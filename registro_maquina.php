@@ -9,7 +9,6 @@
  */
 
 // Define el contexto para el header (habilita botones Inicio/Maquinas)
-$pagina_actual = 'otro'; 
 require_once 'config/db.php';
 
 include 'includes/header.php';
