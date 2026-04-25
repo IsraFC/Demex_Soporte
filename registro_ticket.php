@@ -35,7 +35,7 @@ include 'includes/header.php';
     </div>
 </div>
 
-<form action="actions/procesar_ticket_unificado.php" method="POST" id="formTicket">
+<form action="actions/procesar_ticket.php" method="POST" id="formTicket">
     <input type="hidden" name="id_cliente" value="<?= $id_cliente ?>">
     <input type="hidden" name="estatus" value="Abierto">
     <input type="hidden" name="garantia_valida" id="garantia_valida_input" value="Pendiente">
