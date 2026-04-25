@@ -1,22 +1,16 @@
 <?php
 /**
  * ARCHIVO: maquinas.php
- * DESCRIPCIÓN: Módulo de gestión de inventario de equipos y control de garantías.
- * Centraliza la visualización de activos, KPIs de cobertura y gestión de alertas temporales.
- * * @author Israel Fernández Carrera
- * @version 1.3
+ * DESCRIPCIÓN: Módulo de gestión de inventario de equipos y control de garantías reactivo.
+ * @author Israel Fernández Carrera
+ * @version 1.4
  * @project Soporte Desarrollo Mexicano (DEMEX)
  */
 $pagina_actual = 'maquinas'; 
 require_once 'config/db.php';
 
-/** * KPIs - INDICADORES CLAVE DE DESEMPEÑO
- * Obtención de métricas en tiempo real mediante agregaciones SQL.
- */
-// Total histórico de equipos registrados
+/** * KPIs - INDICADORES CLAVE DE DESEMPEÑO */
 $totalMaquinas = $pdo->query("SELECT COUNT(*) FROM Equipos_Garantia")->fetchColumn();
-
-// Equipos con cobertura técnica activa (Fecha de término >= Hoy)
 $garantiasActivas = $pdo->query("SELECT COUNT(*) FROM Equipos_Garantia WHERE fecha_termino >= CURDATE()")->fetchColumn();
 
 include 'includes/header.php';
@@ -55,7 +49,7 @@ include 'includes/header.php';
                 <small class="text-muted" style="font-size: 0.6rem;">EQUIPOS</small>
             </div>
             <div class="p-2 bg-white shadow-sm rounded border-start border-success border-4 text-center" style="min-width: 100px;">
-                <span class="d-block fw-bold fs-5 text-success"><?= $garantiasActivas ?></span>
+                <span id="kpi-vigentes" class="d-block fw-bold fs-5 text-success"><?= $garantiasActivas ?></span>
                 <small class="text-muted" style="font-size: 0.6rem;">VIGENTES</small>
             </div>
         </div>
@@ -106,7 +100,6 @@ include 'includes/header.php';
             </thead>
             <tbody>
                 <?php
-                // Consulta JOIN para asociar equipos con la información nominal del cliente
                 $sql = "SELECT e.*, c.nombre_cliente 
                         FROM Equipos_Garantia e
                         JOIN Clientes c ON e.id_cliente = c.id_cliente
@@ -114,12 +107,11 @@ include 'includes/header.php';
                 
                 $stmt = $pdo->query($sql);
                 $i = 1;
-                $hoy = date('Y-m-d');
 
                 while ($row = $stmt->fetch()):
-                    $estaVencida = ($row['fecha_termino'] < $hoy);
-                    $badge = $estaVencida ? 'bg-danger' : 'bg-success';
-                    $textoBadge = $estaVencida ? 'Vencida' : 'Vigente';
+                    // La lógica visual inicial se mantiene por PHP, pero JS la sobreescribirá
+                    $hoy_php = date('Y-m-d');
+                    $estaVencida = ($row['fecha_termino'] < $hoy_php);
                 ?>
                 <tr>
                     <td class="fw-bold text-danger"><?= $i++ ?></td>
@@ -127,11 +119,15 @@ include 'includes/header.php';
                     <td><div class="fw-bold small"><?= htmlspecialchars($row['nombre_cliente']) ?></div></td>
                     <td class="small text-muted"><?= $row['modelo'] ?></td>
                     <td class="small"><?= date('d/m/y', strtotime($row['fecha_inicio'])) ?></td>
-                    <td class="small fw-bold <?= $estaVencida ? 'text-danger' : 'text-success' ?>">
+                    
+                    <td class="small fw-bold col-fecha" data-termino="<?= $row['fecha_termino'] ?>">
                         <?= date('d/m/y', strtotime($row['fecha_termino'])) ?>
                     </td>
-                    <td class="text-center">
-                        <span class="badge <?= $badge ?>" style="font-size: 0.65rem;"><?= $textoBadge ?></span>
+                    
+                    <td class="text-center col-estado">
+                        <span class="badge <?= $estaVencida ? 'bg-danger' : 'bg-success' ?>" style="font-size: 0.65rem;">
+                            <?= $estaVencida ? 'Vencida' : 'Vigente' ?>
+                        </span>
                     </td>
                 </tr>
                 <?php endwhile; ?>
@@ -147,12 +143,43 @@ include 'includes/header.php';
 </div>
 
 <script>
-/**
- * LÓGICA DE CONTROL DE INTERFAZ (DataTables & UX)
- */
 $(document).ready(function() {
     
-    // 1. Inicialización de DataTables
+    // --- 1. FUNCIÓN DE REACTIVIDAD ---
+    function actualizarGarantiasVivas() {
+        // Usamos Date.now() que es más rápido que crear un objeto New Date cada vez
+        const ahoraTimestamp = Date.now(); 
+        const hoy = new Date(ahoraTimestamp);
+        hoy.setHours(0, 0, 0, 0);
+
+        let contadorVigentes = 0;
+
+        $('.col-fecha').each(function() {
+            const fechaStr = $(this).data('termino');
+            if (!fechaStr) return;
+
+            // "T23:59:59" asegura que la garantía sea válida hasta el último segundo del día
+            const fechaTermino = new Date(fechaStr + "T23:59:59");
+            const celdaEstado = $(this).siblings('.col-estado');
+
+            if (hoy > fechaTermino) {
+                if (!$(this).hasClass('text-danger')) { // Solo actualiza si el estado cambió
+                    $(this).removeClass('text-success').addClass('text-danger');
+                    celdaEstado.html('<span class="badge bg-danger shadow-sm" style="font-size: 0.65rem;">Vencida</span>');
+                }
+            } else {
+                if (!$(this).hasClass('text-success')) {
+                    $(this).removeClass('text-danger').addClass('text-success');
+                    celdaEstado.html('<span class="badge bg-success shadow-sm" style="font-size: 0.65rem;">Vigente</span>');
+                }
+                contadorVigentes++;
+            }
+        });
+
+        $('#kpi-vigentes').text(contadorVigentes);
+    }
+
+    // --- 2. DATATABLES ---
     if ($('#tablaMaquinas').length) {
         var table = $('#tablaMaquinas').DataTable({
             "language": {
@@ -168,30 +195,35 @@ $(document).ready(function() {
             "order": [[0, "asc"]],
             "columnDefs": [
                 { "type": "num", "targets": 0 }
-            ]
+            ],
+            "drawCallback": function() {
+                // Re-calcula cada vez que la tabla cambia (paginación/filtro)
+                actualizarGarantiasVivas();
+            }
         });
 
-        // Filtros de búsqueda específicos
         $('#searchMaquinas').on('keyup', function() { table.search(this.value).draw(); });
         $('#filterModelo').on('change', function() { table.column(3).search(this.value).draw(); });
         $('#checkSoloVigentes').on('change', function() {
-            table.column(6).search(this.checked ? '^Vigente$' : '', true, false).draw();
+            // Filtra por el texto del badge generado por JS
+            table.column(6).search(this.checked ? 'Vigente' : '', true, false).draw();
         });
     }
 
-    /**
-     * 2. GESTIÓN DE ALERTAS Y LIMPIEZA DE URL
-     * Detecta notificaciones vía GET, limpia la barra de direcciones y aplica auto-cierre.
-     */
+    // --- 3. INICIO DE TIEMPO REAL ---
+    actualizarGarantiasVivas();
+    
+    // Checar cada 0.5 segundos por cambios en el sistema
+    setInterval(actualizarGarantiasVivas, 500);
+
+    // --- 4. GESTIÓN DE ALERTAS ---
     if (window.location.search.indexOf('msg=') > -1) {
-        // Limpieza estética de la URL mediante History API (HTML5)
         var clean_url = window.location.protocol + "//" + window.location.host + window.location.pathname;
         window.history.replaceState({path: clean_url}, '', clean_url);
 
-        // Auto-cierre con colapso de espacio para evitar 'huecos' en el layout
         setTimeout(function() {
             $(".alert").fadeTo(500, 0).slideUp(500, function(){
-                $(this).remove(); // Eliminación física del nodo del DOM
+                $(this).remove();
             });
         }, 4000);
     }
