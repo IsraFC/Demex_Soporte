@@ -1,16 +1,23 @@
 <?php
 /**
  * ARCHIVO: editar_ticket.php
- * DESCRIPCIÓN: Edición unificada. Bordes azules para diferenciar, títulos rojos para identidad.
+ * DESCRIPCIÓN: Interfaz de edición unificada. Permite modificar datos técnicos y financieros.
+ * Utiliza bordes primarios (azules) para diferenciar visualmente el modo edición del registro.
  * @author Israel Fernández Carrera
+ * @project Soporte Técnico DEMEX
+ * @version 1.5
  */
 $pagina_actual = 'soporte';
 require_once 'config/db.php';
 
+// Validación de existencia del folio para la carga de datos
 $id_ticket = $_GET['id_ticket'] ?? null;
 if (!$id_ticket) { header("Location: index.php"); exit(); }
 
-// 1. Consulta completa
+/**
+ * 1. CONSULTA DE RECUPERACIÓN:
+ * Extrae la información actual del ticket cruzando datos de soporte, costos y cliente.
+ */
 $sql = "SELECT t.*, d.*, c.nombre_cliente, e.modelo 
         FROM Tickets_Soporte t 
         LEFT JOIN Detalles_Costos_Tiempos d ON t.id_ticket = d.id_ticket 
@@ -23,15 +30,19 @@ $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$ticket) { header("Location: index.php"); exit(); }
 
-// Lógica de bloqueo: Si tiene serie, se bloquea. Si no, queda libre.
+/**
+ * LÓGICA DE BLOQUEO:
+ * Si el ticket ya tiene un número de serie asignado, se bloquean los campos de equipo
+ * para mantener la integridad del historial. Si está vacío, permite la captura.
+ */
 $tieneSerie = !empty($ticket['no_serie']);
 
-// 2. Equipos del cliente para el Datalist
+// 2. Consulta de equipos del cliente para el buscador dinámico (Datalist)
 $stmt_eq = $pdo->prepare("SELECT no_serie, modelo FROM Equipos_Garantia WHERE id_cliente = ?");
 $stmt_eq->execute([$ticket['id_cliente']]);
 $equipos_cliente = $stmt_eq->fetchAll(PDO::FETCH_ASSOC);
 
-// 3. Modelos para el select
+// 3. Catálogo de modelos disponibles para selección manual
 $stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM Equipos_Garantia ORDER BY modelo ASC");
 $todos_modelos = $stmt_mod->fetchAll(PDO::FETCH_COLUMN);
 
@@ -122,7 +133,7 @@ include 'includes/header.php';
                 <div class="row g-2">
                     <div class="col-4">
                         <label class="form-label small fw-bold text-muted">Llamadas</label>
-                        <input type="number" name="no_llamadas" class="form-control border-0 bg-light shadow-sm text-center" value="<?= $ticket['no_llamadas'] ?>">
+                        <input type="number" min="1" name="no_llamadas" class="form-control border-0 bg-light shadow-sm text-center" value="<?= $ticket['no_llamadas'] ?>">
                     </div>
                     <div class="col-8">
                         <label class="form-label small fw-bold text-muted">Acción Principal</label>
@@ -159,23 +170,23 @@ include 'includes/header.php';
         <div class="row g-3">
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Refac. (Venta)</label>
-                <input type="number" step="0.01" name="costo_refac_venta" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_refac_venta'] > 0 ? $ticket['costo_refac_venta'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_refac_venta" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_refac_venta'] > 0 ? $ticket['costo_refac_venta'] : '' ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-success">Refac. (Gar)</label>
-                <input type="number" step="0.01" name="costo_refac_garantia" class="form-control costo-input border-success bg-light shadow-sm" value="<?= $ticket['costo_refac_garantia'] > 0 ? $ticket['costo_refac_garantia'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_refac_garantia" class="form-control costo-input border-success bg-light shadow-sm" value="<?= $ticket['costo_refac_garantia'] > 0 ? $ticket['costo_refac_garantia'] : '' ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Base</label>
-                <input type="number" step="0.01" name="costo_base" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_base'] > 0 ? $ticket['costo_base'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_base" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_base'] > 0 ? $ticket['costo_base'] : '' ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Técnico</label>
-                <input type="number" step="0.01" name="costo_tecnico" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_tecnico'] > 0 ? $ticket['costo_tecnico'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_tecnico" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_tecnico'] > 0 ? $ticket['costo_tecnico'] : '' ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Envío</label>
-                <input type="number" step="0.01" name="costo_envio" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_envio'] > 0 ? $ticket['costo_envio'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_envio" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_envio'] > 0 ? $ticket['costo_envio'] : '' ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Cotización</label>
@@ -211,14 +222,18 @@ include 'includes/header.php';
 </form>
 
 <script>
+/**
+ * LÓGICA FRONTEND (jQuery):
+ * Controla validaciones AJAX, cálculos automáticos de costos y visualización dinámica.
+ */
 $(document).ready(function() {
-    // 1. BLOQUEOS E INTERFAZ
+    // 1. Mejoras de UX en inputs numéricos
     $(document).on('keydown', 'input[type="number"]', function(e) {
         if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
     });
     $(document).on('focus', 'input, textarea', function() { $(this).select(); });
 
-    // 2. VALIDACIÓN DE SERIE (Solo si está vacío al inicio)
+    // 2. VALIDACIÓN DE SERIE (Solo activa si no es de lectura)
     var typingTimer;
     $('#no_serie_input').on('input', function() {
         if ($(this).attr('readonly')) return; 
@@ -252,14 +267,14 @@ $(document).ready(function() {
         } else { msgDiv.hide(); }
     });
 
-    // 3. DINÁMICA DE COSTOS
+    // 3. MOSTRAR/OCULTAR COSTOS según la acción elegida
     function toggleCostos() {
         if (['Ninguna', 'Información'].includes($('#accion_select').val())) $('#seccion_costos').slideUp();
         else $('#seccion_costos').slideDown();
     }
     $('#accion_select').on('change', toggleCostos);
 
-    // 4. CÁLCULOS
+    // 4. SUMATORIA AUTOMÁTICA DE COSTOS
     $('.costo-input').on('input', function() {
         let total = 0;
         $('.costo-input').each(function() { total += parseFloat($(this).val()) || 0; });
@@ -267,6 +282,7 @@ $(document).ready(function() {
         $('#input_total').val(total.toFixed(2));
     });
 
+    // 5. CÁLCULO DE DÍAS DE ACCIÓN
     $('#fecha_inicio, #fecha_fin').on('change', function() {
         const inicio = $('#fecha_inicio').val();
         const fin = $('#fecha_fin').val();
@@ -280,14 +296,15 @@ $(document).ready(function() {
         }
     });
 
+    // 6. CONTROL VISUAL DEL SWITCH DE PAGO
     $('#pago_switch').on('change', function() {
         const color = $(this).is(':checked') ? 'text-success' : 'text-danger';
         const txt = $(this).is(':checked') ? 'Pagado' : 'Pendiente';
         $('#label_pago').find('span').attr('class', color).text(txt);
     });
 
+    // Inicialización de estados visuales
     toggleCostos();
-    // Color garantía inicial
     const initG = $('#garantia_valida_input').val();
     let c = (initG === 'Válida') ? '#198754' : (initG === 'Pendiente' ? '#6c757d' : '#dc3545');
     $('#txt_status_garantia').css('color', c);

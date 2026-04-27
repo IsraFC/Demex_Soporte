@@ -1,27 +1,31 @@
 <?php
 /**
  * ARCHIVO: registro_ticket.php
- * DESCRIPCIÓN: Registro unificado de Fases 1 y 2 en una sola pantalla dinámica.
+ * DESCRIPCIÓN: Interfaz unificada para la creación de nuevos folios de soporte.
+ * Integra la captura de datos técnicos (Fase 1) y logística financiera (Fase 2)
+ * en una sola pantalla con validaciones AJAX en tiempo real.
  * @author Israel Fernández Carrera
+ * @project Soporte Técnico DEMEX
+ * @version 1.5
  */
 $pagina_actual = 'otro'; 
 require_once 'config/db.php';
 
-// 1. Validar Cliente
+// 1. VALIDACIÓN DE CONTEXTO: Se requiere un cliente destino para iniciar el registro.
 $id_cliente = $_GET['id_cliente'] ?? null;
 if (!$id_cliente) { header("Location: clientes.php"); exit(); }
 
-// 2. Datos del cliente
+// 2. RECUPERACIÓN DE DATOS DEL CLIENTE
 $stmt = $pdo->prepare("SELECT nombre_cliente FROM Clientes WHERE id_cliente = ?");
 $stmt->execute([$id_cliente]);
 $cliente = $stmt->fetch();
 
-// 3. Equipos del cliente para el Datalist
+// 3. CARGA DE EQUIPOS VINCULADOS: Alimenta el buscador de series (Datalist) del cliente actual.
 $stmt_eq = $pdo->prepare("SELECT no_serie, modelo FROM Equipos_Garantia WHERE id_cliente = ?");
 $stmt_eq->execute([$id_cliente]);
 $equipos_cliente = $stmt_eq->fetchAll(PDO::FETCH_ASSOC);
 
-// 4. Todos los modelos para el Select manual
+// 4. CATÁLOGO GLOBAL: Modelos registrados para selección manual en caso de equipos nuevos.
 $stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM Equipos_Garantia ORDER BY modelo ASC");
 $todos_modelos = $stmt_mod->fetchAll(PDO::FETCH_COLUMN);
 
@@ -42,6 +46,7 @@ include 'includes/header.php';
 
     <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-danger mb-4">
         <div class="row g-4">
+            
             <div class="col-md-4">
                 <h5 class="fw-bold mb-3"><i class="bi bi-cpu-fill me-2 text-danger"></i>Equipo</h5>
                 <div class="mb-3">
@@ -52,6 +57,7 @@ include 'includes/header.php';
                             <option value="<?= htmlspecialchars($eq['no_serie']) ?>" data-model="<?= htmlspecialchars($eq['modelo']) ?>">
                         <?php endforeach; ?>
                     </datalist>
+                    
                     <div id="status_garantia" class="mt-2 p-2 rounded small fw-bold" style="display:none; background-color: #f8f9fa; border-left: 4px solid #dee2e6;">
                         <span id="txt_status_garantia">Validando...</span>
                     </div>
@@ -108,7 +114,7 @@ include 'includes/header.php';
                 <div class="row g-2">
                     <div class="col-4">
                         <label class="form-label small fw-bold text-muted">Llamadas</label>
-                        <input type="number" name="no_llamadas" class="form-control border-0 bg-light shadow-sm text-center" value="1">
+                        <input type="number" name="no_llamadas" min="1" class="form-control border-0 bg-light shadow-sm text-center" value="1">
                     </div>
                     <div class="col-8">
                         <label class="form-label small fw-bold text-muted">Acción Principal</label>
@@ -150,23 +156,23 @@ include 'includes/header.php';
         <div class="row g-3">
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Refac. (Venta)</label>
-                <input type="number" step="0.01" name="costo_refac_venta" class="form-control costo-input border-0 bg-light shadow-sm" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_refac_venta" class="form-control costo-input border-0 bg-light shadow-sm" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-success">Refac. (Gar)</label>
-                <input type="number" step="0.01" name="costo_refac_garantia" class="form-control costo-input border-success bg-light shadow-sm" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_refac_garantia" class="form-control costo-input border-success bg-light shadow-sm" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Base</label>
-                <input type="number" step="0.01" name="costo_base" class="form-control costo-input border-0 bg-light shadow-sm" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_base" class="form-control costo-input border-0 bg-light shadow-sm" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Técnico</label>
-                <input type="number" step="0.01" name="costo_tecnico" class="form-control costo-input border-0 bg-light shadow-sm" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_tecnico" class="form-control costo-input border-0 bg-light shadow-sm" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Envío</label>
-                <input type="number" step="0.01" name="costo_envio" class="form-control costo-input border-0 bg-light shadow-sm" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_envio" class="form-control costo-input border-0 bg-light shadow-sm" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Cotización</label>
@@ -192,7 +198,7 @@ include 'includes/header.php';
     </div>
 
     <div class="text-center mt-4 d-flex justify-content-center gap-3">
-        <a href="clientes.php" class="btn btn-light border px-5 rounded-pill fw-bold text-muted">Cancelar <i class="bi bi-x-lg ms-1"></i></a>
+        <a href="clientes.php" class="btn btn-light border px-5 rounded-pill fw-bold text-dark">Cancelar <i class="bi bi-x-lg ms-1"></i></a>
         <button type="submit" class="btn btn-success px-5 rounded-pill fw-bold shadow btn-guardar">
             <span id="btnText">Finalizar Registro</span> <i class="bi bi-check-circle ms-1"></i>
         </button>
@@ -200,14 +206,18 @@ include 'includes/header.php';
 </form>
 
 <script>
+/**
+ * LÓGICA FRONTEND (jQuery):
+ * Controla la interactividad del registro, validaciones AJAX y cálculos en caliente.
+ */
 $(document).ready(function() {
-    // --- 1. BLOQUEO DE TECLA 'E' Y SELECCIÓN AUTOMÁTICA ---
+    // 1. MEJORAS DE UX: Evita notación científica en números y permite selección total al enfocar.
     $(document).on('keydown', 'input[type="number"]', function(e) {
         if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
     });
     $(document).on('focus', 'input, textarea', function() { $(this).select(); });
 
-    // --- 2. LÓGICA DE MOSTRAR/OCULTAR COSTOS ---
+    // 2. PANEL DE COSTOS DINÁMICO: Oculta la sección financiera si la acción es puramente informativa.
     function toggleSeccionCostos() {
         const accion = $('#accion_select').val();
         const btn = $('.btn-guardar');
@@ -223,7 +233,7 @@ $(document).ready(function() {
     }
     $('#accion_select').on('change', toggleSeccionCostos);
 
-    // --- 3. VALIDACIÓN DE GARANTÍA (AJAX) ---
+    // 3. VALIDACIÓN DE GARANTÍA AJAX: Consulta la DB al escribir la serie para determinar cobertura.
     var typingTimer;
     $('#no_serie_input').on('input', function() {
         clearTimeout(typingTimer);
@@ -235,6 +245,8 @@ $(document).ready(function() {
         if (val.length > 2) {
             msgDiv.show();
             txtStatus.text('🔍 Validando...').css('color', '#6c757d');
+            
+            // Auto-selección del modelo si la serie coincide con el datalist
             if (option.length) $('#modelo_select').val(option.data('model'));
 
             typingTimer = setTimeout(function() {
@@ -255,7 +267,7 @@ $(document).ready(function() {
         } else { msgDiv.hide(); }
     });
 
-    // --- 4. SUMA DE COSTOS Y DÍAS ---
+    // 4. CÁLCULO DE TOTALES: Suma todos los conceptos financieros al vuelo.
     $('.costo-input').on('input', function() {
         let total = 0;
         $('.costo-input').each(function() {
@@ -266,6 +278,7 @@ $(document).ready(function() {
         $('#input_total').val(total.toFixed(2));
     });
 
+    // 5. CÁLCULO DE TIEMPO: Calcula la diferencia en días entre las fechas de logística.
     $('#fecha_inicio, #fecha_fin').on('change', function() {
         const inicio = $('#fecha_inicio').val();
         const fin = $('#fecha_fin').val();
@@ -279,6 +292,7 @@ $(document).ready(function() {
         }
     });
 
+    // 6. ESTATUS DE PAGO: Cambio visual del badge según el switch.
     $('#pago_switch').on('change', function() {
         const txt = $(this).is(':checked') ? '<span class="text-success">Pagado</span>' : '<span class="text-danger">Pendiente</span>';
         $('#label_pago').find('span').remove();

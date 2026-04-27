@@ -1,14 +1,24 @@
 <?php
 /**
  * ARCHIVO: actions/obtener_detalles_ticket.php
- * DESCRIPCIÓN: Vista detallada completa con desglose campo por campo de ambas tablas.
+ * DESCRIPCIÓN: Genera la vista detallada del ticket mediante una consulta multi-tabla.
+ * Calcula dinámicamente badges de estatus, lógica de pago (N/A) y visualización de costos.
+ * @author Israel Fernández Carrera
+ * @project Soporte Técnico DEMEX
+ * @version 1.5
  */
 require_once '../config/db.php';
 
+// Validamos la recepción del ID para evitar errores de consulta
 $id_ticket = $_GET['id_ticket'] ?? null;
 if (!$id_ticket) { echo "ID no válido."; exit; }
 
 try {
+    /**
+     * CONSULTA INTEGRAL:
+     * Une Tickets_Soporte con Clientes, Equipos y Detalles de Costos.
+     * Se usa LEFT JOIN en Equipos y Detalles por si el ticket aún no tiene esos registros.
+     */
     $sql = "SELECT t.*, c.nombre_cliente, c.telefono, c.ubicacion, 
                    e.modelo, d.*
             FROM Tickets_Soporte t
@@ -23,18 +33,24 @@ try {
 
     if (!$data) { echo "Sin datos."; exit; }
 
-    // Lógica de Pago
+    /**
+     * LÓGICA DE PAGO (N/A):
+     * Determina si el estatus de pago debe mostrarse como No Aplica basándose en la acción o el total.
+     */
     $pago_no_aplica = (empty($data['estatus_pago']) || $data['accion'] == 'Ninguna' || $data['accion'] == 'Información');
     $textoPago = $pago_no_aplica ? "N/A" : $data['estatus_pago'];
     $badgePago = $pago_no_aplica ? "bg-secondary" : (($data['estatus_pago'] == 'Pagado') ? 'bg-success' : 'bg-danger');
 
-    // Lógica Estatus Ticket
+    /**
+     * LÓGICA DE ESTILOS DE ESTATUS:
+     * Asigna clases de Bootstrap según el estado actual del ticket.
+     */
     $colorEstatus = [
         'Abierto'   => 'bg-warning text-dark',
         'Cerrado'   => 'bg-success text-white',
         'Cancelado' => 'bg-secondary text-white'
     ];
-     $badgeEstatus = $colorEstatus[$data['estatus']] ?? 'bg-secondary';
+    $badgeEstatus = $colorEstatus[$data['estatus']] ?? 'bg-secondary';
 ?>
 
 <div class="container-fluid py-1">

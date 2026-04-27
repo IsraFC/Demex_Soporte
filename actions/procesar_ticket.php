@@ -1,16 +1,25 @@
 <?php
 /**
  * ARCHIVO: actions/procesar_ticket.php
- * DESCRIPCIÓN: Procesa tanto el registro NUEVO como la ACTUALIZACIÓN de tickets existentes.
+ * DESCRIPCIÓN: Motor unificado de persistencia. Gestiona de forma transaccional 
+ * tanto el alta de nuevos folios como la edición de los existentes.
+ * @author Israel Fernández Carrera
+ * @project Soporte Técnico DEMEX
+ * @version 1.5
  */
 require_once '../config/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        /**
+         * INICIO DE TRANSACCIÓN:
+         * Asegura que los cambios se apliquen en ambas tablas (Tickets_Soporte y Detalles_Costos_Tiempos)
+         * simultáneamente. Si una falla, se cancelan ambas para evitar datos huérfanos.
+         */
         $pdo->beginTransaction();
 
         // --- 1. CAPTURA DE DATOS COMUNES ---
-        $id_ticket      = $_POST['id_ticket'] ?? null; // Si existe, es edición
+        $id_ticket      = $_POST['id_ticket'] ?? null; // Discriminador: Si existe -> UPDATE, si no -> INSERT
         $id_cliente     = $_POST['id_cliente'] ?? null;
         $no_serie       = !empty($_POST['no_serie']) ? $_POST['no_serie'] : null;
         $tipo_llamada   = $_POST['tipo_llamada'];
@@ -21,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $observaciones  = $_POST['observaciones'];
         $accion         = $_POST['accion'];
 
-        // Datos de Fase 2 (Costos y Logística)
+        // --- 2. CAPTURA DE FASE 2 (COSTOS Y LOGÍSTICA) ---
         $f_inicio       = !empty($_POST['fecha_inicio_acc']) ? $_POST['fecha_inicio_acc'] : null;
         $f_fin          = !empty($_POST['fecha_fin_acc']) ? $_POST['fecha_fin_acc'] : null;
         $t_accion       = !empty($_POST['tiempo_accion']) ? $_POST['tiempo_accion'] : 0;
@@ -33,12 +42,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $c_total        = !empty($_POST['costo_total']) ? $_POST['costo_total'] : 0;
         $no_cotiz       = !empty($_POST['no_cotizacion']) ? $_POST['no_cotizacion'] : null;
         $factura        = isset($_POST['requiere_factura']) ? 1 : 0;
-        // --- LÓGICA DE PAGO INTELIGENTE ---
-        // Si la acción es informativa o el costo total es 0, el pago NO APLICA (NULL)
+
+        // --- 3. LÓGICA DE PAGO INTELIGENTE ---
+        // Se define como NULL (N/A) si es una consulta informativa o no hay costos involucrados.
         if ($accion === 'Ninguna' || $accion === 'Información' || $c_total == 0) {
             $pago = null; 
         } else {
-            // Si hay costo, revisamos si el switch de pago estaba activado
             $pago = (isset($_POST['estatus_pago']) && $_POST['estatus_pago'] === 'Pagado') ? 'Pagado' : 'Pendiente';
         }
 
@@ -47,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // LOGICA DE ACTUALIZACIÓN (UPDATE)
             // ==========================================
             
-            // Tabla 1: Soporte
+            // Actualización de datos generales de soporte
             $sql1 = "UPDATE Tickets_Soporte SET 
                         no_serie = ?, tipo_llamada = ?, tipo_falla = ?, 
                         maquina_func = ?, garantia_valida = ?, 
@@ -55,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      WHERE id_ticket = ?";
             $pdo->prepare($sql1)->execute([$no_serie, $tipo_llamada, $tipo_falla, $maquina_func, $garantia_valida, $no_llamadas, $observaciones, $id_ticket]);
 
-            // Tabla 2: Detalles
+            // Actualización de desglose financiero y logística
             $sql2 = "UPDATE Detalles_Costos_Tiempos SET 
                         accion = ?, fecha_inicio_acc = ?, fecha_fin_acc = ?, 
                         tiempo_accion = ?, costo_refac_garantia = ?, 
@@ -70,25 +79,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // LOGICA DE NUEVO REGISTRO (INSERT)
             // ==========================================
             
-            // Tabla 1: Soporte
+            // Creación del ticket base con estatus inicial 'Abierto'
             $sql1 = "INSERT INTO Tickets_Soporte (no_serie, id_cliente, tipo_llamada, tipo_falla, maquina_func, garantia_valida, estatus, fecha_inicial, no_llamadas, observaciones) 
                      VALUES (?, ?, ?, ?, ?, ?, 'Abierto', NOW(), ?, ?)";
             $stmt = $pdo->prepare($sql1);
             $stmt->execute([$no_serie, $id_cliente, $tipo_llamada, $tipo_falla, $maquina_func, $garantia_valida, $no_llamadas, $observaciones]);
             
+            // Obtenemos el ID generado para vincular la tabla de detalles
             $nuevo_id = $pdo->lastInsertId();
 
-            // Tabla 2: Detalles
+            // Inserción de detalles financieros vinculados al nuevo ID
             $sql2 = "INSERT INTO Detalles_Costos_Tiempos (id_ticket, accion, fecha_inicio_acc, fecha_fin_acc, tiempo_accion, costo_refac_garantia, costo_refac_venta, costo_base, costo_tecnico, costo_envio, costo_total, no_cotizacion, requiere_factura, estatus_pago) 
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $pdo->prepare($sql2)->execute([$nuevo_id, $accion, $f_inicio, $f_fin, $t_accion, $c_refac_g, $c_refac_v, $c_base, $c_tec, $c_envio, $c_total, $no_cotiz, $factura, $pago]);
         }
 
+        // Si todo salió bien, guardamos cambios definitivamente
         $pdo->commit();
         header("Location: ../index.php?res=ok");
 
     } catch (Exception $e) {
+        // Si algo falla, revertimos para no dejar datos corruptos o incompletos
         if ($pdo->inTransaction()) $pdo->rollBack();
-        die("Error en el motor de tickets: " . $e->getMessage());
+        die("Error crítico en el motor de tickets: " . $e->getMessage());
     }
 }
