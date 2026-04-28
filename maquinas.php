@@ -38,7 +38,7 @@ include 'includes/header.php';
 
 <div class="row mb-4 align-items-center">
     <div class="col-md-6">
-        <h1 class="fw-bold text-danger mb-0">Máquinas y Garantía</h1>
+        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-cpu"></i> Máquinas y Garantía</h1>
         <p class="text-muted small">Inventario de activos y control de cobertura técnica.</p>
     </div>
     

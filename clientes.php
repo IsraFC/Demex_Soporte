@@ -16,25 +16,26 @@ include 'includes/header.php';
 
 <div class="row mb-4 align-items-center">
     <div class="col-md-6">
-        <h1 class="fw-bold text-danger mb-0">Directorio de Clientes</h1>
+        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-people me-2"></i> Directorio de Clientes</h1>
         <p class="text-muted small">Gestión de cuentas y ubicación de servicios.</p>
     </div>
     <div class="col-md-6 text-md-end">
-        <a href="registro_cliente.php" class="btn btn-danger rounded-pill px-4 shadow-sm">
+        <a href="registro_cliente.php" class="btn btn-white border shadow-sm px-5 rounded-pill fw-bold text-danger">
             <i class="bi bi-person-plus-fill me-2"></i> Nuevo Cliente
         </a>
     </div>
 </div>
-
-<div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-danger">
     
-    <div class="mb-4">
+<div class="card-main mb-4 py-3 shadow-sm border-top border-4 border-danger bg-white rounded">
+    <div class="row g-0 align-items-center px-3 justify-content-between">
         <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
             <span class="input-group-text bg-transparent border-0"><i class="bi bi-search text-danger"></i></span>
             <input type="text" id="searchClientes" class="form-control bg-transparent border-0" placeholder="Buscar por nombre o ubicación...">
         </div>
     </div>
-
+</div>
+    
+<div class="card-main shadow-lg p-4 bg-white rounded">
     <div class="table-responsive">
         <table id="tablaClientes" class="table table-hover align-middle w-100">
             <thead class="table-light">
@@ -102,12 +103,12 @@ include 'includes/header.php';
                     </td>
                     
                     <td class="text-center">
-                        <div class="btn-group shadow-sm rounded">
-                            <a href="editar_cliente.php?id=<?= $row['id_cliente'] ?>" class="btn btn-sm btn-white border-end" title="Editar">
-                                <i class="bi bi-pencil text-primary"></i>
+                        <div class="btn-group btm-group-sm">
+                            <a href="editar_cliente.php?id=<?= $row['id_cliente'] ?>" class="btn btn-outline-primary border-0" title="Editar">
+                                <i class="bi bi-pencil-square"></i>
                             </a>
-                            <a href="registro_ticket.php?id_cliente=<?= $row['id_cliente'] ?>" class="btn btn-sm btn-white" title="Crear Ticket">
-                                <i class="bi bi-plus-circle text-danger"></i>
+                            <a href="registro_ticket.php?id_cliente=<?= $row['id_cliente'] ?>" class="btn btn-outline-danger border-0" title="Crear Ticket">
+                                <i class="bi bi-ticket"></i>
                             </a>
                         </div>
                     </td>

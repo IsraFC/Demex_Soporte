@@ -27,7 +27,7 @@ include 'includes/header.php';
 
 <div class="row mb-4 align-items-center">
     <div class="col-md-5">
-        <h1 class="fw-bold text-danger mb-0">Panel de Seguimiento</h1>
+        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-speedometer2"></i> Panel de Seguimiento</h1>
         <p class="text-muted small">Sistema de gestión y soporte técnico.</p>
     </div>
     <div class="col-md-7 text-md-end">
@@ -100,6 +100,7 @@ include 'includes/header.php';
                     <th>Estatus</th> 
                     <th>Inicio</th> 
                     <th class="text-center">Acción</th>
+                    <th>Envios</th>
                 </tr>
             </thead>
             <tbody>
@@ -109,7 +110,7 @@ include 'includes/header.php';
                  * Se cruzan las 4 tablas principales para mostrar un resumen ejecutivo de cada ticket.
                  */
                 $sql = "SELECT t.id_ticket, c.nombre_cliente, e.modelo, t.no_serie, t.tipo_falla, 
-                               t.garantia_valida, t.estatus, t.fecha_inicial, d.estatus_pago, t.tipo_llamada
+                               t.garantia_valida, t.estatus, t.fecha_inicial, d.estatus_pago, t.tipo_llamada, d.accion
                         FROM Tickets_Soporte t 
                         JOIN Clientes c ON t.id_cliente = c.id_cliente
                         LEFT JOIN Equipos_Garantia e ON t.no_serie = e.no_serie
@@ -161,6 +162,71 @@ include 'includes/header.php';
                                     <i class="bi bi-x-circle-fill"></i>
                                 </button>
                             <?php endif; ?>
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <div>
+                        <?php if ($row['accion'] == 'Envio base'): ?>
+                            <?php if ($row['estatus'] == 'Abierto'): ?>
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de base">
+                                    <i class="bi bi-truck me-1"></i>
+                                </span>
+                            <?php elseif ($row['estatus'] == 'Cerrado'): ?>
+                                <span class="badge bg-success text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de base entregado">
+                                    <i class="bi bi-truck me-1"></i>
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de base cancelado">
+                                    <i class="bi bi-truck me-1"></i>
+                                </span>
+                            <?php endif; ?>
+                        <?php elseif ($row['accion'] == 'Envio técnico'): ?>
+                            <?php if ($row['estatus'] == 'Abierto'): ?>
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de técnico">
+                                    <i class="bi bi-tools me-1"></i>
+                                </span>
+                            <?php elseif ($row['estatus'] == 'Cerrado'): ?>
+                                <span class="badge bg-success text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Técnico entregado">
+                                    <i class="bi bi-tools me-1"></i>
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Técnico cancelado">
+                                    <i class="bi bi-tools me-1"></i>
+                                </span>
+                            <?php endif; ?>
+                        <?php elseif ($row['accion'] == 'Envio refacciones'): ?>
+                            <?php if ($row['estatus'] == 'Abierto'): ?>
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de refacciones">
+                                    <i class="bi bi-box-seam me-1"></i>
+                                </span>
+                            <?php elseif ($row['estatus'] == 'Cerrado'): ?>
+                                <span class="badge bg-success text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Refacciones entregadas">
+                                    <i class="bi bi-box-seam me-1"></i>
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Refacciones canceladas">
+                                    <i class="bi bi-box-seam me-1"></i>
+                                </span>
+                            <?php endif; ?>
+                        <?php elseif ($row['accion'] == 'Envio técnico y refacciones'): ?>
+                            <?php if ($row['estatus'] == 'Abierto'): ?>
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de técnico y refacciones">
+                                    <i class="bi bi-tools me-1"></i> <i class="bi bi-box-seam me-1"></i>
+                                </span>
+                            <?php elseif ($row['estatus'] == 'Cerrado'): ?>
+                                <span class="badge bg-success text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Técnico + Refacciones entregados">
+                                    <i class="bi bi-tools me-1"></i> <i class="bi bi-box-seam me-1"></i>
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Técnico + Refacciones cancelados">
+                                    <i class="bi bi-tools me-1"></i> <i class="bi bi-box-seam me-1"></i> 
+                                </span>
+                            <?php endif; ?>
+                         <?php else: ?>
+                            <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="No disponible">
+                                <i class="bi bi-question-circle me-1"></i>
+                            </span>
+                        <?php endif; ?>
                         </div>
                     </td>
                 </tr>

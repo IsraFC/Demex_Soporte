@@ -18,7 +18,7 @@ include 'includes/header.php';
 <div class="container-fluid py-4">
     <div class="row mb-4 align-items-center">
         <div class="col-md-8">
-            <h1 class="fw-bold text-danger mb-0 text-uppercase">Estadísticas de Soporte</h1>
+            <h1 class="fw-bold text-danger mb-0"><i class="bi bi-graph-up"></i> Estadísticas de Soporte</h1>
             <p class="text-muted small">Análisis financiero y monitor de tiempos de respuesta por categoría.</p>
         </div>
         <div class="col-md-4 text-md-end">

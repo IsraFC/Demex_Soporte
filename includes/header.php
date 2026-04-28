@@ -90,7 +90,7 @@
 
                 <li class="nav-item">
                     <a class="nav-link px-4 <?= (isset($pagina_actual) && $pagina_actual == 'estadisticas') ? 'active-page' : '' ?>" href="estadisticas.php">
-                        <i class="bi bi-bar-chart-line-fill me-1"></i> Estadísticas
+                        <i class="bi bi-bar-chart-line me-1"></i> Estadísticas
                     </a>
                 </li>
 
