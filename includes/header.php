@@ -3,10 +3,10 @@
  * ARCHIVO: includes/header.php
  * DESCRIPCIÓN: Estructura de encabezado global y carga de recursos críticos.
  * Gestiona la navegación dinámica con resaltado de página activa (estilo cápsula)
- * y centraliza las dependencias de Bootstrap, DataTables y fuentes.
+ * y centraliza las dependencias de Bootstrap, DataTables, Chart.js y fuentes.
  * * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.4
+ * @version 1.6
  */
 ?>
 <!DOCTYPE html>
@@ -27,11 +27,13 @@
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         /**
          * DISEÑO DE NAVEGACIÓN DINÁMICA
-         * .active-page: Crea un efecto de cápsula blanca para resaltar la sección actual.
+         * .active-page: Crea un efecto de cápsula blanca para resaltar la sección actual en el navbar.
          */
         .nav-link.active-page {
             background-color: white !important;
@@ -83,6 +85,12 @@
                 <li class="nav-item">
                     <a class="nav-link px-4 <?= (isset($pagina_actual) && $pagina_actual == 'clientes') ? 'active-page' : '' ?>" href="clientes.php">
                         <i class="bi bi-people me-1"></i> Clientes
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link px-4 <?= (isset($pagina_actual) && $pagina_actual == 'estadisticas') ? 'active-page' : '' ?>" href="estadisticas.php">
+                        <i class="bi bi-bar-chart-line-fill me-1"></i> Estadísticas
                     </a>
                 </li>
 
