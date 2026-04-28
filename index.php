@@ -1,11 +1,13 @@
 <?php
 /**
  * ARCHIVO: index.php
- * DESCRIPCIÓN: Panel de Control Principal (Dashboard). Centraliza la visualización, 
- * filtrado avanzado por fechas/estatus y la gestión rápida de tickets.
- * @author Israel Fernández Carrera
+ * DESCRIPCIÓN: Panel de Control Principal (Dashboard). 
+ * Centraliza la visualización de tickets mediante un motor de filtrado avanzado.
+ * Implementa una lógica de indicadores de envío (KPI visual) basada en hitos 
+ * temporales: Pendiente, Iniciado y Finalizado.
+ * * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 1.5
+ * @version 1.7
  */
 
 $pagina_actual = 'inicio';
@@ -106,11 +108,13 @@ include 'includes/header.php';
             <tbody>
                 <?php
                 /**
-                 * CARGA DINÁMICA DE TABLA:
-                 * Se cruzan las 4 tablas principales para mostrar un resumen ejecutivo de cada ticket.
+                 * CARGA DINÁMICA: 
+                 * Cruce de tablas Tickets_Soporte, Clientes, Equipos_Garantia y Detalles_Costos_Tiempos.
+                 * Se recuperan las fechas de acción para procesar la lógica de estados de envío.
                  */
                 $sql = "SELECT t.id_ticket, c.nombre_cliente, e.modelo, t.no_serie, t.tipo_falla, 
-                               t.garantia_valida, t.estatus, t.fecha_inicial, d.estatus_pago, t.tipo_llamada, d.accion
+                               t.garantia_valida, t.estatus, t.fecha_inicial, d.estatus_pago, t.tipo_llamada, 
+                               d.accion, d.fecha_inicio_acc, d.fecha_fin_acc
                         FROM Tickets_Soporte t 
                         JOIN Clientes c ON t.id_cliente = c.id_cliente
                         LEFT JOIN Equipos_Garantia e ON t.no_serie = e.no_serie
@@ -119,7 +123,7 @@ include 'includes/header.php';
                 
                 $stmt = $pdo->query($sql);
                 while ($row = $stmt->fetch()):
-                    // Lógica visual de colores por estatus y pago
+                    // Formateo visual de columnas base
                     $colorGarantia = ($row['garantia_valida'] == 'Válida') ? 'text-success' : 'text-danger';
                     
                     $badgeEstatus = 'bg-secondary'; 
@@ -145,12 +149,12 @@ include 'includes/header.php';
                     <td class="small" data-order="<?= $row['fecha_inicial'] ?>">
                         <?= date('d/m/y', strtotime($row['fecha_inicial'])) ?>
                     </td>
+                    
                     <td class="text-center">
                         <div class="btn-group btn-group-sm">
                             <button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(<?= $id ?>)" title="Ver detalles">
                                 <i class="bi bi-eye-fill"></i>
                             </button>
-
                             <?php if($row['estatus'] == 'Abierto'): ?>
                                 <a href="editar_ticket.php?id_ticket=<?= $id ?>" class="btn btn-outline-warning border-0" title="Editar">
                                     <i class="bi bi-pencil-square"></i>
@@ -164,69 +168,59 @@ include 'includes/header.php';
                             <?php endif; ?>
                         </div>
                     </td>
-                    <td class="text-center">
+
+                    <td class="text-center col-envios" data-id="<?= $id ?>">
                         <div>
-                        <?php if ($row['accion'] == 'Envio base'): ?>
-                            <?php if ($row['estatus'] == 'Abierto'): ?>
-                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de base">
-                                    <i class="bi bi-truck me-1"></i>
-                                </span>
-                            <?php elseif ($row['estatus'] == 'Cerrado'): ?>
-                                <span class="badge bg-success text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de base entregado">
-                                    <i class="bi bi-truck me-1"></i>
-                                </span>
-                            <?php else: ?>
-                                <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de base cancelado">
-                                    <i class="bi bi-truck me-1"></i>
-                                </span>
-                            <?php endif; ?>
-                        <?php elseif ($row['accion'] == 'Envio técnico'): ?>
-                            <?php if ($row['estatus'] == 'Abierto'): ?>
-                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de técnico">
-                                    <i class="bi bi-tools me-1"></i>
-                                </span>
-                            <?php elseif ($row['estatus'] == 'Cerrado'): ?>
-                                <span class="badge bg-success text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Técnico entregado">
-                                    <i class="bi bi-tools me-1"></i>
-                                </span>
-                            <?php else: ?>
-                                <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Técnico cancelado">
-                                    <i class="bi bi-tools me-1"></i>
-                                </span>
-                            <?php endif; ?>
-                        <?php elseif ($row['accion'] == 'Envio refacciones'): ?>
-                            <?php if ($row['estatus'] == 'Abierto'): ?>
-                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de refacciones">
+                            <?php 
+                            /**
+                             * LÓGICA DE INDICADORES (Versión 1.7):
+                             * 1. Se define el ícono según la 'accion' registrada.
+                             * 2. Se define el color/estado según la presencia de fechas:
+                             * - Sin fecha inicio: PENDIENTE (Amarillo)
+                             * - Con inicio, sin fin: INICIADO (Azul)
+                             * - Con ambas fechas: FINALIZADO (Verde)
+                             */
+                            $iconos = [
+                                'Envio base' => ['bi bi-truck', 'Envío de base'],
+                                'Envio técnico' => ['bi bi-tools', 'Envío de técnico'],
+                                'Envio refacciones' => ['bi bi-box-seam', 'Envío de refacciones'],
+                                'Envio técnico y refacciones' => ['bi bi-tools', 'Técnico + Refacciones']
+                            ];
+
+                            $esAccionConocida = array_key_exists($row['accion'], $iconos);
+                            $accionInfo = $esAccionConocida ? $iconos[$row['accion']] : ['bi bi-question-circle', 'No disponible'];
+                            
+                            $iconClass = $accionInfo[0];
+                            $baseTitle = $accionInfo[1];
+
+                            $bgClass = 'bg-secondary'; 
+                            $suffix = '';
+
+                            if ($esAccionConocida) {
+                                if (empty($row['fecha_inicio_acc'])) {
+                                    $bgClass = 'bg-warning text-dark';
+                                    $suffix = ' (Pendiente)';
+                                } 
+                                elseif (!empty($row['fecha_inicio_acc']) && empty($row['fecha_fin_acc'])) {
+                                    $bgClass = 'bg-primary text-white';
+                                    $suffix = ' (Iniciado)';
+                                }
+                                elseif (!empty($row['fecha_inicio_acc']) && !empty($row['fecha_fin_acc'])) {
+                                    $bgClass = 'bg-success text-white';
+                                    $suffix = ' (Finalizado)';
+                                }
+                            } else {
+                                $bgClass = 'bg-secondary text-white';
+                            }
+                            ?>
+                            <span class="badge <?= $bgClass ?> rounded-pill px-3 py-2 badge-envio" 
+                                  style="font-size: 0.65rem;" 
+                                  title="<?= $baseTitle . $suffix ?>">
+                                <i class="<?= $iconClass ?> <?= strpos($iconClass, 'bi-tools') !== false ? 'me-1' : '' ?>"></i>
+                                <?php if ($row['accion'] == 'Envio técnico y refacciones'): ?>
                                     <i class="bi bi-box-seam me-1"></i>
-                                </span>
-                            <?php elseif ($row['estatus'] == 'Cerrado'): ?>
-                                <span class="badge bg-success text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Refacciones entregadas">
-                                    <i class="bi bi-box-seam me-1"></i>
-                                </span>
-                            <?php else: ?>
-                                <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Refacciones canceladas">
-                                    <i class="bi bi-box-seam me-1"></i>
-                                </span>
-                            <?php endif; ?>
-                        <?php elseif ($row['accion'] == 'Envio técnico y refacciones'): ?>
-                            <?php if ($row['estatus'] == 'Abierto'): ?>
-                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Envío de técnico y refacciones">
-                                    <i class="bi bi-tools me-1"></i> <i class="bi bi-box-seam me-1"></i>
-                                </span>
-                            <?php elseif ($row['estatus'] == 'Cerrado'): ?>
-                                <span class="badge bg-success text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Técnico + Refacciones entregados">
-                                    <i class="bi bi-tools me-1"></i> <i class="bi bi-box-seam me-1"></i>
-                                </span>
-                            <?php else: ?>
-                                <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="Técnico + Refacciones cancelados">
-                                    <i class="bi bi-tools me-1"></i> <i class="bi bi-box-seam me-1"></i> 
-                                </span>
-                            <?php endif; ?>
-                         <?php else: ?>
-                            <span class="badge bg-secondary text-white rounded-pill px-3 py-2" style="font-size: 0.65rem;" title="No disponible">
-                                <i class="bi bi-question-circle me-1"></i>
+                                <?php endif; ?>
                             </span>
-                        <?php endif; ?>
                         </div>
                     </td>
                 </tr>
@@ -256,8 +250,7 @@ include 'includes/header.php';
 
 <script>
     /**
-     * 1. VISUALIZACIÓN DETALLADA:
-     * Carga el contenido de obtener_detalles_ticket.php dentro del modal.
+     * AJAX: Recupera el desglose técnico y financiero del ticket.
      */
     function abrirModalVisualizar(id) {
         $('#modalVisualizar').modal('show');
@@ -273,22 +266,21 @@ include 'includes/header.php';
     }
 
     /**
-     * 2. GESTIÓN DE FLUJO (CERRAR/CANCELAR):
-     * Utiliza SweetAlert2 para confirmar la acción y actualiza la fila 
-     * en la tabla de forma reactiva sin recargar la página.
+     * CONTROL DE FLUJO: Actualiza el estatus del ticket y refresca la UI reactivamente.
      */
     function cambiarEstatus(id, nuevoEstatus) {
-        const esCierre = (nuevoEstatus === 'Cerrado');
-        const verbo = esCierre ? 'Cerrar' : 'Cancelar';
-        const colorBoton = esCierre ? '#198754' : '#6c757d';
-        const icono = esCierre ? 'success' : 'warning';
+        const colorEstatus = {
+            'Abierto': '#ffc107',
+            'Cerrado': '#198754',
+            'Cancelado': '#6c757d'
+        };
 
         Swal.fire({
-            title: `¿${verbo} ticket #${id}?`,
+            title: `¿${nuevoEstatus === 'Cerrado' ? 'Cerrar' : 'Cancelar'} ticket #${id}?`,
             text: `El estatus cambiará a ${nuevoEstatus.toLowerCase()} de forma permanente.`,
-            icon: icono,
+            icon: nuevoEstatus === 'Cerrado' ? 'success' : 'warning',
             showCancelButton: true,
-            confirmButtonColor: colorBoton,
+            confirmButtonColor: colorEstatus[nuevoEstatus],
             cancelButtonColor: '#adb5bd',
             confirmButtonText: 'Sí, confirmar',
             cancelButtonText: 'Regresar'
@@ -309,23 +301,24 @@ include 'includes/header.php';
                                 showConfirmButton: false
                             });
 
-                            // Actualización visual de la fila afectada
-                            $('#tablaTickets tbody tr').each(function() {
-                                const fila = $(this);
-                                const idFila = fila.find('td:first').text().trim();
+                            const fila = $(`button[onclick*="cambiarEstatus(${id},"]`).closest('tr');
 
-                                if (idFila == id) {
-                                    let badgeClass = (nuevoEstatus === 'Cerrado') ? 'bg-success' : 'bg-secondary';
-                                    fila.find('td:nth-child(8)').html(`<span class="badge ${badgeClass}" style="font-size: 0.65rem;">${nuevoEstatus}</span>`);
-                                    
-                                    // Bloqueamos edición una vez cerrado/cancelado
-                                    fila.find('.btn-group').html(`
-                                        <button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(${id})" title="Ver detalles">
-                                            <i class="bi bi-eye-fill"></i>
-                                        </button>
-                                    `);
-                                }
-                            });
+                            // Actualización de Badge de Estatus principal
+                            const badgeEstatus = fila.find('td:nth-child(8) .badge');
+                            badgeEstatus.text(nuevoEstatus);
+                            badgeEstatus.removeClass('bg-warning bg-success bg-secondary text-dark text-white');
+                            
+                            let badgeClass = (nuevoEstatus === 'Cerrado') ? 'bg-success' : 'bg-secondary';
+                            badgeEstatus.addClass(badgeClass + ' text-white');
+
+                            // Bloqueo de controles de edición
+                            if (nuevoEstatus !== 'Abierto') {
+                                fila.find('.btn-group').html(`
+                                    <button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(${id})" title="Ver detalles">
+                                        <i class="bi bi-eye-fill"></i>
+                                    </button>
+                                `);
+                            }
                         } else {
                             Swal.fire('Error', 'No se pudo actualizar: ' + response.error, 'error');
                         }
@@ -336,8 +329,7 @@ include 'includes/header.php';
     }
 
     /**
-     * 3. INICIALIZACIÓN DE DATATABLES Y FILTROS:
-     * Configura la búsqueda avanzada, el idioma y los filtros personalizados del dashboard.
+     * CONFIGURACIÓN DATATABLES: Inicializa filtros de búsqueda y rango de fechas.
      */
     $(document).ready(function() {
         if ($('#tablaTickets').length) {
@@ -348,14 +340,13 @@ include 'includes/header.php';
                 "order": [[0, "desc"]]
             });
 
-            // Eventos de Filtrado por Interfaz
             $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
             $('#filterTipo').on('change', function() { table.column(3).search(this.value).draw(); });
             $('#checkSoloPendientes').on('change', function() { table.column(7).search(this.checked ? '^Abierto$' : '', true, false).draw(); });
             $('#checkGarantia').on('change', function() { table.column(5).search(this.checked ? '^Válida$' : '', true, false).draw(); });
             $('#checkSoloDeuda').on('change', function() { table.column(6).search(this.checked ? '^Pendiente$' : '', true, false).draw(); });
 
-            // Extensión de DataTables para Filtrado por Rango de Fechas
+            // Filtro de búsqueda por fechas personalizado
             $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
                 var min = $('#fechaDesde').val();
                 var max = $('#fechaHasta').val();
