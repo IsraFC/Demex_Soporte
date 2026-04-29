@@ -230,6 +230,12 @@ include 'includes/header.php';
     </div>
 </div>
 
+<div class="d-flex justify-content-center mt-3" style="gap: 10px;">
+    <button type="button" class="btn btn-outline-success shadow-sm rounded-pill px-3" onclick="confirmarRespaldo()">
+        <i class="bi bi-file-earmark-excel-fill me-1"></i> Respaldo y Limpieza
+    </button>
+</div>
+
 <div class="modal fade" id="modalVisualizar" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content border-0 shadow-lg">
@@ -324,6 +330,29 @@ include 'includes/header.php';
                         }
                     }
                 });
+            }
+        });
+    }
+
+    function confirmarRespaldo() {
+        Swal.fire({
+            title: '¿Generar Respaldo y Limpiar?',
+            text: "Se descargará un Excel con TODO el historial. Los tickets 'Cerrados' y 'Cancelados' se eliminarán de la base de datos para depurar el sistema.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#198754',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Sí, respaldar y limpiar',
+            cancelButtonText: 'Solo descargar Excel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Descarga + Limpieza
+                window.location.href = 'actions/respaldo_limpieza.php?download=true&clean=true';
+                // Recargar la página después de un momento para ver los cambios
+                setTimeout(() => { location.reload(); }, 3000);
+            } else if (result.dismiss === Swal.DismissReason.cancel) {
+                // Solo Descarga (sin borrar nada)
+                window.location.href = 'actions/respaldo_limpieza.php?download=true&clean=false';
             }
         });
     }
