@@ -6,6 +6,7 @@
  * @project Soporte Desarrollo Mexicano (DEMEX)
  * @version 1.16
  */
+require_once 'config/db.php';
 $pagina_actual = 'estadisticas';
 include 'includes/header.php';
 ?>

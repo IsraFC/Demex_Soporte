@@ -8,9 +8,10 @@
  * @project Soporte Desarrollo Mexicano (DEMEX)
  * @version 1.6
  */
-require_once 'config/db.php';
 require_once 'config/backup.php';
-ejecutarRespaldoSilencioso($pdo);
+if (isset($pdo)) {
+    ejecutarRespaldoSilencioso($pdo);
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
