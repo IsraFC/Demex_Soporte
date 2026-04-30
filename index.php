@@ -55,9 +55,9 @@ include 'includes/header.php';
 <div class="card-main mb-4 py-3 shadow-sm border-top border-4 border-danger bg-white rounded">
     <div class="row g-0 align-items-center justify-content-between px-3"> 
         <div class="col-auto" style="width: 20%;">
-            <div class="input-group input-group-sm border rounded shadow-sm">
-                <span class="input-group-text bg-white border-0"><i class="bi bi-search text-danger"></i></span>
-                <input type="text" id="customSearch" class="form-control border-0" placeholder="Cliente o Serie...">
+            <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
+                <span class="input-group-text border-0"><i class="bi bi-search text-danger"></i></span>
+                <input type="text" id="customSearch" class="form-control bg-transparent border-0" placeholder="Cliente o Serie...">
             </div>
         </div>
         <div class="col-auto">
