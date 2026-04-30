@@ -20,8 +20,10 @@ require_once 'config/db.php';
 $total = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte")->fetchColumn();
 $pendientes = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte WHERE estatus = 'Abierto'")->fetchColumn();
 
-// Sumatoria de deuda total (Tickets con estatus_pago = 'Pendiente')
-$sql_cobro = "SELECT SUM(costo_total) FROM Detalles_Costos_Tiempos WHERE estatus_pago = 'Pendiente'";
+// Sumatoria de deuda total (Tickets con estatus_pago = 'Pendiente' y estatus = ´Abierto´)
+$sql_cobro = "SELECT SUM(d.costo_total) FROM Detalles_Costos_Tiempos d
+JOIN Tickets_Soporte t ON d.id_ticket = t.id_ticket
+WHERE d.estatus_pago = 'Pendiente' AND t.estatus = 'Abierto'";
 $por_cobrar = $pdo->query($sql_cobro)->fetchColumn() ?: 0;
 
 include 'includes/header.php';

@@ -20,7 +20,7 @@ include 'includes/header.php';
         <p class="text-muted small">Gestión de cuentas y ubicación de servicios.</p>
     </div>
     <div class="col-md-6 text-md-end">
-        <a href="registro_cliente.php" class="btn btn-white border shadow-sm px-5 rounded-pill fw-bold text-danger">
+        <a href="registro_cliente.php" class="btn btn-outline-danger shadow-sm px-5 rounded-pill fw-bold">
             <i class="bi bi-person-plus-fill me-2"></i> Nuevo Cliente
         </a>
     </div>

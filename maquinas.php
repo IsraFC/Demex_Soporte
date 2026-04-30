@@ -134,12 +134,12 @@ include 'includes/header.php';
             </tbody>
         </table>
     </div>
-    
-    <div class="text-center mt-4">
-        <a href="registro_maquina.php" class="btn btn-white border shadow-sm px-5 rounded-pill fw-bold text-danger">
-            <i class="bi bi-plus-circle me-2"></i> Nueva Máquina
-        </a>
-    </div>
+</div>
+
+<div class="text-center mt-4">
+    <a href="registro_maquina.php" class="btn btn-outline-danger shadow-sm px-5 rounded-pill fw-bold">
+        <i class="bi bi-plus-circle me-2"></i> Nueva Máquina
+    </a>
 </div>
 
 <script>
