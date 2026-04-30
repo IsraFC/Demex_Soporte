@@ -292,7 +292,12 @@ $(document).ready(function() {
                 const diff = new Date(fin) - new Date(inicio);
                 const dias = Math.floor(diff / (1000 * 60 * 60 * 24));
                 $('#tiempo_accion').val(dias >= 0 ? dias : 0);
+            } else {
+                $('#tiempo_accion').val('');
             }
+        } else {
+            $('#fecha_fin').val('').prop('disabled', true);
+            $('#tiempo_accion').val('');
         }
     });
 
