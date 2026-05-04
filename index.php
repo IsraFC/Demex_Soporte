@@ -274,7 +274,7 @@ include 'includes/header.php';
     }
 
     /**
-     * CONTROL DE FLUJO: Actualiza el estatus del ticket y refresca la UI reactivamente.
+     * CONTROL DE FLUJO: Actualiza el estatus del ticket.
      */
     function cambiarEstatus(id, nuevoEstatus) {
         const colorEstatus = {
@@ -303,32 +303,12 @@ include 'includes/header.php';
                         if (response.success) {
                             Swal.fire({
                                 title: '¡Hecho!',
-                                text: `Ticket #${id} ${nuevoEstatus.toLowerCase()} correctamente.`,
+                                text: `Ticket #${id} actualizado correctamente.`,
                                 icon: 'success',
                                 timer: 1500,
                                 showConfirmButton: false
                             });
-
-                            const fila = $(`button[onclick*="cambiarEstatus(${id},"]`).closest('tr');
-
-                            // Actualización de Badge de Estatus principal
-                            const badgeEstatus = fila.find('td:nth-child(8) .badge');
-                            badgeEstatus.text(nuevoEstatus);
-                            badgeEstatus.removeClass('bg-warning bg-success bg-secondary text-dark text-white');
-                            
-                            let badgeClass = (nuevoEstatus === 'Cerrado') ? 'bg-success' : 'bg-secondary';
-                            badgeEstatus.addClass(badgeClass + ' text-white');
-
-                            // Bloqueo de controles de edición
-                            if (nuevoEstatus !== 'Abierto') {
-                                fila.find('.btn-group').html(`
-                                    <button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(${id})" title="Ver detalles">
-                                        <i class="bi bi-eye-fill"></i>
-                                    </button>
-                                `);
-                            }
-                        } else {
-                            Swal.fire('Error', 'No se pudo actualizar: ' + response.error, 'error');
+                            setTimeout(() => { location.reload(); }, 1500);
                         }
                     }
                 });
@@ -336,10 +316,13 @@ include 'includes/header.php';
         });
     }
 
+    /**
+     * FUNCIÓN DEL BOTÓN EXCEL (Respaldo y Limpieza)
+     */
     function confirmarRespaldo() {
         Swal.fire({
             title: '¿Generar Respaldo y Limpiar?',
-            text: "Se descargará un Excel con TODO el historial. Los tickets 'Cerrados' y 'Cancelados' se eliminarán de la base de datos para depurar el sistema.",
+            text: "Se descargará un Excel con TODO el historial. Los tickets 'Cerrados' y 'Cancelados' se eliminarán de la base de datos.",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#198754',
@@ -350,22 +333,31 @@ include 'includes/header.php';
             if (result.isConfirmed) {
                 // Descarga + Limpieza
                 window.location.href = 'actions/respaldo_limpieza.php?download=true&clean=true';
-                // Recargar la página después de un momento para ver los cambios
                 setTimeout(() => { location.reload(); }, 3000);
             } else if (result.dismiss === Swal.DismissReason.cancel) {
-                // Solo Descarga (sin borrar nada)
+                // Solo Descarga
                 window.location.href = 'actions/respaldo_limpieza.php?download=true&clean=false';
             }
         });
     }
 
     /**
-     * CONFIGURACIÓN DATATABLES: Inicializa filtros de búsqueda y rango de fechas.
+     * CONFIGURACIÓN DATATABLES Y FILTROS (Versión Blindada)
      */
     $(document).ready(function() {
         if ($('#tablaTickets').length) {
             var table = $('#tablaTickets').DataTable({
-                "language": { "url": "//cdn.datatables.net/plug-ins/1.10.20/i18n/Spanish.json" },
+                "language": {
+                    "sProcessing":     "Procesando...",
+                    "sLengthMenu":     "Mostrar _MENU_ registros",
+                    "sZeroRecords":    "No se encontraron resultados",
+                    "sInfo":           "Mostrando _START_ al _END_ de _TOTAL_",
+                    "sInfoEmpty":      "Mostrando 0 al 0 de 0",
+                    "sSearch":         "Buscar:",
+                    "oPaginate": {
+                        "sFirst": "Primero", "sLast": "Último", "sNext": "Sig", "sPrevious": "Ant"
+                    }
+                },
                 "dom": 'rtip',
                 "pageLength": 13,
                 "order": [[0, "desc"]]
@@ -373,22 +365,33 @@ include 'includes/header.php';
 
             $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
             $('#filterTipo').on('change', function() { table.column(3).search(this.value).draw(); });
-            $('#checkSoloPendientes').on('change', function() { table.column(7).search(this.checked ? '^Abierto$' : '', true, false).draw(); });
-            $('#checkGarantia').on('change', function() { table.column(5).search(this.checked ? '^Válida$' : '', true, false).draw(); });
-            $('#checkSoloDeuda').on('change', function() { table.column(6).search(this.checked ? '^Pendiente$' : '', true, false).draw(); });
+            
+            // --- BLOQUEO DE CALENDARIOS ---
+            $('#fechaDesde').on('change', function() {
+                var fechaMin = $(this).val();
+                $('#fechaHasta').attr('min', fechaMin); // Bloquea días anteriores en el segundo input
+                table.draw();
+            });
 
-            // Filtro de búsqueda por fechas personalizado
+            $('#fechaHasta').on('change', function() {
+                var fechaMax = $(this).val();
+                $('#fechaDesde').attr('max', fechaMax); // Bloquea días posteriores en el primer input
+                table.draw();
+            });
+
+            // --- LÓGICA DE FILTRADO ---
             $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
                 var min = $('#fechaDesde').val();
                 var max = $('#fechaHasta').val();
-                var dateRaw = settings.aoData[dataIndex].anCells[8].getAttribute('data-order');
-                var date = dateRaw ? dateRaw.split(' ')[0] : ""; 
+                var dateRaw = $(table.row(dataIndex).node()).find('td:nth-child(9)').attr('data-order');
+                var date = dateRaw ? dateRaw.substring(0, 10) : ""; 
 
-                if ((min === "" && max === "") || (min === "" && date <= max) || (min <= date && max === "") || (min <= date && date <= max)) return true;
+                if (min === "" && max === "") return true;
+                if (min === "" && date <= max) return true;
+                if (min <= date && max === "") return true;
+                if (min <= date && date <= max) return true;
                 return false;
             });
-
-            $('#fechaDesde, #fechaHasta').on('change', function() { table.draw(); });
         }
     });
 </script>
