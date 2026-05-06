@@ -2,3 +2,9 @@
 Thumbs.db
 desktop.ini
 *.log
+
+# Bloquear la carpeta de respaldos completa
+backups/
+
+# Bloquear archivos de registro de tiempo
+config/ultimo_respaldo.txt
