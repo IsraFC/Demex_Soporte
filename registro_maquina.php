@@ -1,24 +1,17 @@
 <?php
 /**
  * ARCHIVO: registro_maquina.php
- * DESCRIPCIÓN: Formulario de alta para equipos con validación asíncrona de duplicados.
- * Integra un buscador dinámico de clientes y cálculo automático de vigencia en backend.
- * * @author Israel Fernández Carrera
+ * DESCRIPCIÓN: Formulario de alta para equipos con modal de cliente integrado.
+ * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.2
+ * @version 1.6
  */
 
-// Define el contexto para el header (habilita botones Inicio/Maquinas)
 require_once 'config/db.php';
-
 include 'includes/header.php';
 ?>
 
 <style>
-    /**
-     * ESTILOS DE VALIDACIÓN VISUAL
-     * .required-alt: Agrega un asterisco rojo a etiquetas obligatorias.
-     */
     .required-alt::after {
         content: " *";
         color: #dc3545;
@@ -37,13 +30,12 @@ include 'includes/header.php';
     <form action="actions/procesar_maquina.php" method="POST" id="formRegistroMaquina">
         
         <div class="row g-4 mb-4">
-            
             <div class="col-md-4">
                 <label class="form-label fw-bold small text-muted required-alt">
                     <i class="bi bi-upc-scan me-1"></i> Número de Serie
                 </label>
                 <input type="text" name="no_serie" id="no_serie" class="form-control border-0 bg-light shadow-sm" 
-                    placeholder="Numero de serie..." required maxlength="15">
+                    placeholder="Número de serie..." required maxlength="15">
                 <div id="status_serie" class="small mt-1 fw-bold" style="display:none;"></div>
             </div>
 
@@ -51,18 +43,21 @@ include 'includes/header.php';
                 <label class="form-label fw-bold small text-muted required-alt">
                     <i class="bi bi-person-circle me-1"></i> Cliente
                 </label>
-                <input list="listaClientes" name="nombre_cliente" class="form-control border-0 bg-light shadow-sm" 
-                       placeholder="Escriba para buscar..." required>
+                <div class="input-group">
+                    <input list="listaClientes" name="nombre_cliente" id="input_cliente" class="form-control border-0 bg-light shadow-sm" 
+                           placeholder="Buscar cliente..." required>
+                    <button class="btn btn-danger shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente" title="Agregar nuevo cliente">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
                 <datalist id="listaClientes">
                     <?php
-                    // Carga nominal de clientes para el buscador predictivo
                     $clientes = $pdo->query("SELECT nombre_cliente FROM Clientes ORDER BY nombre_cliente ASC");
                     while ($c = $clientes->fetch()) {
-                        echo "<option value='{$c['nombre_cliente']}'>";
+                        echo "<option value='".htmlspecialchars($c['nombre_cliente'])."'>";
                     }
                     ?>
                 </datalist>
-                <small class="text-muted" style="font-size: 0.65rem;">Seleccione de la lista o escriba uno nuevo.</small>
             </div>
 
             <div class="col-md-4">
@@ -84,7 +79,6 @@ include 'includes/header.php';
         </div>
 
         <div class="row justify-content-center g-4 border-top pt-4">
-            
             <div class="col-md-4 text-center">
                 <label class="form-label fw-bold small text-muted required-alt">
                     <i class="bi bi-calendar-check me-1"></i> Inicio de Garantía
@@ -123,50 +117,115 @@ include 'includes/header.php';
     </form>
 </div>
 
-<script>
-/**
- * LÓGICA DE VALIDACIÓN ASÍNCRONA (AJAX)
- * Verifica la existencia del número de serie en la base de datos mientras el usuario escribe.
- */
-$(document).ready(function() {
-    var typingTimer;                // Identificador del temporizador
-    var doneTypingInterval = 500;  // Tiempo de espera para evitar saturación de peticiones (Debounce)
+<div class="modal fade" id="modalNuevoCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-plus-fill me-2"></i>Alta Rápida de Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formModalCliente">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Nombre del Cliente / Empresa</label>
+                        <input type="text" id="m_nombre_cliente" class="form-control border-0 bg-light shadow-sm" placeholder="Nombre completo..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Teléfono</label>
+                        <input type="tel" id="m_telefono" class="form-control border-0 bg-light shadow-sm" placeholder="222 123 4567" maxlength="12">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Ubicación</label>
+                        <textarea id="m_ubicacion" class="form-control border-0 bg-light shadow-sm" rows="2" placeholder="Dirección..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" id="btnGuardarClienteModal" class="btn btn-danger rounded-pill px-4 fw-bold shadow">
+                    <i class="bi bi-person-check me-1"></i> Guardar Cliente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
+<script>
+$(document).ready(function() {
+    // 1. VALIDACIÓN DE SERIE
+    var typingTimer;
     $('#no_serie').on('input', function() {
         clearTimeout(typingTimer);
         var serie = $(this).val();
         var input = $(this);
         var msg = $('#status_serie');
-
-        // Limpieza de estados visuales previos
-        input.css('border', 'none'); 
-        msg.hide();
+        input.css('border', 'none'); msg.hide();
 
         if (serie.length >= 3) {
-            // Se inicia el temporizador para procesar la búsqueda tras una pausa en la escritura
             typingTimer = setTimeout(function() {
                 $.ajax({
-                    url: 'actions/verificar_serie.php', // Endpoint de verificación
+                    url: 'actions/verificar_serie.php',
                     method: 'POST',
                     data: { no_serie: serie },
                     success: function(response) {
                         if (response === 'existe') {
-                            // Estado: Error (Serie duplicada)
-                            input.addClass('is-invalid').removeClass('is-valid');
-                            input.css('border', '2px solid #dc3545');
-                            msg.text('⚠️ Este número de serie ya existe').css('color', '#dc3545').show();
-                            $('#btnGuardar').attr('disabled', true); // Bloquea envío
+                            input.addClass('is-invalid').css('border', '2px solid #dc3545');
+                            msg.text('⚠️ Existe').css('color', '#dc3545').show();
+                            $('#btnGuardar').attr('disabled', true);
                         } else {
-                            // Estado: Éxito (Serie disponible)
-                            input.addClass('is-valid').removeClass('is-invalid');
-                            input.css('border', '2px solid #198754');
-                            msg.text('✅ Disponible').css('color', '#198754').show();
-                            $('#btnGuardar').attr('disabled', false); // Habilita envío
+                            input.addClass('is-valid').css('border', '2px solid #198754');
+                            msg.text('✅ OK').css('color', '#198754').show();
+                            $('#btnGuardar').attr('disabled', false);
                         }
                     }
                 });
-            }, doneTypingInterval);
+            }, 500);
         }
+    });
+
+    // 2. MÁSCARA TELÉFONO MODAL
+    $('#m_telefono').on('input', function() {
+        var val = $(this).val().replace(/\D/g, '');
+        var res = '';
+        if (val.length > 0) {
+            res = val.substring(0, 3);
+            if (val.length > 3) res += ' ' + val.substring(3, 6);
+            if (val.length > 6) res += ' ' + val.substring(6, 10);
+        }
+        $(this).val(res);
+    });
+
+    // 3. GUARDAR CLIENTE (AJAX)
+    $('#btnGuardarClienteModal').on('click', function() {
+        const nombre = $('#m_nombre_cliente').val();
+        if (nombre.length < 4) { Swal.fire('Atención', 'Nombre muy corto', 'warning'); return; }
+
+        const btn = $(this);
+        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+        $.ajax({
+            url: 'actions/procesar_cliente.php',
+            method: 'POST',
+            data: {
+                nombre_cliente: nombre,
+                telefono: $('#m_telefono').val(),
+                ubicacion: $('#m_ubicacion').val(),
+                es_ajax: true // BANDERA PARA EL PHP
+            },
+            success: function(response) {
+                if(response.trim() === "ok") {
+                    $('#listaClientes').append($('<option>').val(nombre));
+                    $('#input_cliente').val(nombre);
+                    $('#modalNuevoCliente').modal('hide');
+                    $('#formModalCliente')[0].reset();
+                    Swal.fire('¡Éxito!', 'Cliente seleccionado', 'success');
+                } else {
+                    Swal.fire('Error', 'No se pudo guardar', 'error');
+                }
+            },
+            error: function() { Swal.fire('Error', 'Fallo de conexión', 'error'); },
+            complete: function() { btn.prop('disabled', false).html('<i class="bi bi-person-check me-1"></i> Guardar Cliente'); }
+        });
     });
 });
 </script>
