@@ -36,8 +36,13 @@ try {
     $res_func = $pdo->query("SELECT SUM(CASE WHEN maquina_func = 1 THEN 1 ELSE 0 END) as si, SUM(CASE WHEN maquina_func = 0 THEN 1 ELSE 0 END) as no FROM Tickets_Soporte $where_tickets")->fetch(PDO::FETCH_ASSOC);
     $res_est = $pdo->query("SELECT SUM(CASE WHEN estatus = 'Abierto' THEN 1 ELSE 0 END) as a, SUM(CASE WHEN estatus = 'Cerrado' THEN 1 ELSE 0 END) as c, SUM(CASE WHEN estatus = 'Cancelado' THEN 1 ELSE 0 END) as x FROM Tickets_Soporte $where_tickets")->fetch(PDO::FETCH_ASSOC);
     $res_fallas = $pdo->query("SELECT SUM(CASE WHEN tipo_falla = 'Mecánica' THEN 1 ELSE 0 END) as mec, SUM(CASE WHEN tipo_falla = 'Refrigeración' THEN 1 ELSE 0 END) as ref, SUM(CASE WHEN tipo_falla = 'Electrónica' THEN 1 ELSE 0 END) as ele, SUM(CASE WHEN tipo_falla = 'Regulador' THEN 1 ELSE 0 END) as reg, SUM(CASE WHEN tipo_falla = 'Materia prima' THEN 1 ELSE 0 END) as mp, SUM(CASE WHEN tipo_falla = 'Otra' THEN 1 ELSE 0 END) as otr FROM Tickets_Soporte $where_tickets")->fetch(PDO::FETCH_ASSOC);
-    $res_tllamada = $pdo->query("SELECT SUM(CASE WHEN tipo_llamada = 'Venta Refacciones' THEN 1 ELSE 0 END) as venta, SUM(CASE WHEN tipo_llamada = 'Información' THEN 1 ELSE 0 END) as info_ll, SUM(CASE WHEN tipo_llamada = 'Capacitaciones' THEN 1 ELSE 0 END) as capa, SUM(CASE WHEN tipo_llamada = 'Soporte' THEN 1 ELSE 0 END) as sop FROM Tickets_Soporte $where_tickets")->fetch(PDO::FETCH_ASSOC);
-    
+    $res_tllamada = $pdo->query("SELECT 
+    SUM(CASE WHEN UPPER(TRIM(tipo_llamada)) LIKE 'VENTA%' THEN 1 ELSE 0 END) as venta, 
+    SUM(CASE WHEN UPPER(TRIM(tipo_llamada)) LIKE 'INF%' THEN 1 ELSE 0 END) as info, 
+    SUM(CASE WHEN UPPER(TRIM(tipo_llamada)) LIKE 'CAPA%' THEN 1 ELSE 0 END) as capa, 
+    SUM(CASE WHEN UPPER(TRIM(tipo_llamada)) LIKE 'SOP%' THEN 1 ELSE 0 END) as sop 
+    FROM Tickets_Soporte $where_tickets")->fetch(PDO::FETCH_ASSOC);
+
     // Conteo de Acciones individuales para usarlas como divisores
     $res_acc = $pdo->query("SELECT SUM(CASE WHEN accion = 'Ninguna' THEN 1 ELSE 0 END) as ning, SUM(CASE WHEN accion = 'Envio técnico' THEN 1 ELSE 0 END) as e_tec, SUM(CASE WHEN accion = 'Envio refacciones' THEN 1 ELSE 0 END) as e_ref, SUM(CASE WHEN accion = 'Envio técnico y refacciones' THEN 1 ELSE 0 END) as e_amb, SUM(CASE WHEN accion = 'Envio base' THEN 1 ELSE 0 END) as e_bas, SUM(CASE WHEN accion = 'Reparación en taller' THEN 1 ELSE 0 END) as tall, SUM(CASE WHEN accion = 'Cambio de maquina' THEN 1 ELSE 0 END) as camb, SUM(CASE WHEN accion = 'Información' THEN 1 ELSE 0 END) as info FROM Detalles_Costos_Tiempos $where_detalles")->fetch(PDO::FETCH_ASSOC);
 
@@ -66,7 +71,12 @@ try {
         'estatus' => ['a' => (int)$res_est['a'], 'c' => (int)$res_est['c'], 'x' => (int)$res_est['x'], 'suma' => (int)$res_est['a'] + (int)$res_est['c'] + (int)$res_est['x']],
         'fallas' => ['mec' => (int)$res_fallas['mec'], 'ref' => (int)$res_fallas['ref'], 'ele' => (int)$res_fallas['ele'], 'reg' => (int)$res_fallas['reg'], 'mp' => (int)$res_fallas['mp'], 'otr' => (int)$res_fallas['otr']],
         'acciones' => ['ning' => (int)$res_acc['ning'], 'e_tec' => (int)$res_acc['e_tec'], 'e_ref' => (int)$res_acc['e_ref'], 'e_amb' => (int)$res_acc['e_amb'], 'e_bas' => (int)$res_acc['e_bas'], 'tall' => (int)$res_acc['tall'], 'camb' => (int)$res_acc['camb'], 'info' => (int)$res_acc['info']],
-        'tipo_llamada' => ['venta' => (int)$res_tllamada['venta'], 'info' => (int)$res_tllamada['info_ll'], 'capa' => (int)$res_tllamada['capa'], 'sop' => (int)$res_tllamada['sop']],
+        'tipo_llamada' => [
+            'venta' => (int)($res_tllamada['venta'] ?? 0), 
+            'info'  => (int)($res_tllamada['info'] ?? 0), 
+            'capa'  => (int)($res_tllamada['capa'] ?? 0), 
+            'sop'   => (int)($res_tllamada['sop'] ?? 0)
+        ],
         'financiero' => [
             'gar_sum' => (float)$res_fin['sum_gar'], 'gar_count' => (int)$res_fin['count_gar'],
             'venta_sum' => (float)$res_fin['sum_venta'], 'venta_count' => (int)$res_fin['count_venta'],

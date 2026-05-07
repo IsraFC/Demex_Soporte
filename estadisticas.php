@@ -176,6 +176,23 @@ $fecha_fin_val = $_GET['fecha_fin'] ?? '';
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 $(document).ready(function() {
+    // --- LÓGICA DE BLOQUEO DE CALENDARIOS ---
+    $('#fecha_inicio').on('change', function() {
+        var fechaMin = $(this).val();
+        if (fechaMin) {
+            // Establece la fecha seleccionada como el mínimo permitido para la fecha de fin
+            $('#fecha_fin').attr('min', fechaMin);
+        }
+    });
+
+    $('#fecha_fin').on('change', function() {
+        var fechaMax = $(this).val();
+        if (fechaMax) {
+            // Establece la fecha seleccionada como el máximo permitido para la fecha de inicio
+            $('#fecha_inicio').attr('max', fechaMax);
+        }
+    });
+
     const apiQuery = new URLSearchParams(window.location.search).toString();
     
     $.getJSON('actions/obtener_estadisticas.php?' + apiQuery, function(data) {
@@ -196,10 +213,68 @@ $(document).ready(function() {
         setupChart('chartFun', 'pie', ['Funcionando', 'No funciona'], [data.funcionamiento.si, data.funcionamiento.no], ['#0d6efd', '#fd7e14']);
         setupChart('chartEst', 'pie', ['Abierto', 'Cerrado', 'Cancelado'], [data.estatus.a, data.estatus.c, data.estatus.x], ['#ffc107', '#198754', '#6c757d'], true);
 
-        const barOpt = { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
-        new Chart(document.getElementById('chartFal'), { type: 'bar', data: { labels: ['Mec', 'Ref', 'Ele', 'Reg', 'MP', 'Otr'], datasets: [{ data: Object.values(data.fallas), backgroundColor: '#3b82f6' }] }, options: barOpt });
-        new Chart(document.getElementById('chartLL'), { type: 'bar', data: { labels: ['Venta', 'Info', 'Capa', 'Sop'], datasets: [{ data: Object.values(data.tipo_llamada), backgroundColor: '#10b981' }] }, options: { ...barOpt, indexAxis: 'x' } });
-        new Chart(document.getElementById('chartAcc'), { type: 'bar', data: { labels: ['Ning', 'Tec', 'Ref', 'Mix', 'Base', 'Tall', 'Camb', 'Info'], datasets: [{ data: Object.values(data.acciones), backgroundColor: '#8b5cf6' }] }, options: barOpt });
+        const barOpt = { 
+            indexAxis: 'y', 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { 
+                legend: { display: false },
+                tooltip: {
+                    enabled: true,
+                    callbacks: {
+                        // Forzamos a que el tooltip muestre el valor completo
+                        label: function(context) {
+                            return ' Total: ' + context.raw;
+                        }
+                    }
+                }
+            } 
+        };
+
+        new Chart(document.getElementById('chartFal'), { 
+            type: 'bar', 
+            data: { 
+                labels: ['Mecánica', 'Refrigeración', 'Electrónica', 'Regulador', 'Materia Prima', 'Otra'], 
+                datasets: [{ data: Object.values(data.fallas), backgroundColor: '#3b82f6' }] 
+            }, 
+            options: barOpt 
+        });
+
+        new Chart(document.getElementById('chartLL'), { 
+            type: 'bar', 
+            data: { 
+                labels: ['Venta Refacciones', 'Información', 'Capacitaciones', 'Soporte'], 
+                datasets: [{ 
+                    // Accedemos a las propiedades una por una para que el orden sea SIEMPRE el mismo
+                    data: [
+                        data.tipo_llamada.venta, 
+                        data.tipo_llamada.info, 
+                        data.tipo_llamada.capa, 
+                        data.tipo_llamada.sop
+                    ], 
+                    backgroundColor: '#10b981' 
+                }] 
+            }, 
+            options: { 
+                ...barOpt, 
+                indexAxis: 'x',
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 } // Útil para que no salgan decimales si hay pocos datos
+                    }
+                }
+            } 
+        });
+
+        new Chart(document.getElementById('chartAcc'), { 
+            type: 'bar', 
+            data: { 
+                labels: ['Ninguna', 'Envío Técnico', 'Envío Refacciones', 'Técnico + Refacc.', 'Envío Base', 'Reparación Taller', 'Cambio Máquina', 'Información'], 
+                datasets: [{ data: Object.values(data.acciones), backgroundColor: '#8b5cf6' }] 
+            }, 
+            options: barOpt 
+        });
 
         const fin = data.financiero;
         const fmt = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n);
