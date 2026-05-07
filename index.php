@@ -7,7 +7,7 @@
  * temporales: Pendiente, Iniciado y Finalizado.
  * * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 1.7
+ * @version 1.8
  */
 
 $pagina_actual = 'inicio';
@@ -53,39 +53,67 @@ include 'includes/header.php';
 </div>
 
 <div class="card-main mb-4 py-3 shadow-sm border-top border-4 border-danger bg-white rounded">
-    <div class="row g-0 align-items-center justify-content-between px-3"> 
-        <div class="col-auto" style="width: 20%;">
+    <div class="row g-3 align-items-center px-3 mb-3">
+        <div class="col-md-3">
             <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
-                <span class="input-group-text border-0"><i class="bi bi-search text-danger"></i></span>
+                <span class="input-group-text border-0 bg-transparent"><i class="bi bi-search text-danger"></i></span>
                 <input type="text" id="customSearch" class="form-control bg-transparent border-0" placeholder="Cliente o Serie...">
             </div>
         </div>
-        <div class="col-auto">
-            <select id="filterTipo" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3">
-                <option value="">Todo</option>
+        <div class="col-md-3">
+            <select id="filterTipo" class="form-select border-0 bg-light fw-bold text-muted shadow-sm">
+                <option value="">Todas las Llamadas</option>
                 <option value="Soporte">Soporte</option>
                 <option value="Venta Refacciones">Venta Refacciones</option>
                 <option value="Información">Información</option>
                 <option value="Capacitaciones">Capacitaciones</option>
             </select>
         </div>
-        <div class="col-auto d-flex gap-3 align-items-center">
+        <div class="col-md-3">
+            <select id="filterFalla" class="form-select border-0 bg-light fw-bold text-muted shadow-sm">
+                <option value="">Todas las Fallas</option>
+                <option value="Mecánica">Mecánica</option>
+                <option value="Refrigeración">Refrigeración</option>
+                <option value="Electrónica">Electrónica</option>
+                <option value="Regulador">Regulador</option>
+                <option value="Materia prima">Materia prima</option>
+                <option value="Otra">Otra</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select id="filterAccion" class="form-select border-0 bg-light fw-bold text-muted shadow-sm">
+                <option value="">Todas las Acciones</option>
+                <option value="Ninguna">Ninguna</option>
+                <option value="Envio técnico">Envío técnico</option>
+                <option value="Envio refacciones">Envío refacciones</option>
+                <option value="Envio técnico y refacciones">Técnico + Refacc.</option>
+                <option value="Envio base">Envío base</option>
+                <option value="Reparación en taller">Reparación en taller</option>
+                <option value="Cambio de maquina">Cambio de máquina</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row g-3 align-items-center px-3 border-top pt-3">
+        <div class="col-md-4 d-flex align-items-center gap-2">
+            <span class="small fw-bold text-muted text-uppercase me-1">Rango:</span>
+            <input type="date" id="fechaDesde" class="form-control form-control-sm border-0 bg-light shadow-sm text-muted">
+            <input type="date" id="fechaHasta" class="form-control form-control-sm border-0 bg-light shadow-sm text-muted">
+        </div>
+        
+        <div class="col-md-8 d-flex justify-content-end gap-4">
             <div class="form-check form-switch d-flex align-items-center gap-2 m-0">
                 <input class="form-check-input" type="checkbox" id="checkSoloPendientes">
-                <label class="form-check-label small fw-bold text-muted" for="checkSoloPendientes">Solo <br>Abiertos</label>
+                <label class="form-check-label small fw-bold text-muted" for="checkSoloPendientes">Solo Abiertos</label>
             </div>
             <div class="form-check form-switch d-flex align-items-center gap-2 m-0">
                 <input class="form-check-input" type="checkbox" id="checkGarantia">
-                <label class="form-check-label small fw-bold text-muted" for="checkGarantia">Garantía</label>
+                <label class="form-check-label small fw-bold text-muted" for="checkGarantia">Garantía Válida</label>
             </div>
             <div class="form-check form-switch d-flex align-items-center gap-2 m-0">
                 <input class="form-check-input" type="checkbox" id="checkSoloDeuda">
-                <label class="form-check-label small fw-bold text-danger" for="checkSoloDeuda">Con <br>Deuda</label>
+                <label class="form-check-label small fw-bold text-danger" for="checkSoloDeuda">Con Deuda</label>
             </div>
-        </div>
-        <div class="col-auto d-flex align-items-center gap-2">
-            <input type="date" id="fechaDesde" class="form-control form-control-sm border-0 bg-light shadow-sm text-muted" style="width: 135px;">
-            <input type="date" id="fechaHasta" class="form-control form-control-sm border-0 bg-light shadow-sm text-muted" style="width: 135px;">
         </div>
     </div>
 </div>
@@ -98,7 +126,9 @@ include 'includes/header.php';
                     <th data-type="num">#</th> 
                     <th>Cliente</th>
                     <th>Equipo / Serie</th>
-                    <th class="d-none">Tipo Llamada</th> <th>Falla</th>
+                    <th class="d-none">Tipo Llamada</th> 
+                    <th>Falla</th>
+                    <th class="d-none">Accion Realizada</th>
                     <th>Garantía</th> 
                     <th>Pago</th> 
                     <th>Estatus</th> 
@@ -145,6 +175,7 @@ include 'includes/header.php';
                     </td>
                     <td class="d-none"><?= $row['tipo_llamada'] ?></td>
                     <td class="small text-muted"><?= $row['tipo_falla'] ?: 'Soporte' ?></td>
+                    <td class="d-none"><?= $row['accion'] ?></td>
                     <td class="small fw-bold <?= $colorGarantia ?>"><?= $row['garantia_valida'] ?></td>
                     <td class="small <?= $colorPago ?>"><?= $pagoTexto ?></td>
                     <td><span class="badge <?= $badgeEstatus ?>" style="font-size: 0.65rem;"><?= $row['estatus'] ?></span></td>
@@ -364,7 +395,28 @@ include 'includes/header.php';
             });
 
             $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
-            $('#filterTipo').on('change', function() { table.column(3).search(this.value).draw(); });
+
+            $('#filterTipo').on('change', function() { table.column(3).search(this.value).draw(); }); // Col 3 (Oculta)
+            $('#filterFalla').on('change', function() { table.column(4).search(this.value).draw(); }); // Col 4 (Visible)
+            $('#filterAccion').on('change', function() { 
+                table.column(5).search(this.value ? '^' + this.value + '$' : '', true, false).draw(); 
+            });
+
+            // 2. Lógica de los Switches (Interruptores)
+            // Filtro: Solo Abiertos (Columna 7 del HTML / Índice 7 de DataTable)
+            $('#checkSoloPendientes').on('change', function() {
+                table.column(8).search(this.checked ? '^Abierto$' : '', true, false).draw();
+            });
+
+            // Filtro: Garantía Válida (Columna 5)
+            $('#checkGarantia').on('change', function() {
+                table.column(6).search(this.checked ? '^Válida$' : '', true, false).draw();
+            });
+
+            // Filtro: Con Deuda (Estatus de Pago 'Pendiente' en Columna 6)
+            $('#checkSoloDeuda').on('change', function() {
+                table.column(7).search(this.checked ? '^Pendiente$' : '', true, false).draw();
+            });
             
             // --- BLOQUEO DE CALENDARIOS ---
             $('#fechaDesde').on('change', function() {
@@ -383,7 +435,8 @@ include 'includes/header.php';
             $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
                 var min = $('#fechaDesde').val();
                 var max = $('#fechaHasta').val();
-                var dateRaw = $(table.row(dataIndex).node()).find('td:nth-child(9)').attr('data-order');
+                // nth-child(10) porque en el DOM el conteo empieza en 1
+                var dateRaw = $(table.row(dataIndex).node()).find('td:nth-child(10)').attr('data-order');
                 var date = dateRaw ? dateRaw.substring(0, 10) : ""; 
 
                 if (min === "" && max === "") return true;
