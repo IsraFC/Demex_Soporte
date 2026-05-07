@@ -98,6 +98,12 @@ if (isset($pdo)) {
                     </a>
                 </li>
 
+                <li class="nav-item ms-lg-3">
+                    <button class="btn btn-danger rounded-pill px-4 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevoTicket">
+                        <i class="bi bi-plus-circle-fill me-2"></i> NUEVO TICKET
+                    </button>
+                </li>
+
             </ul>
         </div>
     </div>

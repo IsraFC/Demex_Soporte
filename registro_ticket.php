@@ -211,6 +211,27 @@ include 'includes/header.php';
  * Controla la interactividad del registro, validaciones AJAX y cálculos en caliente.
  */
 $(document).ready(function() {
+    // --- LÓGICA DE AUTO-LLENADO DESDE ACCESO RÁPIDO ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const serieURL = urlParams.get('no_serie');
+    const modeloURL = urlParams.get('modelo');
+
+    if (serieURL) {
+        // 1. Ponemos la serie
+        $('#no_serie_input').val(serieURL);
+
+        // 2. Si el modelo viene en la URL, lo seleccionamos de inmediato
+        if (modeloURL) {
+            $('#modelo_select').val(modeloURL);
+        }
+
+        // 3. Disparamos la validación de garantía para que aparezca el badge de "Válida/No válida"
+        setTimeout(function() {
+            $('#no_serie_input').trigger('input');
+        }, 100);
+    }
+    // --------------------------------------------------
+
     // 1. MEJORAS DE UX: Evita notación científica en números y permite selección total al enfocar.
     $(document).on('keydown', 'input[type="number"]', function(e) {
         if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
