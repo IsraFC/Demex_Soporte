@@ -1,12 +1,10 @@
 <?php
 /**
  * ARCHIVO: includes/header.php
- * DESCRIPCIÓN: Estructura de encabezado global y carga de recursos críticos.
- * Gestiona la navegación dinámica con resaltado de página activa (estilo cápsula)
- * y centraliza las dependencias de Bootstrap, DataTables, Chart.js y fuentes.
- * * @author Israel Fernández Carrera
+ * DESCRIPCIÓN: Estructura de encabezado global con menú de importación masiva.
+ * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.6
+ * @version 1.7
  */
 require_once 'config/backup.php';
 if (isset($pdo)) {
@@ -31,31 +29,37 @@ if (isset($pdo)) {
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
-        /**
-         * DISEÑO DE NAVEGACIÓN DINÁMICA
-         * .active-page: Crea un efecto de cápsula blanca para resaltar la sección actual en el navbar.
-         */
         .nav-link.active-page {
             background-color: white !important;
-            color: #C62828 !important; /* Rojo institucional DEMEX */
+            color: #C62828 !important; 
             font-weight: 600;
             border-radius: 50px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
         
-        /* Efecto hover suave para items no activos */
         .nav-link:hover:not(.active-page) {
             background-color: rgba(255,255,255,0.1);
             border-radius: 50px;
         }
 
-        /* Sombra sutil para el logotipo */
         .filter-drop-shadow {
             filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.2));
+        }
+
+        /* Estilo para el dropdown de importación para que no rompa la estética */
+        .dropdown-menu-custom {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            margin-top: 10px;
+        }
+        .dropdown-item-custom:hover {
+            background-color: #f8f9fa;
+            color: #C62828;
+            border-radius: 8px;
         }
     </style>
 </head>
@@ -72,7 +76,7 @@ if (isset($pdo)) {
         </button>
 
         <div class="collapse navbar-collapse" id="mainNav">
-            <ul class="navbar-nav ms-auto gap-2">
+            <ul class="navbar-nav ms-auto gap-2 align-items-center">
                 
                 <li class="nav-item">
                     <a class="nav-link px-4 <?= (isset($pagina_actual) && $pagina_actual == 'inicio') ? 'active-page' : '' ?>" href="index.php">
@@ -98,8 +102,28 @@ if (isset($pdo)) {
                     </a>
                 </li>
 
+                <li class="nav-item dropdown ms-lg-2">
+                    <a class="nav-link dropdown-toggle px-4 border border-light border-opacity-25 rounded-pill" href="#" id="importDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-cloud-arrow-up-fill me-1"></i> Importar
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom p-2" aria-labelledby="importDropdown">
+                        <li><h6 class="dropdown-header small text-uppercase fw-bold">Cargas Masivas CSV</h6></li>
+                        <li>
+                            <a class="dropdown-item dropdown-item-custom py-2" href="importar_clientes.php">
+                                <i class="bi bi-person-plus-fill me-2 text-primary"></i> Clientes y Máquinas
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item dropdown-item-custom py-2" href="importar_tickets.php">
+                                <i class="bi bi-ticket-detailed-fill me-2 text-danger"></i> Historial de Tickets
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
                 <li class="nav-item ms-lg-3">
-                    <button class="btn btn-danger rounded-pill px-4 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevoTicket">
+                    <button class="btn btn-danger rounded-pill px-4 shadow-sm fw-bold border border-white border-opacity-50" data-bs-toggle="modal" data-bs-target="#modalNuevoTicket">
                         <i class="bi bi-plus-circle-fill me-2"></i> NUEVO TICKET
                     </button>
                 </li>
