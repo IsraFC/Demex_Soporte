@@ -3,9 +3,12 @@
  * ARCHIVO: editar_ticket.php
  * DESCRIPCIÓN: Interfaz de edición unificada. Permite modificar datos técnicos y financieros.
  * Utiliza bordes primarios (azules) para diferenciar visualmente el modo edición del registro.
- * @author Israel Fernández Carrera
+ * * * MEJORAS V1.6:
+ * - Inteligencia de Series: Genera S/N-XXX automáticamente si se elige modelo en tickets sin serie.
+ * - Sincronización AJAX: Valida garantías y modelos al vuelo durante la edición.
+ * * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 1.5
+ * @version 1.6
  */
 $pagina_actual = 'soporte';
 require_once 'config/db.php';
@@ -32,10 +35,10 @@ if (!$ticket) { header("Location: index.php"); exit(); }
 
 /**
  * LÓGICA DE BLOQUEO:
- * Si el ticket ya tiene un número de serie asignado, se bloquean los campos de equipo
- * para mantener la integridad del historial. Si está vacío, permite la captura.
+ * Si el ticket ya tiene un número de serie real asignado, se bloquean los campos de equipo
+ * para mantener la integridad del historial. Si está vacío o es genérico, permite la captura.
  */
-$tieneSerie = !empty($ticket['no_serie']);
+$tieneSerie = !empty($ticket['no_serie']) && strpos($ticket['no_serie'], 'S/N-') === false;
 
 // 2. Consulta de equipos del cliente para el buscador dinámico (Datalist)
 $stmt_eq = $pdo->prepare("SELECT no_serie, modelo FROM Equipos_Garantia WHERE id_cliente = ?");
@@ -60,6 +63,8 @@ include 'includes/header.php';
     <input type="hidden" name="id_ticket" value="<?= $id_ticket ?>">
     <input type="hidden" name="id_cliente" value="<?= $ticket['id_cliente'] ?>">
     <input type="hidden" name="garantia_valida" id="garantia_valida_input" value="<?= $ticket['garantia_valida'] ?>">
+    
+    <input type="hidden" name="fecha_compra_nueva" id="fecha_compra_nueva" value="">
 
     <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-primary mb-4">
         <div class="row g-4">
@@ -80,7 +85,7 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </datalist>
                     
-                    <div id="status_garantia" class="mt-2 p-2 rounded small fw-bold" style="background-color: #f8f9fa; border-left: 4px solid #dee2e6; <?= $tieneSerie ? '' : 'display:none;' ?>">
+                    <div id="status_garantia" class="mt-2 p-2 rounded small fw-bold" style="background-color: #f8f9fa; border-left: 4px solid #dee2e6; <?= !empty($ticket['no_serie']) ? '' : 'display:none;' ?>">
                         <span id="txt_status_garantia">Garantía: <?= $ticket['garantia_valida'] ?></span>
                     </div>
                 </div>
@@ -170,27 +175,33 @@ include 'includes/header.php';
         <div class="row g-3">
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Refac. (Venta)</label>
-                <input type="number" step="0.01" min="0" name="costo_refac_venta" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_refac_venta'] > 0 ? $ticket['costo_refac_venta'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_refac_venta" class="form-control costo-input border-0 bg-light shadow-sm" 
+                       value="<?= (float)$ticket['costo_refac_venta'] ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-success">Refac. (Gar)</label>
-                <input type="number" step="0.01" min="0" name="costo_refac_garantia" class="form-control costo-input border-success bg-light shadow-sm" value="<?= $ticket['costo_refac_garantia'] > 0 ? $ticket['costo_refac_garantia'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_refac_garantia" class="form-control costo-input border-success bg-light shadow-sm" 
+                       value="<?= (float)$ticket['costo_refac_garantia'] ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Base</label>
-                <input type="number" step="0.01" min="0" name="costo_base" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_base'] > 0 ? $ticket['costo_base'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_base" class="form-control costo-input border-0 bg-light shadow-sm" 
+                       value="<?= (float)$ticket['costo_base'] ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Técnico</label>
-                <input type="number" step="0.01" min="0" name="costo_tecnico" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_tecnico'] > 0 ? $ticket['costo_tecnico'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_tecnico" class="form-control costo-input border-0 bg-light shadow-sm" 
+                       value="<?= (float)$ticket['costo_tecnico'] ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Envío</label>
-                <input type="number" step="0.01" min="0" name="costo_envio" class="form-control costo-input border-0 bg-light shadow-sm" value="<?= $ticket['costo_envio'] > 0 ? $ticket['costo_envio'] : '' ?>" placeholder="0.00">
+                <input type="number" step="0.01" min="0" name="costo_envio" class="form-control costo-input border-0 bg-light shadow-sm" 
+                       value="<?= (float)$ticket['costo_envio'] ?>" placeholder="0.00">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted">Cotización</label>
-                <input type="text" name="no_cotizacion" class="form-control bg-light border-0 shadow-sm" value="<?= $ticket['no_cotizacion'] ?>" placeholder="Folio...">
+                <input type="text" name="no_cotizacion" class="form-control bg-light border-0 shadow-sm" 
+                       value="<?= htmlspecialchars($ticket['no_cotizacion'] ?? '') ?>" placeholder="Folio...">
             </div>
 
             <div class="col-md-6 d-flex gap-4 align-items-center mt-4">
@@ -221,32 +232,74 @@ include 'includes/header.php';
     </div>
 </form>
 
+<div class="modal fade" id="modalSerieNueva" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header bg-warning text-dark border-0 py-3">
+                <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle-fill me-2"></i>¿Nueva Serie Detectada?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-center mb-3">Has ingresado la serie <strong id="txtSerieNueva" class="text-danger"></strong>, que no está registrada.</p>
+                <div class="bg-light p-3 rounded-3 mb-2">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Fecha de Compra / Instalación</label>
+                    <input type="date" id="modal_fecha_compra" class="form-control border-0 shadow-sm" value="<?= date('Y-m-d') ?>">
+                    <p class="text-muted small mt-2 mb-0 italic">* Se usará para calcular la garantía del equipo.</p>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pb-4 justify-content-center">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Corregir</button>
+                <button type="button" id="btnConfirmarRegistro" class="btn btn-warning rounded-pill px-4 fw-bold">Sí, Registrar Equipo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 /**
  * LÓGICA FRONTEND (jQuery):
  * Controla validaciones AJAX, cálculos automáticos de costos y visualización dinámica.
  */
 $(document).ready(function() {
-    // 1. Mejoras de UX en inputs numéricos
+    
+    let serieExiste = true; // Por defecto asumimos que existe al cargar edición
+
+    /**
+     * NUEVA LÓGICA: GENERACIÓN DE SERIE GENÉRICA AL EDITAR
+     */
+    $('#modelo_select').on('change', function() {
+        const modelo = $(this).val();
+        const serieInput = $('#no_serie_input');
+
+        if (!serieInput.attr('readonly') && serieInput.val().trim() === "" && modelo !== "") {
+            const sufijo = modelo.replace('DEMEX ', '').replace('SPICE ', '').replace(' ', '');
+            serieInput.val("S/N-" + sufijo);
+            serieInput.trigger('input'); 
+        }
+    });
+
     $(document).on('keydown', 'input[type="number"]', function(e) {
         if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
     });
     $(document).on('focus', 'input, textarea', function() { $(this).select(); });
 
-    // 2. VALIDACIÓN DE SERIE (Solo activa si no es de lectura)
+    // VALIDACIÓN DE SERIE
     var typingTimer;
     $('#no_serie_input').on('input', function() {
         if ($(this).attr('readonly')) return; 
         
         clearTimeout(typingTimer);
-        var val = $(this).val();
+        var val = $(this).val().trim();
         var msgDiv = $('#status_garantia');
         var txtStatus = $('#txt_status_garantia');
-        var option = $('#series_cliente option').filter(function() { return this.value === val; });
+        var option = $('#series_cliente option').filter(function() { 
+            return this.value.toUpperCase() === val.toUpperCase(); 
+        });
 
         if (val.length > 2) {
             msgDiv.show();
             txtStatus.text('🔍 Validando...').css('color', '#6c757d');
+            
             if (option.length) $('#modelo_select').val(option.data('model'));
 
             typingTimer = setTimeout(function() {
@@ -256,36 +309,62 @@ $(document).ready(function() {
                     data: { no_serie: val },
                     dataType: 'json',
                     success: function(res) {
+                        serieExiste = (res.resultado !== 'Pendiente');
                         txtStatus.text('Garantía: ' + res.resultado);
                         $('#garantia_valida_input').val(res.resultado);
-                        let color = (res.resultado === 'Válida') ? '#198754' : '#dc3545';
+                        let color = (res.resultado === 'Válida') ? '#198754' : (res.resultado === 'Pendiente' ? '#6c757d' : '#dc3545');
                         txtStatus.css('color', color);
                         msgDiv.css('border-left', '4px solid ' + color);
                     }
                 });
             }, 600);
-        } else { msgDiv.hide(); }
+        } else { msgDiv.hide(); serieExiste = false; }
     });
 
-    // 3. MOSTRAR/OCULTAR COSTOS según la acción elegida
+    // SEGURIDAD: INTERCEPTAR SUBMIT
+    $('#formEditar').on('submit', function(e) {
+        const serie = $('#no_serie_input').val().trim();
+        if (!$('#no_serie_input').attr('readonly') && !serieExiste && serie !== "" && !serie.startsWith("S/N-")) {
+            e.preventDefault();
+            $('#txtSerieNueva').text(serie);
+            $('#modalSerieNueva').modal('show');
+        }
+    });
+
+    $('#btnConfirmarRegistro').on('click', function() {
+        $('#fecha_compra_nueva').val($('#modal_fecha_compra').val());
+        serieExiste = true; 
+        $('#formEditar').submit();
+    });
+
     function toggleCostos() {
         if (['Ninguna', 'Información'].includes($('#accion_select').val())) $('#seccion_costos').slideUp();
         else $('#seccion_costos').slideDown();
     }
     $('#accion_select').on('change', toggleCostos);
 
-    // 4. SUMATORIA AUTOMÁTICA DE COSTOS
+    // SUMATORIA + LÓGICA PAGO N/A
     $('.costo-input').on('input', function() {
         let total = 0;
         $('.costo-input').each(function() { total += parseFloat($(this).val()) || 0; });
         $('#label_total').text(total.toFixed(2));
         $('#input_total').val(total.toFixed(2));
+
+        if (total === 0) {
+            $('#pago_switch').prop('checked', false).prop('disabled', true);
+            $('#label_pago').html('Estatus: <span class="text-muted">N/A</span>');
+        } else {
+            $('#pago_switch').prop('disabled', false);
+            const statusTxt = $('#pago_switch').is(':checked') ? '<span class="text-success">Pagado</span>' : '<span class="text-danger">Pendiente</span>';
+            $('#label_pago').html('Estatus: ' + statusTxt);
+        }
     });
 
-    // 5. CÁLCULO DE DÍAS DE ACCIÓN
+    // LÓGICA DE FECHAS Y TIEMPOS (CON RESET INCLUIDO)
     $('#fecha_inicio, #fecha_fin').on('change', function() {
         const inicio = $('#fecha_inicio').val();
         const fin = $('#fecha_fin').val();
+        
         if (inicio) {
             $('#fecha_fin').prop('disabled', false).attr('min', inicio);
             if (fin) {
@@ -293,23 +372,31 @@ $(document).ready(function() {
                 const dias = Math.floor(diff / (1000 * 60 * 60 * 24));
                 $('#tiempo_accion').val(dias >= 0 ? dias : 0);
             } else {
-                $('#tiempo_accion').val('');
+                $('#tiempo_accion').val(''); // Reset días si se borra la fecha fin
             }
         } else {
+            // Reset total si se borra la fecha de inicio
             $('#fecha_fin').val('').prop('disabled', true);
             $('#tiempo_accion').val('');
         }
     });
 
-    // 6. CONTROL VISUAL DEL SWITCH DE PAGO
     $('#pago_switch').on('change', function() {
-        const color = $(this).is(':checked') ? 'text-success' : 'text-danger';
-        const txt = $(this).is(':checked') ? 'Pagado' : 'Pendiente';
-        $('#label_pago').find('span').attr('class', color).text(txt);
+        const txt = $(this).is(':checked') ? '<span class="text-success">Pagado</span>' : '<span class="text-danger">Pendiente</span>';
+        $('#label_pago').html('Estatus: ' + txt);
     });
 
-    // Inicialización de estados visuales
+    // --- INICIALIZACIÓN ---
     toggleCostos();
+    
+    /**
+     * IMPORTANTE: Disparamos el input manualmente pero con un pequeño delay
+     * para asegurar que los valores cargados por PHP ya estén disponibles.
+     */
+    setTimeout(function() {
+        $('.costo-input').first().trigger('input'); 
+    }, 100);
+
     const initG = $('#garantia_valida_input').val();
     let c = (initG === 'Válida') ? '#198754' : (initG === 'Pendiente' ? '#6c757d' : '#dc3545');
     $('#txt_status_garantia').css('color', c);
