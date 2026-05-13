@@ -26,6 +26,11 @@ JOIN Tickets_Soporte t ON d.id_ticket = t.id_ticket
 WHERE d.estatus_pago = 'Pendiente' AND t.estatus = 'Abierto'";
 $por_cobrar = $pdo->query($sql_cobro)->fetchColumn() ?: 0;
 
+// Conteo de tickets críticos (Abiertos con más de 14 días)
+$criticos = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte 
+                         WHERE estatus = 'Abierto' 
+                         AND DATEDIFF(CURDATE(), fecha_inicial) >= 14")->fetchColumn();
+
 include 'includes/header.php';
 ?>
 
@@ -35,22 +40,48 @@ include 'includes/header.php';
         <p class="text-muted small">Sistema de gestión y soporte técnico.</p>
     </div>
     <div class="col-md-7 text-md-end">
+        <!-- Tarjetas de indicadores (KPIs) con lógica de colores y animaciones para resaltar información crítica. -->
         <div class="d-inline-flex gap-2">
+            <!-- Tarjeta de Total: Resalta en rojo, con animación si hay más de 50 tickets. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-danger border-4 text-center" style="min-width: 90px;">
                 <span class="d-block fw-bold fs-5"><?= $total ?></span>
                 <small class="text-muted" style="font-size: 0.6rem;">TICKETS</small>
             </div>
+
+            <!-- Tarjeta de Pendientes: Resalta en amarillo, con animación si hay más de 10. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-warning border-4 text-center" style="min-width: 90px;">
                 <span class="d-block fw-bold fs-5 text-warning"><?= $pendientes ?></span>
                 <small class="text-muted" style="font-size: 0.6rem;">ABIERTOS</small>
             </div>
+
+            <!-- Tarjeta de Por Cobrar: Resalta en verde, con animación si la deuda supera los $5,000. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-success border-4 text-center" style="min-width: 120px;">
                 <span class="d-block fw-bold fs-5 text-success">$<?= number_format($por_cobrar, 2) ?></span>
                 <small class="text-muted" style="font-size: 0.6rem;">POR COBRAR</small>
             </div>
+
+            <!-- Tarjeta de Críticos: Resalta en rojo, con animación si hay más de 0 tickets críticos. -->
+            <div class="p-2 bg-white shadow-sm rounded border-start border-danger border-4 text-center" style="min-width: 90px;">
+                <span class="d-block fw-bold fs-5 <?= ($criticos > 0) ? 'text-danger ms-1-animate' : 'text-muted' ?>">
+                    <?= $criticos ?>
+                </span>
+                <small class="text-muted" style="font-size: 0.6rem;">CRÍTICOS</small>
+            </div>
         </div>
     </div>
 </div>
+
+<?php if ($criticos > 0): ?>
+    <div class="alert alert-danger shadow-sm border-0 border-start border-4 border-danger bg-white d-flex align-items-center justify-content-between animate__animated animate__headShake" role="alert" id="alertaCriticos">
+        <div>
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-3 text-danger"></i>
+            <span class="fw-bold">Atención:</span> Hay <strong><?= $criticos ?></strong> tickets que llevan más de 2 semanas abiertos.
+        </div>
+        <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold" id="btnFiltrarCriticos">
+            <i class="bi bi-funnel-fill me-1"></i> Ver Urgentes
+        </button>
+    </div>
+<?php endif; ?>
 
 <div class="card-main mb-4 py-3 shadow-sm border-top border-4 border-danger bg-white rounded">
     <div class="row g-3 align-items-center px-3 mb-3">
@@ -155,19 +186,34 @@ include 'includes/header.php';
                 
                 $stmt = $pdo->query($sql);
                 while ($row = $stmt->fetch()):
-                    // Formateo visual de columnas base
+                    // --- Formateo visual de columnas base ---
                     $colorGarantia = ($row['garantia_valida'] == 'Válida') ? 'text-success' : 'text-danger';
-                    
+
+                    // --- Lógica de estatus (Abierto, Cerrado, Cancelado) con colores distintivos ---
                     $badgeEstatus = 'bg-secondary'; 
                     if ($row['estatus'] == 'Abierto') $badgeEstatus = 'bg-warning text-dark';
                     elseif ($row['estatus'] == 'Cerrado') $badgeEstatus = 'bg-success';
 
+                    // --- Lógica de estatus de pago ---
                     $pagoTexto = $row['estatus_pago'] ?: 'N/A';
                     $colorPago = ($pagoTexto == 'Pendiente') ? 'text-danger fw-bold' : 'text-success fw-bold';
                     $id = $row['id_ticket'];
+
+                    // --- Lógica de ticket crítico (Abierto por más de 14 días) ---
+                    $fecha_ini = new DateTime($row['fecha_inicial']);
+                    $hoy = new DateTime();
+                    $diff = $hoy->diff($fecha_ini)->days; // Días transcurridos desde la apertura
+                    $esCritico = ($row['estatus'] == 'Abierto' && $diff >= 14); // Condición: Abierto y >= 14 días
                 ?>
                 <tr>
-                    <td class="fw-bold text-danger"><?= $id ?></td>
+                    <td class="fw-bold text-danger text-nowrap">
+                        <?= $id ?>
+                        <?php if ($esCritico): ?>
+                            <i class="bi bi-exclamation-triangle-fill text-danger ms-1 ms-1-animate" 
+                            title="Urgente: Este ticket lleva <?= $diff ?> días abierto" 
+                            data-bs-toggle="tooltip"></i>
+                        <?php endif; ?>
+                    </td>
                     <td><div class="fw-bold small"><?= htmlspecialchars($row['nombre_cliente']) ?></div></td>
                     <td>
                         <div class="small fw-bold text-dark"><?= $row['modelo'] ?: 'S/M' ?></div>
@@ -372,6 +418,7 @@ include 'includes/header.php';
         });
     }
 
+
     /**
      * CONFIGURACIÓN DATATABLES Y FILTROS (Versión Blindada)
      */
@@ -384,9 +431,13 @@ include 'includes/header.php';
                     "sZeroRecords":    "No se encontraron resultados",
                     "sInfo":           "Mostrando _START_ al _END_ de _TOTAL_",
                     "sInfoEmpty":      "Mostrando 0 al 0 de 0",
+                    "sInfoFiltered":   "(filtrado de un total de _MAX_ registros)", // <--- AGREGA ESTA LÍNEA
                     "sSearch":         "Buscar:",
                     "oPaginate": {
-                        "sFirst": "Primero", "sLast": "Último", "sNext": "Sig", "sPrevious": "Ant"
+                        "sFirst": "Primero", 
+                        "sLast": "Último", 
+                        "sNext": "Sig", 
+                        "sPrevious": "Ant"
                     }
                 },
                 "dom": 'rtip',
@@ -416,6 +467,48 @@ include 'includes/header.php';
             // Filtro: Con Deuda (Estatus de Pago 'Pendiente' en Columna 6)
             $('#checkSoloDeuda').on('change', function() {
                 table.column(7).search(this.checked ? '^Pendiente$' : '', true, false).draw();
+            });
+
+            // --- INTEGRACIÓN DE SISTEMA DE ALARMAS ---
+
+            // 1. Inicializar los Tooltips de Bootstrap (para que el mensaje del triángulo funcione)
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl)
+            });
+
+            // 2. Función para el botón "Ver Urgentes" del Banner
+            $('#btnFiltrarCriticos').on('click', function() {
+                const btn = $(this);
+
+                // Si el botón tiene la clase de peligro, activa el filtro
+                if (btn.hasClass('btn-danger')) {
+                    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+                        var estatus = data[8]; // Columna Estatus
+                        var dateRaw = $(table.row(dataIndex).node()).find('td:nth-child(10)').attr('data-order');
+                        
+                        if (dateRaw && estatus === 'Abierto') {
+                            // Calcula la diferencia de días entre hoy y la fecha de inicio
+                            var diff = Math.floor((new Date() - new Date(dateRaw)) / (1000 * 60 * 60 * 24));
+                            return diff >= 14;
+                        }
+                        return false;
+                    });
+
+                    // Cambia el texto y estilo para permitir quitar el filtro
+                    btn.html('<i class="bi bi-arrow-counterclockwise me-1"></i> Quitar Filtro')
+                    .addClass('btn-dark').removeClass('btn-danger');
+                } 
+                // Si no es rojo, quita la regla de filtrado
+                else {
+                    $.fn.dataTable.ext.search.pop(); // Elimina la última regla de búsqueda
+                    
+                    // Restaura el botón a su estado original
+                    btn.html('<i class="bi bi-funnel-fill me-1"></i> Ver Urgentes')
+                    .addClass('btn-danger').removeClass('btn-dark');
+                }
+
+                table.draw(); // Redibuja la tabla con los cambios aplicados
             });
             
             // --- BLOQUEO DE CALENDARIOS ---
