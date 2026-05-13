@@ -108,8 +108,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                 $tipo_ll = normalizarEnum($data[3] ?? '', ['Venta Refacciones','Información','Capacitaciones','Soporte'], 'Soporte');
                 $falla   = normalizarEnum($data[9] ?? '', ['Mecánica','Refrigeración','Electrónica','Regulador','Materia prima','Otra'], 'Otra');
                 $func    = (strtoupper(trim($data[8] ?? '')) == 'SI' || trim($data[8] ?? '') == '1') ? 1 : 0;
-                $gar_val = normalizarEnum($data[7] ?? '', ['Válida','No válida','Pendiente'], 'Pendiente');
                 $estatus = normalizarEnum($data[10] ?? '', ['Abierto','Cerrado','Cancelado'], 'Cerrado');
+
+                $gar_val = 'Pendiente'; // Estado por defecto si el equipo no existe
+
+                if (!empty($serie_final)) {
+                    // Busca la fecha de término directamente en la tabla de Equipos_Garantia
+                    $stG = $pdo->prepare("SELECT fecha_termino FROM Equipos_Garantia WHERE no_serie = ?");
+                    $stG->execute([$serie_final]);
+                    $f_vencimiento = $stG->fetchColumn();
+
+                    if ($f_vencimiento) {
+                        // Si el registro existe, define el estado comparando la vigencia contra la fecha actual
+                        $hoy = date('Y-m-d');
+                        $gar_val = (strtotime($hoy) <= strtotime($f_vencimiento)) ? 'Válida' : 'No válida';
+                    } else {
+                        // Si el número de serie no existe en la base de datos, asigna estado pendiente
+                        $gar_val = 'Pendiente';
+                    }
+                } else {
+                    // Para registros sin número de serie, utiliza el valor del archivo de origen
+                    $gar_val = normalizarEnum($data[7] ?? '', ['Válida','No válida','Pendiente'], 'Pendiente');
+                }
                 
                 $f_ini   = convertirFecha($data[11] ?? '') ?: date('Y-m-d H:i:s');
                 $f_cie   = convertirFecha($data[12] ?? '');
