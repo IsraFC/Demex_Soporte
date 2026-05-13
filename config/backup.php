@@ -59,7 +59,8 @@ function ejecutarRespaldoSilencioso($pdo) {
      * Utiliza el operador de redirección '>' para crear el archivo físico.
      * El comando incluye '--opt' para optimizar el archivo para importaciones futuras.
      */
-    $comando = "\"{$mysqldump}\" --opt -h {$host} -u {$user} -p\"{$pass}\" {$db} > \"{$nuevo_backup}\" 2>&1";
+    $pass_param = empty($pass) ? "" : "-p\"{$pass}\""; // No envía -p si la clave está vacía
+    $comando = "\"{$mysqldump}\" --opt -h {$host} -u {$user} {$pass_param} {$db} > \"{$nuevo_backup}\" 2>&1";
     exec($comando);
 
     /**
