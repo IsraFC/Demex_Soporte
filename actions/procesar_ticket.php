@@ -37,14 +37,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $checkEq->execute([$no_serie]);
             
             if (!$checkEq->fetch()) {
-                $fecha_termino = date('Y-m-d', strtotime($fecha_compra . ' + 1 year'));
+                // CAPTURA LA VIGENCIA (Si no viene, por defecto es 1)
+                $vigencia_anios = !empty($_POST['vigencia_nueva']) ? (int)$_POST['vigencia_nueva'] : 1;
+                
+                // Calcula la fecha de término sumando los años elegidos (1 o 2)
+                $fecha_termino = date('Y-m-d', strtotime($fecha_compra . " + $vigencia_anios year"));
                 $hoy = date('Y-m-d');
 
                 $sqlEq = "INSERT INTO Equipos_Garantia (no_serie, id_cliente, modelo, fecha_inicio, fecha_termino) 
-                          VALUES (?, ?, ?, ?, ?)";
+                        VALUES (?, ?, ?, ?, ?)";
                 $pdo->prepare($sqlEq)->execute([$no_serie, $id_cliente, $modelo, $fecha_compra, $fecha_termino]);
                 
-                // Recalculamos la vigencia según la fecha elegida en el modal
+                // Recalcula el estatus de la garantía para el ticket actual
                 $garantia_valida = (strtotime($fecha_termino) >= strtotime($hoy)) ? "Válida" : "No válida";
             }
         }

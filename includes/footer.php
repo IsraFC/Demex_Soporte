@@ -74,7 +74,7 @@
                                     </datalist>
                                 </div>
                                 <div class="text-end">
-                                    <a href="registro_cliente.php" class="text-danger small fw-bold text-decoration-none">
+                                    <a href="registro_cliente.php" id="linkClienteNuevo" class="text-danger small fw-bold text-decoration-none">
                                         <i class="bi bi-person-plus-fill me-1"></i> ¿Cliente nuevo? Regístralo aquí
                                     </a>
                                 </div>
@@ -136,7 +136,7 @@
                                 } else {
                                     $('#resultadoBusquedaRapid').hide();
                                     $('#noEncontrado').fadeIn();
-                                    $('#btnNuevaMaquinaRapida').attr('href', 'registro_maquina.php?no_serie=' + serie);
+                                    $('#btnNuevaMaquinaRapida').attr('href', 'registro_maquina.php?no_serie=' + encodeURIComponent(serie));
                                     $('#btnIrARegistro').addClass('disabled');
                                 }
                             }
@@ -152,6 +152,13 @@
             $('#inputBusquedaCliente').on('input', function() {
                 var val = $(this).val();
                 var option = $('#listaClientesBusqueda option').filter(function() { return this.value === val; });
+
+                // MODIFICACIÓN: Actualizar el enlace de "Cliente nuevo" con el nombre escrito
+                if (val.length > 0) {
+                    $('#linkClienteNuevo').attr('href', 'registro_cliente.php?nombre=' + encodeURIComponent(val));
+                } else {
+                    $('#linkClienteNuevo').attr('href', 'registro_cliente.php');
+                }
 
                 if (option.length) {
                     var id_cli = option.data('id');

@@ -35,7 +35,8 @@ include 'includes/header.php';
                     <i class="bi bi-upc-scan me-1"></i> Número de Serie
                 </label>
                 <input type="text" name="no_serie" id="no_serie" class="form-control border-0 bg-light shadow-sm" 
-                    placeholder="Número de serie..." required maxlength="15">
+                    placeholder="Número de serie..." required maxlength="15"
+                    value="<?= htmlspecialchars($_GET['no_serie'] ?? '') ?>">
                 <div id="status_serie" class="small mt-1 fw-bold" style="display:none;"></div>
             </div>
 
@@ -78,7 +79,7 @@ include 'includes/header.php';
             </div>
         </div>
 
-        <div class="row justify-content-center g-4 border-top pt-4">
+        <div class="row justify-content-center g-4 pt-4">
             <div class="col-md-4 text-center">
                 <label class="form-label fw-bold small text-muted required-alt">
                     <i class="bi bi-calendar-check me-1"></i> Inicio de Garantía
@@ -227,6 +228,11 @@ $(document).ready(function() {
             complete: function() { btn.prop('disabled', false).html('<i class="bi bi-person-check me-1"></i> Guardar Cliente'); }
         });
     });
+
+    // Si el campo ya viene con texto, dispara la validación de una vez
+    if ($('#no_serie').val().length >= 3) {
+        $('#no_serie').trigger('input');
+    }
 });
 </script>
 

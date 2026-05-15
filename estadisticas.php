@@ -42,7 +42,7 @@ $fecha_fin_val = $_GET['fecha_fin'] ?? '';
 
 <div class="container-fluid py-4" id="area-reporte">
     
-    <!-- ENCABEZADO EXCLUSIVO PARA PDF (Invisible en web) -->
+    <!-- ENCABEZADO EXCLUSIVO PARA PDF -->
     <div id="pdf-header-extra" class="mb-4">
         <div style="border-bottom: 3px solid #dc3545; padding-bottom: 15px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; font-family: Arial, sans-serif;">
             <div>
@@ -72,7 +72,7 @@ $fecha_fin_val = $_GET['fecha_fin'] ?? '';
         </div>
     </div>
 
-    <!-- FILTROS (no-print) -->
+    <!-- FILTROS  -->
     <div class="card shadow-sm border-0 rounded-4 mb-4 no-print">
         <div class="card-body p-4">
             <form method="GET" action="estadisticas.php" class="row g-3 align-items-end">
@@ -131,9 +131,27 @@ $fecha_fin_val = $_GET['fecha_fin'] ?? '';
 
         <!-- HOJA 2: BARRAS -->
         <div class="row g-4 mb-4" id="pdf_seccion_2">
-            <div class="col-md-4"><div class="card h-100 shadow-sm border-0 rounded-4 p-4"><h5>Fallas</h5><div style="height: 250px;"><canvas id="chartFal"></canvas></div></div></div>
-            <div class="col-md-4"><div class="card h-100 shadow-sm border-0 rounded-4 p-4"><h5>Tipo Llamada</h5><div style="height: 250px;"><canvas id="chartLL"></canvas></div></div></div>
-            <div class="col-md-4"><div class="card h-100 shadow-sm border-0 rounded-4 p-4"><h5>Acciones</h5><div style="height: 250px;"><canvas id="chartAcc"></canvas></div></div></div>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0 rounded-4 p-4">
+                    <h5>Fallas</h5>
+                    <div style="height: 250px;"><canvas id="chartFal"></canvas></div>
+                    <div id="leg_fal" class="mt-3 small border-top pt-2"></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0 rounded-4 p-4">
+                    <h5>Tipo Llamada</h5>
+                    <div style="height: 250px;"><canvas id="chartLL"></canvas></div>
+                    <div id="leg_ll" class="mt-3 small border-top pt-2"></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0 rounded-4 p-4">
+                    <h5>Acciones</h5>
+                    <div style="height: 250px;"><canvas id="chartAcc"></canvas></div>
+                    <div id="leg_acc" class="mt-3 small border-top pt-2"></div>
+                </div>
+            </div>
         </div>
 
         <div class="pdf-page-break"></div>
@@ -275,6 +293,39 @@ $(document).ready(function() {
             }, 
             options: barOpt 
         });
+
+        // Función reutilizable para generar leyendas de barras
+        const generarLegendaBarras = (idContenedor, etiquetas, valores, color) => {
+            let html = '';
+            etiquetas.forEach((label, i) => {
+                if(valores[i] > 0) { // Solo muestra categorías que tengan datos
+                    html += `
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="bi bi-square-fill me-1" style="color:${color}"></i> ${label}</span>
+                            <span class="fw-bold">${valores[i]}</span>
+                        </div>`;
+                }
+            });
+            $(`#${idContenedor}`).html(html);
+        };
+
+        // Generar indicadores para Fallas
+        generarLegendaBarras('leg_fal', 
+            ['Mecánica', 'Refrigeración', 'Electrónica', 'Regulador', 'Materia Prima', 'Otra'], 
+            Object.values(data.fallas), '#3b82f6'
+        );
+
+        // Generar indicadores para Tipo Llamada
+        generarLegendaBarras('leg_ll', 
+            ['Venta Refacciones', 'Información', 'Capacitaciones', 'Soporte'], 
+            [data.tipo_llamada.venta, data.tipo_llamada.info, data.tipo_llamada.capa, data.tipo_llamada.sop], '#10b981'
+        );
+
+        // Generar indicadores para Acciones
+        generarLegendaBarras('leg_acc', 
+            ['Ninguna', 'Envío Técnico', 'Envío Refacciones', 'Técnico + Refacc.', 'Envío Base', 'Reparación Taller', 'Cambio Máquina', 'Información'], 
+            Object.values(data.acciones), '#8b5cf6'
+        );
 
         const fin = data.financiero;
         const fmt = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n);

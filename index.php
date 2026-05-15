@@ -50,19 +50,19 @@ include 'includes/header.php';
 
             <!-- Tarjeta de Pendientes: Resalta en amarillo, con animación si hay más de 10. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-warning border-4 text-center" style="min-width: 90px;">
-                <span class="d-block fw-bold fs-5 text-warning"><?= $pendientes ?></span>
+                <span id="kpi_pendientes" class="d-block fw-bold fs-5 text-warning"><?= $pendientes ?></span>
                 <small class="text-muted" style="font-size: 0.6rem;">ABIERTOS</small>
             </div>
 
             <!-- Tarjeta de Por Cobrar: Resalta en verde, con animación si la deuda supera los $5,000. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-success border-4 text-center" style="min-width: 120px;">
-                <span class="d-block fw-bold fs-5 text-success">$<?= number_format($por_cobrar, 2) ?></span>
+                <span id="kpi_cobrar" class="d-block fw-bold fs-5 text-success">$<?= number_format($por_cobrar, 2) ?></span>
                 <small class="text-muted" style="font-size: 0.6rem;">POR COBRAR</small>
             </div>
 
             <!-- Tarjeta de Críticos: Resalta en rojo, con animación si hay más de 0 tickets críticos. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-danger border-4 text-center" style="min-width: 90px;">
-                <span class="d-block fw-bold fs-5 <?= ($criticos > 0) ? 'text-danger ms-1-animate' : 'text-muted' ?>">
+                <span id="kpi_criticos" class="d-block fw-bold fs-5 <?= ($criticos > 0) ? 'text-danger ms-1-animate' : 'text-muted' ?>">
                     <?= $criticos ?>
                 </span>
                 <small class="text-muted" style="font-size: 0.6rem;">CRÍTICOS</small>
@@ -125,7 +125,7 @@ include 'includes/header.php';
         </div>
     </div>
 
-    <div class="row g-3 align-items-center px-3 border-top pt-3">
+    <div class="row g-3 align-items-center px-3 pt-3">
         <div class="col-md-4 d-flex align-items-center gap-2">
             <span class="small fw-bold text-muted text-uppercase me-1">Rango:</span>
             <input type="date" id="fechaDesde" class="form-control form-control-sm border-0 bg-light shadow-sm text-muted">
@@ -177,7 +177,7 @@ include 'includes/header.php';
                  */
                 $sql = "SELECT t.id_ticket, c.nombre_cliente, e.modelo, t.no_serie, t.tipo_falla, 
                                t.garantia_valida, t.estatus, t.fecha_inicial, d.estatus_pago, t.tipo_llamada, 
-                               d.accion, d.fecha_inicio_acc, d.fecha_fin_acc
+                               d.accion, d.fecha_inicio_acc, d.fecha_fin_acc, d.costo_total
                         FROM Tickets_Soporte t 
                         JOIN Clientes c ON t.id_cliente = c.id_cliente
                         LEFT JOIN Equipos_Garantia e ON t.no_serie = e.no_serie
@@ -205,7 +205,7 @@ include 'includes/header.php';
                     $diff = $hoy->diff($fecha_ini)->days; // Días transcurridos desde la apertura
                     $esCritico = ($row['estatus'] == 'Abierto' && $diff >= 14); // Condición: Abierto y >= 14 días
                 ?>
-                <tr>
+                <tr data-costo="<?= $row['costo_total'] ?? 0 ?>">
                     <td class="fw-bold text-danger text-nowrap">
                         <?= $id ?>
                         <?php if ($esCritico): ?>
@@ -382,10 +382,82 @@ include 'includes/header.php';
                                 title: '¡Hecho!',
                                 text: `Ticket #${id} actualizado correctamente.`,
                                 icon: 'success',
-                                timer: 1500,
+                                timer: 1000,
                                 showConfirmButton: false
                             });
-                            setTimeout(() => { location.reload(); }, 1500);
+
+                            // A. Localizar la fila
+                            let filaNodo = $(`button[onclick*="${id}"]`).closest('tr');
+
+                            // B. ACTUALIZAR DATA INTERNA (Esto arregla que la fila se oculte con filtros)
+                            if (table) {
+                                table.cell(filaNodo, 8).data(nuevoEstatus); 
+                            }
+
+                            // C. ACTUALIZAR KPI DINERO (Si estaba pendiente de pago)
+                            let textoPago = filaNodo.find('td:nth-child(8)').text().trim();
+                            if (textoPago === 'Pendiente') {
+                                // Usamos .attr para leer el valor que pusimos en el PHP
+                                let costoTicket = parseFloat(filaNodo.attr('data-costo')) || 0;
+                                
+                                // Limpiamos el texto del KPI (quitamos $, comas y espacios)
+                                let actualCobrarStr = $('#kpi_cobrar').text().replace(/[^0-9.]/g, "");
+                                let actualCobrar = parseFloat(actualCobrarStr) || 0;
+                                
+                                let nuevoCobrar = Math.max(0, actualCobrar - costoTicket);
+                                
+                                // Actualizamos con el formato de moneda exacto
+                                $('#kpi_cobrar').text('$' + nuevoCobrar.toLocaleString('es-MX', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                }));
+                            }
+
+                            // D. ACTUALIZAR KPIs ABIERTOS Y CRÍTICOS
+                            let numPendientes = parseInt($('#kpi_pendientes').text()) || 0;
+                            $('#kpi_pendientes').text(Math.max(0, numPendientes - 1));
+
+                            if (filaNodo.find('.ms-1-animate').length > 0) {
+                                let numCriticos = parseInt($('#kpi_criticos').text()) || 0;
+                                let nuevoTotalCriticos = Math.max(0, numCriticos - 1);
+                                $('#kpi_criticos').text(nuevoTotalCriticos);
+                                
+                                // Actualiza el mensaje del banner de alerta
+                                if (nuevoTotalCriticos > 0) {
+                                    $('#alertaCriticos strong').text(nuevoTotalCriticos);
+                                } else {
+                                    if ($('#btnFiltrarCriticos').hasClass('btn-dark')) {
+                                        $.fn.dataTable.ext.search.pop(); // Elimina la regla de los 14 días
+                                        
+                                        // Restauramos el botón a su estado original
+                                        $('#btnFiltrarCriticos').html('<i class="bi bi-funnel-fill me-1"></i> Ver Urgentes')
+                                            .addClass('btn-danger').removeClass('btn-dark');
+                                    }
+
+                                    // Si no quedan críticos, se elimina la alerta
+                                    $('#alertaCriticos').fadeOut(400, function() {
+                                        $(this).remove(); // Se elimina del código
+                                    });
+
+                                    // Redibujar la tabla para eliminar cualquier rastro de tickets críticos
+                                    table.draw();
+                                }
+                                filaNodo.find('.ms-1-animate').remove();
+                            }
+
+                            // E. ACTUALIZAR VISUALMENTE LA FILA (Por si no hay filtros activos)
+                            let badge = filaNodo.find('td:nth-child(9) span');
+                            badge.text(nuevoEstatus).removeClass('bg-warning text-dark bg-success bg-secondary');
+                            if (nuevoEstatus === 'Cerrado') badge.addClass('bg-success');
+                            else if (nuevoEstatus === 'Cancelado') badge.addClass('bg-secondary');
+
+                            filaNodo.find('.btn-outline-warning, .btn-outline-success, .btn-outline-secondary').remove();
+
+                            // F. EL PASO FINAL: REDIBUJAR
+                            // Si el switch de "Solo Abiertos" está encendido, la fila desaparece aquí mágicamente
+                            if (table) {
+                                table.draw(false); 
+                            }
                         }
                     }
                 });
@@ -422,9 +494,10 @@ include 'includes/header.php';
     /**
      * CONFIGURACIÓN DATATABLES Y FILTROS (Versión Blindada)
      */
+    var table;
     $(document).ready(function() {
         if ($('#tablaTickets').length) {
-            var table = $('#tablaTickets').DataTable({
+            table = $('#tablaTickets').DataTable({
                 "language": {
                     "sProcessing":     "Procesando...",
                     "sLengthMenu":     "Mostrar _MENU_ registros",

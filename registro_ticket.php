@@ -52,6 +52,7 @@ include 'includes/header.php';
     <input type="hidden" name="estatus" value="Abierto">
     <input type="hidden" name="garantia_valida" id="garantia_valida_input" value="Pendiente">
     <input type="hidden" name="fecha_compra_nueva" id="fecha_compra_nueva" value="">
+    <input type="hidden" name="vigencia_nueva" id="vigencia_nueva_input" value="1">
 
     <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-danger mb-4">
         <div class="row g-4">
@@ -223,10 +224,32 @@ include 'includes/header.php';
             </div>
             <div class="modal-body p-4">
                 <p class="text-center mb-3">La serie <strong id="txtSerieNueva" class="text-danger"></strong> no existe en el catálogo.</p>
+
+                <div id="error_modelo_modal" class="alert alert-danger shadow-sm py-2 mb-3" style="display:none; border-radius: 12px;">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-exclamation-circle-fill me-2 fs-5"></i> 
+                        <small class="fw-bold">Atención: Debes seleccionar un MODELO en el formulario para poder registrar el equipo.</small>
+                    </div>
+                </div>
+
                 <div class="bg-light p-3 rounded-3 mb-2">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Fecha de Compra / Instalación</label>
-                    <input type="date" id="modal_fecha_compra" class="form-control border-0 shadow-sm" value="<?= date('Y-m-d') ?>">
-                    <p class="text-muted small mt-2 mb-0 italic">* Se usará para calcular 1 año de garantía.</p>
+                    <div class="col-md-7">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Fecha de Compra / Instalación</label>
+                        <input type="date" id="modal_fecha_compra" class="form-control border-0 shadow-sm" value="<?= date('Y-m-d') ?>">
+                    </div>
+                    <div class="col-md-5">
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Vigencia</label>
+            <div class="d-flex gap-2">
+                <div class="form-check m-0">
+                    <input class="form-check-input" type="radio" name="modal_vigencia" id="mv1" value="1" checked>
+                    <label class="form-check-label small" for="mv1">1A</label>
+                </div>
+                <div class="form-check m-0">
+                    <input class="form-check-input" type="radio" name="modal_vigencia" id="mv2" value="2">
+                    <label class="form-check-label small" for="mv2">2A</label>
+                </div>
+            </div>
+        </div>
                 </div>
             </div>
             <div class="modal-footer border-0 pb-4 justify-content-center">
@@ -308,15 +331,53 @@ $(document).ready(function() {
     // 6. INTERCEPTAR SUBMIT
     $('#formTicket').on('submit', function(e) {
         const serie = $('#no_serie_input').val().trim();
+        const modelo = $('#modelo_select').val(); // Obtenemos el modelo del selector
+
+        // Si es una serie nueva (no existe y no es genérica)
         if (!serieExiste && serie !== "" && !serie.startsWith("S/N-")) {
-            e.preventDefault();
+            e.preventDefault(); // Detenemos el envío
             $('#txtSerieNueva').text(serie);
+            
+            // --- LÓGICA DE VALIDACIÓN DE MODELO ---
+            if (modelo === "") {
+                // Si no hay modelo, mostramos el error y bloqueamos el botón del modal
+                $('#error_modelo_modal').show();
+                $('#btnConfirmarRegistro').prop('disabled', true).addClass('opacity-50');
+            } else {
+                // Si sí hay modelo, ocultamos el error y habilitamos el botón
+                $('#error_modelo_modal').hide();
+                $('#btnConfirmarRegistro').prop('disabled', false).removeClass('opacity-50');
+            }
+            
             $('#modalSerieNueva').modal('show');
         }
     });
 
+    // Escuchar si el usuario corrige el modelo en el formulario de atrás
+    // Esto sirve por si el usuario deja el modal abierto y cambia el modelo
+    $('#modelo_select').on('change', function() {
+        if ($(this).val() !== "") {
+            $('#error_modelo_modal').fadeOut();
+            $('#btnConfirmarRegistro').prop('disabled', false).removeClass('opacity-50');
+        } else {
+            $('#error_modelo_modal').fadeIn();
+            $('#btnConfirmarRegistro').prop('disabled', true).addClass('opacity-50');
+        }
+    });
+
     $('#btnConfirmarRegistro').on('click', function() {
+        if ($('#modelo_select').val() === "") {
+            return false; 
+        }
+        
+        // 1. Copiamos la fecha
         $('#fecha_compra_nueva').val($('#modal_fecha_compra').val());
+        
+        // 2. Copiamos la vigencia seleccionada al input oculto físico
+        const valorVigencia = $('input[name="modal_vigencia"]:checked').val();
+        $('#vigencia_nueva_input').val(valorVigencia);
+
+        // 3. Enviamos
         serieExiste = true; 
         $('#formTicket').submit();
     });
