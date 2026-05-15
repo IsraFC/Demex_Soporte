@@ -15,27 +15,50 @@ $fecha_fin_val = $_GET['fecha_fin'] ?? '';
 ?>
 
 <style>
-    /* Estilo para el encabezado que SOLO aparecerá en el PDF */
     #pdf-header-extra { display: none; }
     
     @media print {
+        #pdf-header-extra { display: block !important; }
+        
         .pdf-page-break { 
             page-break-before: always !important; 
             display: block; 
-            height: 0; 
-            margin: 0; 
-            border: none;
         }
-        #pdf-header-extra { display: block !important; }
 
-        /* CORRECCIÓN DE ALINEACIÓN: Eliminamos márgenes negativos de Bootstrap que causan el recorte */
+        /* AUTO-AJUSTE: Dejamos que el navegador maneje el ancho */
+        #area-reporte {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 10px !important;
+            background: white !important;
+        }
+
+        /* Evitamos que Bootstrap use márgenes negativos que causan cortes */
         .row { 
             margin-right: 0 !important; 
-            margin-left: 0 !important; 
+            margin-left: 0 !important;
+            display: flex !important;
+            flex-wrap: nowrap !important; /* Mantiene las 3 columnas en una fila */
         }
-        .container-fluid {
-            padding-left: 0 !important;
-            padding-right: 0 !important;
+        
+        .col-md-4 {
+            flex: 1 !important; /* Distribuye el espacio equitativamente */
+            max-width: 33.33% !important;
+        }
+
+        .card {
+            border: 1px solid #eee !important;
+            box-shadow: none !important;
+            break-inside: avoid;
+        }
+        
+        /* Ajuste de tablas para que no se corten */
+        .table-responsive {
+            overflow: visible !important;
+        }
+        table {
+            width: 100% !important;
+            table-layout: auto !important;
         }
     }
 </style>
@@ -223,7 +246,13 @@ $(document).ready(function() {
             new Chart(document.getElementById(ctx), { 
                 type: donut ? 'doughnut' : type, 
                 data: { labels: labels, datasets: [{ data: d, backgroundColor: bg, borderWidth: 0 }] }, 
-                options: { cutout: donut ? '75%' : 0, responsive: true, maintainAspectRatio: false, animation: { duration: 800 }, plugins: { legend: { display: false } } } 
+                options: { 
+                    cutout: donut ? '75%' : 0, 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    devicePixelRatio: 2,
+                    animation: { duration: 800 }, 
+                    plugins: { legend: { display: false } } } 
             });
         };
         
@@ -369,14 +398,13 @@ $(document).ready(function() {
         $('#pdf-header-extra').show();
 
         const opciones = {
-            margin: [10, 10, 10, 10], // Margen uniforme
+            margin: 10, // Margen uniforme
             filename: `Reporte_DEMEX_${fechaStr}_${horaStr}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { 
-                scale: 2, 
+                scale: 3, 
                 useCORS: true, 
                 scrollY: 0,
-                windowWidth: 1450 // Aumentamos el visor para que nada se encime o se corte a la izquierda
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
             pagebreak: { mode: 'css', before: '.pdf-page-break' }
