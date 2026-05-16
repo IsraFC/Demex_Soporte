@@ -1,13 +1,12 @@
 <?php
 /**
  * ARCHIVO: index.php
- * DESCRIPCIÓN: Panel de Control Principal (Dashboard). 
- * Centraliza la visualización de tickets mediante un motor de filtrado avanzado.
- * Implementa una lógica de indicadores de envío (KPI visual) basada en hitos 
- * temporales: Pendiente, Iniciado y Finalizado.
+ * DESCRIPCIÓN: Panel de Control Principal (Dashboard) con Server-side Processing.
+ * Centraliza la visualización de tickets mediante un motor de filtrado remoto.
+ * Mantiene lógica de indicadores (KPI) y sistema de alarmas de urgencia.
  * * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 1.8
+ * @version 2.0 (Optimizado)
  */
 
 $pagina_actual = 'inicio';
@@ -15,18 +14,16 @@ require_once 'config/db.php';
 
 /**
  * CONSULTAS DE INDICADORES (KPIs):
- * Cálculo de métricas globales para las tarjetas de resumen superior.
+ * Estas se mantienen porque alimentan las tarjetas superiores al cargar la página.
  */
 $total = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte")->fetchColumn();
 $pendientes = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte WHERE estatus = 'Abierto'")->fetchColumn();
 
-// Sumatoria de deuda total (Tickets con estatus_pago = 'Pendiente' y estatus = ´Abierto´)
 $sql_cobro = "SELECT SUM(d.costo_total) FROM Detalles_Costos_Tiempos d
 JOIN Tickets_Soporte t ON d.id_ticket = t.id_ticket
 WHERE d.estatus_pago = 'Pendiente' AND t.estatus = 'Abierto'";
 $por_cobrar = $pdo->query($sql_cobro)->fetchColumn() ?: 0;
 
-// Conteo de tickets críticos (Abiertos con más de 14 días)
 $criticos = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte 
                          WHERE estatus = 'Abierto' 
                          AND DATEDIFF(CURDATE(), fecha_inicial) >= 14")->fetchColumn();
@@ -40,27 +37,19 @@ include 'includes/header.php';
         <p class="text-muted small">Sistema de gestión y soporte técnico.</p>
     </div>
     <div class="col-md-7 text-md-end">
-        <!-- Tarjetas de indicadores (KPIs) con lógica de colores y animaciones para resaltar información crítica. -->
         <div class="d-inline-flex gap-2">
-            <!-- Tarjeta de Total: Resalta en rojo, con animación si hay más de 50 tickets. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-danger border-4 text-center" style="min-width: 90px;">
                 <span class="d-block fw-bold fs-5"><?= $total ?></span>
                 <small class="text-muted" style="font-size: 0.6rem;">TICKETS</small>
             </div>
-
-            <!-- Tarjeta de Pendientes: Resalta en amarillo, con animación si hay más de 10. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-warning border-4 text-center" style="min-width: 90px;">
                 <span id="kpi_pendientes" class="d-block fw-bold fs-5 text-warning"><?= $pendientes ?></span>
                 <small class="text-muted" style="font-size: 0.6rem;">ABIERTOS</small>
             </div>
-
-            <!-- Tarjeta de Por Cobrar: Resalta en verde, con animación si la deuda supera los $5,000. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-success border-4 text-center" style="min-width: 120px;">
                 <span id="kpi_cobrar" class="d-block fw-bold fs-5 text-success">$<?= number_format($por_cobrar, 2) ?></span>
                 <small class="text-muted" style="font-size: 0.6rem;">POR COBRAR</small>
             </div>
-
-            <!-- Tarjeta de Críticos: Resalta en rojo, con animación si hay más de 0 tickets críticos. -->
             <div class="p-2 bg-white shadow-sm rounded border-start border-danger border-4 text-center" style="min-width: 90px;">
                 <span id="kpi_criticos" class="d-block fw-bold fs-5 <?= ($criticos > 0) ? 'text-danger ms-1-animate' : 'text-muted' ?>">
                     <?= $criticos ?>
@@ -75,7 +64,7 @@ include 'includes/header.php';
     <div class="alert alert-danger shadow-sm border-0 border-start border-4 border-danger bg-white d-flex align-items-center justify-content-between animate__animated animate__headShake" role="alert" id="alertaCriticos">
         <div>
             <i class="bi bi-exclamation-triangle-fill fs-4 me-3 text-danger"></i>
-            <span class="fw-bold">Atención:</span> Hay <strong><?= $criticos ?></strong> tickets que llevan más de 2 semanas abiertos.
+            <span class="fw-bold">Atención:</span> Hay <strong><?= $criticos ?></strong> tickets con más de 2 semanas abiertos.
         </div>
         <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold" id="btnFiltrarCriticos">
             <i class="bi bi-funnel-fill me-1"></i> Ver Urgentes
@@ -131,7 +120,6 @@ include 'includes/header.php';
             <input type="date" id="fechaDesde" class="form-control form-control-sm border-0 bg-light shadow-sm text-muted">
             <input type="date" id="fechaHasta" class="form-control form-control-sm border-0 bg-light shadow-sm text-muted">
         </div>
-        
         <div class="col-md-8 d-flex justify-content-end gap-4">
             <div class="form-check form-switch d-flex align-items-center gap-2 m-0">
                 <input class="form-check-input" type="checkbox" id="checkSoloPendientes">
@@ -169,142 +157,7 @@ include 'includes/header.php';
                 </tr>
             </thead>
             <tbody>
-                <?php
-                /**
-                 * CARGA DINÁMICA: 
-                 * Cruce de tablas Tickets_Soporte, Clientes, Equipos_Garantia y Detalles_Costos_Tiempos.
-                 * Se recuperan las fechas de acción para procesar la lógica de estados de envío.
-                 */
-                $sql = "SELECT t.id_ticket, c.nombre_cliente, e.modelo, t.no_serie, t.tipo_falla, 
-                               t.garantia_valida, t.estatus, t.fecha_inicial, d.estatus_pago, t.tipo_llamada, 
-                               d.accion, d.fecha_inicio_acc, d.fecha_fin_acc, d.costo_total
-                        FROM Tickets_Soporte t 
-                        JOIN Clientes c ON t.id_cliente = c.id_cliente
-                        LEFT JOIN Equipos_Garantia e ON t.no_serie = e.no_serie
-                        LEFT JOIN Detalles_Costos_Tiempos d ON t.id_ticket = d.id_ticket
-                        ORDER BY t.id_ticket DESC";
-                
-                $stmt = $pdo->query($sql);
-                while ($row = $stmt->fetch()):
-                    // --- Formateo visual de columnas base ---
-                    $colorGarantia = ($row['garantia_valida'] == 'Válida') ? 'text-success' : 'text-danger';
-
-                    // --- Lógica de estatus (Abierto, Cerrado, Cancelado) con colores distintivos ---
-                    $badgeEstatus = 'bg-secondary'; 
-                    if ($row['estatus'] == 'Abierto') $badgeEstatus = 'bg-warning text-dark';
-                    elseif ($row['estatus'] == 'Cerrado') $badgeEstatus = 'bg-success';
-
-                    // --- Lógica de estatus de pago ---
-                    $pagoTexto = $row['estatus_pago'] ?: 'N/A';
-                    $colorPago = ($pagoTexto == 'Pendiente') ? 'text-danger fw-bold' : 'text-success fw-bold';
-                    $id = $row['id_ticket'];
-
-                    // --- Lógica de ticket crítico (Abierto por más de 14 días) ---
-                    $fecha_ini = new DateTime($row['fecha_inicial']);
-                    $hoy = new DateTime();
-                    $diff = $hoy->diff($fecha_ini)->days; // Días transcurridos desde la apertura
-                    $esCritico = ($row['estatus'] == 'Abierto' && $diff >= 14); // Condición: Abierto y >= 14 días
-                ?>
-                <tr data-costo="<?= $row['costo_total'] ?? 0 ?>">
-                    <td class="fw-bold text-danger text-nowrap">
-                        <?= $id ?>
-                        <?php if ($esCritico): ?>
-                            <i class="bi bi-exclamation-triangle-fill text-danger ms-1 ms-1-animate" 
-                            title="Urgente: Este ticket lleva <?= $diff ?> días abierto" 
-                            data-bs-toggle="tooltip"></i>
-                        <?php endif; ?>
-                    </td>
-                    <td><div class="fw-bold small"><?= htmlspecialchars($row['nombre_cliente']) ?></div></td>
-                    <td>
-                        <div class="small fw-bold text-dark"><?= $row['modelo'] ?: 'S/M' ?></div>
-                        <code class="text-muted" style="font-size: 0.7rem;"><?= $row['no_serie'] ?></code>
-                    </td>
-                    <td class="d-none"><?= $row['tipo_llamada'] ?></td>
-                    <td class="small text-muted"><?= $row['tipo_falla'] ?: 'Soporte' ?></td>
-                    <td class="d-none"><?= $row['accion'] ?></td>
-                    <td class="small fw-bold <?= $colorGarantia ?>"><?= $row['garantia_valida'] ?></td>
-                    <td class="small <?= $colorPago ?>"><?= $pagoTexto ?></td>
-                    <td><span class="badge <?= $badgeEstatus ?>" style="font-size: 0.65rem;"><?= $row['estatus'] ?></span></td>
-                    <td class="small" data-order="<?= $row['fecha_inicial'] ?>">
-                        <?= date('d/m/y', strtotime($row['fecha_inicial'])) ?>
-                    </td>
-                    
-                    <td class="text-center">
-                        <div class="btn-group btn-group-sm">
-                            <button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(<?= $id ?>)" title="Ver detalles">
-                                <i class="bi bi-eye-fill"></i>
-                            </button>
-                            <?php if($row['estatus'] == 'Abierto'): ?>
-                                <a href="editar_ticket.php?id_ticket=<?= $id ?>" class="btn btn-outline-warning border-0" title="Editar">
-                                    <i class="bi bi-pencil-square"></i>
-                                </a>
-                                <button type="button" class="btn btn-outline-success border-0" onclick="cambiarEstatus(<?= $id ?>, 'Cerrado')" title="Cerrar">
-                                    <i class="bi bi-lock-fill"></i>
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary border-0" onclick="cambiarEstatus(<?= $id ?>, 'Cancelado')" title="Cancelar">
-                                    <i class="bi bi-x-circle-fill"></i>
-                                </button>
-                            <?php endif; ?>
-                        </div>
-                    </td>
-
-                    <td class="text-center col-envios" data-id="<?= $id ?>">
-                        <div>
-                            <?php 
-                            /**
-                             * LÓGICA DE INDICADORES (Versión 1.7):
-                             * 1. Se define el ícono según la 'accion' registrada.
-                             * 2. Se define el color/estado según la presencia de fechas:
-                             * - Sin fecha inicio: PENDIENTE (Amarillo)
-                             * - Con inicio, sin fin: INICIADO (Azul)
-                             * - Con ambas fechas: FINALIZADO (Verde)
-                             */
-                            $iconos = [
-                                'Envio base' => ['bi bi-truck', 'Envío de base'],
-                                'Envio técnico' => ['bi bi-tools', 'Envío de técnico'],
-                                'Envio refacciones' => ['bi bi-box-seam', 'Envío de refacciones'],
-                                'Envio técnico y refacciones' => ['bi bi-tools', 'Técnico + Refacciones']
-                            ];
-
-                            $esAccionConocida = array_key_exists($row['accion'], $iconos);
-                            $accionInfo = $esAccionConocida ? $iconos[$row['accion']] : ['bi bi-question-circle', 'No disponible'];
-                            
-                            $iconClass = $accionInfo[0];
-                            $baseTitle = $accionInfo[1];
-
-                            $bgClass = 'bg-secondary'; 
-                            $suffix = '';
-
-                            if ($esAccionConocida) {
-                                if (empty($row['fecha_inicio_acc'])) {
-                                    $bgClass = 'bg-warning text-dark';
-                                    $suffix = ' (Pendiente)';
-                                } 
-                                elseif (!empty($row['fecha_inicio_acc']) && empty($row['fecha_fin_acc'])) {
-                                    $bgClass = 'bg-primary text-white';
-                                    $suffix = ' (Iniciado)';
-                                }
-                                elseif (!empty($row['fecha_inicio_acc']) && !empty($row['fecha_fin_acc'])) {
-                                    $bgClass = 'bg-success text-white';
-                                    $suffix = ' (Finalizado)';
-                                }
-                            } else {
-                                $bgClass = 'bg-secondary text-white';
-                            }
-                            ?>
-                            <span class="badge <?= $bgClass ?> rounded-pill px-3 py-2 badge-envio" 
-                                  style="font-size: 0.65rem;" 
-                                  title="<?= $baseTitle . $suffix ?>">
-                                <i class="<?= $iconClass ?> <?= strpos($iconClass, 'bi-tools') !== false ? 'me-1' : '' ?>"></i>
-                                <?php if ($row['accion'] == 'Envio técnico y refacciones'): ?>
-                                    <i class="bi bi-box-seam me-1"></i>
-                                <?php endif; ?>
-                            </span>
-                        </div>
-                    </td>
-                </tr>
-                <?php endwhile; ?>
-            </tbody>
+                </tbody>
         </table>
     </div>
 </div>
@@ -323,9 +176,7 @@ include 'includes/header.php';
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="contenidoTicket">
-                <div class="text-center p-5">
-                    <div class="spinner-border text-danger" role="status"></div>
-                </div>
+                <div class="text-center p-5"><div class="spinner-border text-danger" role="status"></div></div>
             </div>
         </div>
     </div>
@@ -351,14 +202,10 @@ include 'includes/header.php';
     }
 
     /**
-     * CONTROL DE FLUJO: Actualiza el estatus del ticket.
+     * CONTROL DE FLUJO: Actualiza el estatus del ticket con recarga AJAX.
      */
     function cambiarEstatus(id, nuevoEstatus) {
-        const colorEstatus = {
-            'Abierto': '#ffc107',
-            'Cerrado': '#198754',
-            'Cancelado': '#6c757d'
-        };
+        const colorEstatus = { 'Abierto': '#ffc107', 'Cerrado': '#198754', 'Cancelado': '#6c757d' };
 
         Swal.fire({
             title: `¿${nuevoEstatus === 'Cerrado' ? 'Cerrar' : 'Cancelar'} ticket #${id}?`,
@@ -378,86 +225,10 @@ include 'includes/header.php';
                     dataType: 'json',
                     success: function(response) {
                         if (response.success) {
-                            Swal.fire({
-                                title: '¡Hecho!',
-                                text: `Ticket #${id} actualizado correctamente.`,
-                                icon: 'success',
-                                timer: 1000,
-                                showConfirmButton: false
-                            });
-
-                            // A. Localizar la fila
-                            let filaNodo = $(`button[onclick*="${id}"]`).closest('tr');
-
-                            // B. ACTUALIZAR DATA INTERNA (Esto arregla que la fila se oculte con filtros)
-                            if (table) {
-                                table.cell(filaNodo, 8).data(nuevoEstatus); 
-                            }
-
-                            // C. ACTUALIZAR KPI DINERO (Si estaba pendiente de pago)
-                            let textoPago = filaNodo.find('td:nth-child(8)').text().trim();
-                            if (textoPago === 'Pendiente') {
-                                // Usamos .attr para leer el valor que pusimos en el PHP
-                                let costoTicket = parseFloat(filaNodo.attr('data-costo')) || 0;
-                                
-                                // Limpiamos el texto del KPI (quitamos $, comas y espacios)
-                                let actualCobrarStr = $('#kpi_cobrar').text().replace(/[^0-9.]/g, "");
-                                let actualCobrar = parseFloat(actualCobrarStr) || 0;
-                                
-                                let nuevoCobrar = Math.max(0, actualCobrar - costoTicket);
-                                
-                                // Actualizamos con el formato de moneda exacto
-                                $('#kpi_cobrar').text('$' + nuevoCobrar.toLocaleString('es-MX', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                }));
-                            }
-
-                            // D. ACTUALIZAR KPIs ABIERTOS Y CRÍTICOS
-                            let numPendientes = parseInt($('#kpi_pendientes').text()) || 0;
-                            $('#kpi_pendientes').text(Math.max(0, numPendientes - 1));
-
-                            if (filaNodo.find('.ms-1-animate').length > 0) {
-                                let numCriticos = parseInt($('#kpi_criticos').text()) || 0;
-                                let nuevoTotalCriticos = Math.max(0, numCriticos - 1);
-                                $('#kpi_criticos').text(nuevoTotalCriticos);
-                                
-                                // Actualiza el mensaje del banner de alerta
-                                if (nuevoTotalCriticos > 0) {
-                                    $('#alertaCriticos strong').text(nuevoTotalCriticos);
-                                } else {
-                                    if ($('#btnFiltrarCriticos').hasClass('btn-dark')) {
-                                        $.fn.dataTable.ext.search.pop(); // Elimina la regla de los 14 días
-                                        
-                                        // Restauramos el botón a su estado original
-                                        $('#btnFiltrarCriticos').html('<i class="bi bi-funnel-fill me-1"></i> Ver Urgentes')
-                                            .addClass('btn-danger').removeClass('btn-dark');
-                                    }
-
-                                    // Si no quedan críticos, se elimina la alerta
-                                    $('#alertaCriticos').fadeOut(400, function() {
-                                        $(this).remove(); // Se elimina del código
-                                    });
-
-                                    // Redibujar la tabla para eliminar cualquier rastro de tickets críticos
-                                    table.draw();
-                                }
-                                filaNodo.find('.ms-1-animate').remove();
-                            }
-
-                            // E. ACTUALIZAR VISUALMENTE LA FILA (Por si no hay filtros activos)
-                            let badge = filaNodo.find('td:nth-child(9) span');
-                            badge.text(nuevoEstatus).removeClass('bg-warning text-dark bg-success bg-secondary');
-                            if (nuevoEstatus === 'Cerrado') badge.addClass('bg-success');
-                            else if (nuevoEstatus === 'Cancelado') badge.addClass('bg-secondary');
-
-                            filaNodo.find('.btn-outline-warning, .btn-outline-success, .btn-outline-secondary').remove();
-
-                            // F. EL PASO FINAL: REDIBUJAR
-                            // Si el switch de "Solo Abiertos" está encendido, la fila desaparece aquí mágicamente
-                            if (table) {
-                                table.draw(false); 
-                            }
+                            Swal.fire({ title: '¡Hecho!', icon: 'success', timer: 1000, showConfirmButton: false });
+                            // Al ser Server-side, simplemente recargamos los datos del servidor
+                            // 'false' mantiene la posición de la página actual
+                            table.ajax.reload(null, false); 
                         }
                     }
                 });
@@ -471,146 +242,178 @@ include 'includes/header.php';
     function confirmarRespaldo() {
         Swal.fire({
             title: '¿Generar Respaldo y Limpiar?',
-            text: "Se descargará un Excel con TODO el historial. Los tickets 'Cerrados' y 'Cancelados' se eliminarán de la base de datos.",
+            text: "Se descargará un Excel con TODO el historial. Los tickets 'Cerrados' y 'Cancelados' se limpiarán.",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#198754',
-            cancelButtonColor: '#d33',
             confirmButtonText: 'Sí, respaldar y limpiar',
             cancelButtonText: 'Solo descargar Excel'
         }).then((result) => {
             if (result.isConfirmed) {
-                // Descarga + Limpieza
                 window.location.href = 'actions/respaldo_limpieza.php?download=true&clean=true';
-                setTimeout(() => { location.reload(); }, 3000);
+                setTimeout(() => { table.ajax.reload(); }, 3000);
             } else if (result.dismiss === Swal.DismissReason.cancel) {
-                // Solo Descarga
                 window.location.href = 'actions/respaldo_limpieza.php?download=true&clean=false';
             }
         });
     }
 
-
     /**
-     * CONFIGURACIÓN DATATABLES Y FILTROS (Versión Blindada)
+     * CONFIGURACIÓN DATATABLES SERVER-SIDE (VERSIÓN 2.0 BLINDADA)
+     * @author Israel Fernández Carrera
      */
     var table;
     $(document).ready(function() {
         if ($('#tablaTickets').length) {
             table = $('#tablaTickets').DataTable({
+                "processing": true,
+                "serverSide": true,
+                "ajax": {
+                    "url": "actions/obtener_tickets_datatable.php",
+                    "type": "POST",
+                    "data": function(d) {
+                        // INTEGRAMOS TODOS TUS FILTROS AL ENVÍO DEL SERVIDOR
+                        d.filterTipo   = $('#filterTipo').val();
+                        d.filterFalla  = $('#filterFalla').val();
+                        d.filterAccion = $('#filterAccion').val();
+                        d.fechaDesde   = $('#fechaDesde').val();
+                        d.fechaHasta   = $('#fechaHasta').val();
+                        
+                        // Captura de Switches (Boleanos enviados como 1 o 0)
+                        d.soloPendientes = $('#checkSoloPendientes').is(':checked') ? 1 : 0;
+                        d.soloGarantia   = $('#checkGarantia').is(':checked') ? 1 : 0;
+                        d.soloDeuda      = $('#checkSoloDeuda').is(':checked') ? 1 : 0;
+                        
+                        // Captura de Alarma de Urgentes (Basado en la clase del botón)
+                        d.soloUrgentes   = $('#btnFiltrarCriticos').hasClass('btn-dark') ? 1 : 0;
+                    }
+                },
+                "columns": [
+                    { 
+                        "data": "id_ticket", // 1. #
+                        "render": function(data, type, row) {
+                            let alerta = row.es_urgente ? 
+                                `<i class="bi bi-exclamation-triangle-fill text-danger ms-1-animate me-1" title="Urgente: ${row.diff_dias} días abierto" data-bs-toggle="tooltip"></i>` : '';
+                            // El triángulo va ANTES del data (ID) y todo en color rojo negrita
+                            return `<span class="fw-bold text-danger text-nowrap">${alerta}${data}</span>`;
+                        }
+                    },
+                    { "data": "nombre_cliente" }, // 2. Cliente
+                    { "data": "modelo_serie" },   // 3. Equipo / Serie
+                    { "data": "tipo_llamada", "visible": false }, // 4. Oculta
+                    { "data": "tipo_falla" },     // 5. Falla
+                    { "data": "accion_realizada", "visible": false }, // 6. Oculta
+                    { 
+                        "data": "garantia_valida", // 7. Garantía
+                        "render": function(data) {
+                            let color = data === 'Válida' ? 'text-success' : 'text-danger';
+                            return `<span class="small fw-bold ${color}">${data}</span>`;
+                        }
+                    },
+                    { 
+                        "data": "estatus_pago", // 8. Pago
+                        "render": function(data) {
+                            let color = data === 'Pendiente' ? 'text-danger fw-bold' : 'text-success fw-bold';
+                            return `<span class="small ${color}">${data}</span>`;
+                        }
+                    },
+                    { 
+                        "data": "estatus", // 9. Estatus
+                        "render": function(data) {
+                            let badge = data === 'Abierto' ? 'bg-warning text-dark' : (data === 'Cerrado' ? 'bg-success' : 'bg-secondary text-white');
+                            return `<span class="badge ${badge}" style="font-size: 0.65rem;">${data}</span>`;
+                        }
+                    },
+                    { "data": "fecha_inicial" }, // 10. Inicio
+                    { 
+                        "data": null, // 11. Botones de Acción
+                        "orderable": false,
+                        "className": "text-center",
+                        "render": function(data, type, row) {
+                            let btns = `<button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(${row.id_ticket})" title="Ver detalles"><i class="bi bi-eye-fill"></i></button>`;
+                            if (row.estatus === 'Abierto') {
+                                btns += `<a href="editar_ticket.php?id_ticket=${row.id_ticket}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square"></i></a>
+                                        <button type="button" class="btn btn-outline-success border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cerrado')" title="Cerrar"><i class="bi bi-lock-fill"></i></button>
+                                        <button type="button" class="btn btn-outline-secondary border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cancelado')" title="Cancelar"><i class="bi bi-x-circle-fill"></i></button>`;
+                            }
+                            return `<div class="btn-group btn-group-sm">${btns}</div>`;
+                        }
+                    },
+                    { 
+                        "data": null, // 12. Envios (Lógica 1.7 de iconos)
+                        "className": "text-center",
+                        "render": function(data, type, row) {
+                            const iconMap = {
+                                'Envio base': 'bi bi-truck',
+                                'Envio técnico': 'bi bi-tools',
+                                'Envio refacciones': 'bi bi-box-seam',
+                                'Envio técnico y refacciones': 'bi bi-tools'
+                            };
+                            
+                            let iconClass = iconMap[row.accion_realizada] || 'bi bi-question-circle';
+                            let bgClass = 'bg-secondary text-white'; // Default: N/A o Acción desconocida
+                            let suffix = '';
+
+                            if (iconMap[row.accion_realizada]) {
+                                if (!row.f_ini_acc) { 
+                                    bgClass = 'bg-warning text-dark'; suffix = ' (Pendiente)'; 
+                                } else if (row.f_ini_acc && !row.f_fin_acc) { 
+                                    bgClass = 'bg-primary text-white'; suffix = ' (Iniciado)'; 
+                                } else { 
+                                    bgClass = 'bg-success text-white'; suffix = ' (Finalizado)'; 
+                                }
+                            }
+
+                            let extraIcon = (row.accion_realizada === 'Envio técnico y refacciones') ? '<i class="bi bi-box-seam ms-1"></i>' : '';
+
+                            return `<span class="badge ${bgClass} rounded-pill px-3 py-2 badge-envio" style="font-size: 0.65rem;" title="${row.accion_realizada}${suffix}">
+                                    <i class="${iconClass}"></i>${extraIcon}
+                                    </span>`;
+                        }
+                    }
+                ],
                 "language": {
                     "sProcessing":     "Procesando...",
                     "sLengthMenu":     "Mostrar _MENU_ registros",
                     "sZeroRecords":    "No se encontraron resultados",
                     "sInfo":           "Mostrando _START_ al _END_ de _TOTAL_",
                     "sInfoEmpty":      "Mostrando 0 al 0 de 0",
-                    "sInfoFiltered":   "(filtrado de un total de _MAX_ registros)", // <--- AGREGA ESTA LÍNEA
+                    "sInfoFiltered":   "(filtrado de _MAX_ registros)",
                     "sSearch":         "Buscar:",
-                    "oPaginate": {
-                        "sFirst": "Primero", 
-                        "sLast": "Último", 
-                        "sNext": "Sig", 
-                        "sPrevious": "Ant"
-                    }
+                    "oPaginate": { "sFirst": "Primero", "sLast": "Último", "sNext": "Sig", "sPrevious": "Ant" }
                 },
                 "dom": 'rtip',
                 "pageLength": 13,
                 "order": [[0, "desc"]]
             });
 
+            // 1. EVENTOS DE RECARGA (REDAW) AL CAMBIAR FILTROS
             $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
 
-            $('#filterTipo').on('change', function() { table.column(3).search(this.value).draw(); }); // Col 3 (Oculta)
-            $('#filterFalla').on('change', function() { table.column(4).search(this.value).draw(); }); // Col 4 (Visible)
-            $('#filterAccion').on('change', function() { 
-                table.column(5).search(this.value ? '^' + this.value + '$' : '', true, false).draw(); 
+            $('#filterTipo, #filterFalla, #filterAccion, #fechaDesde, #fechaHasta').on('change', function() {
+                table.draw(); 
             });
 
-            // 2. Lógica de los Switches (Interruptores)
-            // Filtro: Solo Abiertos (Columna 7 del HTML / Índice 7 de DataTable)
-            $('#checkSoloPendientes').on('change', function() {
-                table.column(8).search(this.checked ? '^Abierto$' : '', true, false).draw();
+            $('#checkSoloPendientes, #checkGarantia, #checkSoloDeuda').on('change', function() {
+                table.draw();
             });
 
-            // Filtro: Garantía Válida (Columna 5)
-            $('#checkGarantia').on('change', function() {
-                table.column(6).search(this.checked ? '^Válida$' : '', true, false).draw();
-            });
-
-            // Filtro: Con Deuda (Estatus de Pago 'Pendiente' en Columna 6)
-            $('#checkSoloDeuda').on('change', function() {
-                table.column(7).search(this.checked ? '^Pendiente$' : '', true, false).draw();
-            });
-
-            // --- INTEGRACIÓN DE SISTEMA DE ALARMAS ---
-
-            // 1. Inicializar los Tooltips de Bootstrap (para que el mensaje del triángulo funcione)
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl)
-            });
-
-            // 2. Función para el botón "Ver Urgentes" del Banner
+            // 2. LÓGICA DE BOTÓN URGENTES
             $('#btnFiltrarCriticos').on('click', function() {
                 const btn = $(this);
-
-                // Si el botón tiene la clase de peligro, activa el filtro
-                if (btn.hasClass('btn-danger')) {
-                    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-                        var estatus = data[8]; // Columna Estatus
-                        var dateRaw = $(table.row(dataIndex).node()).find('td:nth-child(10)').attr('data-order');
-                        
-                        if (dateRaw && estatus === 'Abierto') {
-                            // Calcula la diferencia de días entre hoy y la fecha de inicio
-                            var diff = Math.floor((new Date() - new Date(dateRaw)) / (1000 * 60 * 60 * 24));
-                            return diff >= 14;
-                        }
-                        return false;
-                    });
-
-                    // Cambia el texto y estilo para permitir quitar el filtro
-                    btn.html('<i class="bi bi-arrow-counterclockwise me-1"></i> Quitar Filtro')
-                    .addClass('btn-dark').removeClass('btn-danger');
-                } 
-                // Si no es rojo, quita la regla de filtrado
-                else {
-                    $.fn.dataTable.ext.search.pop(); // Elimina la última regla de búsqueda
-                    
-                    // Restaura el botón a su estado original
-                    btn.html('<i class="bi bi-funnel-fill me-1"></i> Ver Urgentes')
-                    .addClass('btn-danger').removeClass('btn-dark');
-                }
-
-                table.draw(); // Redibuja la tabla con los cambios aplicados
-            });
-            
-            // --- BLOQUEO DE CALENDARIOS ---
-            $('#fechaDesde').on('change', function() {
-                var fechaMin = $(this).val();
-                $('#fechaHasta').attr('min', fechaMin); // Bloquea días anteriores en el segundo input
-                table.draw();
+                btn.toggleClass('btn-danger btn-dark');
+                const activo = btn.hasClass('btn-dark');
+                btn.html(activo ? '<i class="bi bi-arrow-counterclockwise me-1"></i> Quitar Filtro' : '<i class="bi bi-funnel-fill me-1"></i> Ver Urgentes');
+                table.draw(); // Esto dispara el AJAX enviando soloUrgentes = 1
             });
 
-            $('#fechaHasta').on('change', function() {
-                var fechaMax = $(this).val();
-                $('#fechaDesde').attr('max', fechaMax); // Bloquea días posteriores en el primer input
-                table.draw();
-            });
+            // 3. BLOQUEO DE CALENDARIOS (UI)
+            $('#fechaDesde').on('change', function() { $('#fechaHasta').attr('min', $(this).val()); });
+            $('#fechaHasta').on('change', function() { $('#fechaDesde').attr('max', $(this).val()); });
 
-            // --- LÓGICA DE FILTRADO ---
-            $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-                var min = $('#fechaDesde').val();
-                var max = $('#fechaHasta').val();
-                // nth-child(10) porque en el DOM el conteo empieza en 1
-                var dateRaw = $(table.row(dataIndex).node()).find('td:nth-child(10)').attr('data-order');
-                var date = dateRaw ? dateRaw.substring(0, 10) : ""; 
-
-                if (min === "" && max === "") return true;
-                if (min === "" && date <= max) return true;
-                if (min <= date && max === "") return true;
-                if (min <= date && date <= max) return true;
-                return false;
-            });
+            // 4. TOOLTIPS
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
         }
     });
 </script>

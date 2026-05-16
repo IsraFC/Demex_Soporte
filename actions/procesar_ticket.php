@@ -56,7 +56,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // --- 3. RECEPCIÓN DE DATOS FINANCIEROS (CORREGIDO) ---
         $f_inicio  = !empty($_POST['fecha_inicio_acc']) ? $_POST['fecha_inicio_acc'] : null;
         $f_fin     = !empty($_POST['fecha_fin_acc']) ? $_POST['fecha_fin_acc'] : null;
-        $t_accion  = $_POST['tiempo_accion'] ?? 0;
+
+        // NUEVA LÓGICA DE AUDITORÍA: Recalcular días directamente en el servidor
+        $t_acc_recalculado = 0;
+        if ($f_inicio && $f_fin) {
+            $d_ini = new DateTime($f_inicio);
+            $d_fin = new DateTime($f_fin);
+            
+            if ($d_fin >= $d_ini) {
+                $intervalo = $d_ini->diff($d_fin);
+                $t_acc_recalculado = $intervalo->days;
+            }
+        }
+
+        $t_accion  = $t_acc_recalculado;
         
         // Aquí estaba el error: No se estaban capturando estas variables del POST
         $c_refac_v = (float)($_POST['costo_refac_venta'] ?? 0);
