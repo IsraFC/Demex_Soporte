@@ -264,6 +264,10 @@ $(document).ready(function() {
             indexAxis: 'y', 
             responsive: true, 
             maintainAspectRatio: false, 
+            animation: {
+                duration: 1500,
+                easing: 'easeOutQuart'
+            },
             plugins: { 
                 legend: { display: false },
                 tooltip: {
@@ -284,7 +288,12 @@ $(document).ready(function() {
                 labels: ['Mecánica', 'Refrigeración', 'Electrónica', 'Regulador', 'Materia Prima', 'Otra'], 
                 datasets: [{ data: Object.values(data.fallas), backgroundColor: '#3b82f6' }] 
             }, 
-            options: barOpt 
+            options: {
+                ...barOpt,
+                animations: {
+                    x: { duration: 2000, from: 0 } // Las barras se estiran desde la izquierda
+                }
+            }
         });
 
         new Chart(document.getElementById('chartLL'), { 
@@ -305,11 +314,11 @@ $(document).ready(function() {
             options: { 
                 ...barOpt, 
                 indexAxis: 'x',
+                animations: {
+                    y: { duration: 2000, from: 500 } // Las barras suben desde el fondo
+                },
                 scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: { stepSize: 1 } // Útil para que no salgan decimales si hay pocos datos
-                    }
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
                 }
             } 
         });
@@ -320,7 +329,12 @@ $(document).ready(function() {
                 labels: ['Ninguna', 'Envío Técnico', 'Envío Refacciones', 'Técnico + Refacc.', 'Envío Base', 'Reparación Taller', 'Cambio Máquina', 'Información'], 
                 datasets: [{ data: Object.values(data.acciones), backgroundColor: '#8b5cf6' }] 
             }, 
-            options: barOpt 
+            options: {
+                ...barOpt,
+                animations: {
+                    x: { duration: 2000, from: 0 } // Las barras suben desde el fondo
+                },
+            }
         });
 
         // Función reutilizable para generar leyendas de barras
