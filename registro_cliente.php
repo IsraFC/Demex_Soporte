@@ -43,7 +43,8 @@ include 'includes/header.php';
                 </label>
                 <input type="text" name="nombre_cliente" id="nombre_cliente" 
                     class="form-control border-0 bg-light shadow-sm" 
-                    placeholder="Ej: Maderería El Pino S.A." required>
+                    placeholder="Ej: Maderería El Pino S.A."
+                    value="<?= htmlspecialchars($_GET['nombre'] ?? '') ?>" required>
                 <div id="status_cliente" class="small mt-1 fw-bold" style="display:none;"></div>
             </div>
 
@@ -134,6 +135,11 @@ $(document).ready(function() {
             }, doneTypingInterval);
         }
     });
+
+    // Si ya viene un nombre en la URL, valida si existe de una vez
+    if ($('#nombre_cliente').val().length >= 4) {
+        $('#nombre_cliente').trigger('input');
+    }
 });
 </script>
 

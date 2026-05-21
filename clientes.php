@@ -108,7 +108,7 @@ include 'includes/header.php';
                                 <i class="bi bi-pencil-square"></i>
                             </a>
                             <a href="registro_ticket.php?id_cliente=<?= $row['id_cliente'] ?>" class="btn btn-outline-danger border-0" title="Crear Ticket">
-                                <i class="bi bi-ticket"></i>
+                                <i class="bi bi-ticket-perforated"></i>
                             </a>
                         </div>
                     </td>

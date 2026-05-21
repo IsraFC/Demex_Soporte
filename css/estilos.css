@@ -1,3 +1,6 @@
+/* ==========================================================================
+   ESTILOS PERSONALIZADOS PARA DEMEX - NEUMORFISMO SUAVE
+   ========================================================================== */
 :root {
     --primary-red: #C62828;
     --dark-red: #8E1C1C;
@@ -5,6 +8,7 @@
     --shadow-soft: 0 8px 30px rgba(0,0,0,0.08);
 }
 
+/* Estilo base para toda la aplicación */
 body {
     background-color: var(--bg-light);
     font-family: 'Poppins', sans-serif;
@@ -33,6 +37,7 @@ body {
     transition: all 0.2s ease-in-out;
 }
 
+/* Efecto de enfoque para inputs */
 .form-control:focus {
     border-color: var(--primary-red);
     box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
@@ -50,8 +55,60 @@ body {
     transition: 0.3s;
 }
 
+/* Efecto hover para botones */
 .btn-demex:hover {
     background-color: var(--dark-red);
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(198, 40, 40, 0.3);
+}
+
+/* ==========================================================================
+   SISTEMA DE ALERTAS DINÁMICAS (TICKETS CRÍTICOS)
+   ========================================================================== */
+
+/* 1. Animación de parpadeo para el icono de peligro */
+.ms-1-animate {
+    animation: blinker-urgente 1.5s linear infinite;
+    filter: drop-shadow(0 0 2px rgba(220, 53, 69, 0.5));
+}
+
+@keyframes blinker-urgente {
+    50% {
+        opacity: 0.2; /* El icono se desvanece a un 20% y vuelve */
+    }
+}
+
+/* 2. Estilo para el banner de alerta superior */
+#alertaCriticos {
+    margin-top: -10px; /* Ajuste para pegarse un poco más a los KPIs */
+    margin-bottom: 20px;
+    border-radius: 12px;
+    padding: 15px 20px;
+    transition: all 0.3s ease;
+}
+
+/* 3. Animación de entrada para el banner (opcional) */
+/* Si no usas Animate.css, esto le dará un efecto de entrada suave */
+.animate__headShake {
+    animation: headShake 1s ease-in-out;
+}
+
+@keyframes headShake {
+    0% { transform: translateX(0); }
+    6.5% { transform: translateX(-6px) rotateY(-9deg); }
+    18.5% { transform: translateX(5px) rotateY(7deg); }
+    31.5% { transform: translateX(-3px) rotateY(-5deg); }
+    43.5% { transform: translateX(2px) rotateY(3deg); }
+    50% { transform: translateX(0); }
+}
+
+/* 4. Estilo de los Tooltips (Opcional: para que se vean más acorde a DEMEX) */
+.tooltip-inner {
+    background-color: #dc3545 !important; /* Rojo DEMEX */
+    font-weight: bold;
+    font-size: 0.75rem;
+}
+.bs-tooltip-auto[data-pooper-placement^=top] .tooltip-arrow::before, 
+.bs-tooltip-top .tooltip-arrow::before {
+    border-top-color: #dc3545 !important;
 }
