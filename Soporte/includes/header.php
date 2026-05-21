@@ -6,6 +6,17 @@
  * @project Soporte Desarrollo Mexicano (DEMEX)
  * @version 1.7
  */
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Control de seguridad del portal: Si no tiene rol autorizado, va para afuera
+if (!isset($_SESSION['rol']) || ($_SESSION['rol'] !== 'administrador' && $_SESSION['rol'] !== 'soporte')) {
+    header("Location: ../login.php?error=no_autorizado");
+    exit();
+}
+
 require_once 'config/backup.php';
 if (isset($pdo)) {
     ejecutarRespaldoSilencioso($pdo);
