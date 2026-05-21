@@ -10,7 +10,6 @@
  * @project Soporte Técnico DEMEX
  * @version 1.6
  */
-$pagina_actual = 'soporte';
 require_once 'config/db.php';
 
 // Validación de existencia del folio para la carga de datos

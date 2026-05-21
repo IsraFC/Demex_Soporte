@@ -34,6 +34,7 @@ $options = [
 try {
     /** @var PDO $pdo_portal Instancia global de conexión al repositorio de datos */
     $pdo_portal = new PDO($dsn, $user, $pass, $options);
+    /*echo "¡Conexión exitosa al portal!"*/; // Debugging: Confirmación de conexión exitosa (Descomentar para pruebas)
 } catch (\PDOException $e) {
     /**
      * En producción se debe redirigir a una bitácora de errores (Log) interna.

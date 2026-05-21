@@ -5,7 +5,6 @@
  * @author Israel Fernández Carrera
  */
 require_once 'config/db.php';
-$pagina_actual = 'clientes'; 
 include 'includes/header.php';
 ?>
 

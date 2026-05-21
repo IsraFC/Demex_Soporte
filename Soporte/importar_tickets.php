@@ -5,7 +5,6 @@
  * @author Israel Fernández Carrera
  */
 require_once 'config/db.php';
-$pagina_actual = 'otro'; // Mantenemos 'otro' para no resaltar Clientes/Máquinas
 include 'includes/header.php';
 ?>
 

@@ -9,7 +9,6 @@
  * @version 2.0 (Optimizado)
  */
 
-$pagina_actual = 'inicio';
 require_once 'config/db.php';
 
 /**

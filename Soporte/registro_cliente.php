@@ -8,7 +8,6 @@
  * @project Soporte Desarrollo Mexicano (DEMEX)
  * @version 1.4
  */
-$pagina_actual = 'otro'; 
 require_once 'config/db.php';
 
 include 'includes/header.php';

@@ -7,7 +7,6 @@
  * @version 1.41
  */
 require_once 'config/db.php';
-$pagina_actual = 'estadisticas';
 include 'includes/header.php';
 
 $fecha_inicio_val = $_GET['fecha_inicio'] ?? '';
@@ -236,12 +235,20 @@ $(document).ready(function() {
 
     const apiQuery = new URLSearchParams(window.location.search).toString();
     
+    /**
+     * ⚡ CONFIGURACIÓN GLOBAL DE CHART.JS (ANTI-REBOOT AUTOMÁTICO)
+     * Forzamos al motor global a apagar la animación ÚNICAMENTE cuando detecte un cambio
+     * de geometría por el Flexbox del Sidebar, manteniendo intactas las cargas iniciales.
+     */
+    Chart.defaults.transitions.resize.animation.duration = 0;
+
     $.getJSON('actions/obtener_estadisticas.php?' + apiQuery, function(data) {
         if (!data.success) return;
         if (data.total === 0) { $('#dashboard_contenido').hide(); $('#estado_vacio').show(); return; }
 
         $('#kpi_total, #kpi_pdf').text(data.total);
 
+        // CONFIGURACIÓN DE GRÁFICAS CIRCULARES (CON ANIMACIÓN RESTAURADA)
         const setupChart = (ctx, type, labels, d, bg, donut = false) => {
             new Chart(document.getElementById(ctx), { 
                 type: donut ? 'doughnut' : type, 
@@ -251,8 +258,12 @@ $(document).ready(function() {
                     responsive: true, 
                     maintainAspectRatio: false, 
                     devicePixelRatio: 2,
-                    animation: { duration: 800 }, 
-                    plugins: { legend: { display: false } } } 
+                    animation: { 
+                        duration: 1000, // Regresamos su animación fluida de entrada
+                        easing: 'easeOutQuart'
+                    }, 
+                    plugins: { legend: { display: false } } 
+                } 
             });
         };
         
@@ -260,10 +271,12 @@ $(document).ready(function() {
         setupChart('chartFun', 'pie', ['Funcionando', 'No funciona'], [data.funcionamiento.si, data.funcionamiento.no], ['#0d6efd', '#fd7e14']);
         setupChart('chartEst', 'pie', ['Abierto', 'Cerrado', 'Cancelado'], [data.estatus.a, data.estatus.c, data.estatus.x], ['#ffc107', '#198754', '#6c757d'], true);
 
+        // CONFIGURACIÓN BASE PARA GRÁFICAS DE BARRAS
         const barOpt = { 
             indexAxis: 'y', 
             responsive: true, 
             maintainAspectRatio: false, 
+            devicePixelRatio: 2,
             animation: {
                 duration: 1500,
                 easing: 'easeOutQuart'
@@ -273,7 +286,6 @@ $(document).ready(function() {
                 tooltip: {
                     enabled: true,
                     callbacks: {
-                        // Forzamos a que el tooltip muestre el valor completo
                         label: function(context) {
                             return ' Total: ' + context.raw;
                         }
@@ -282,6 +294,7 @@ $(document).ready(function() {
             } 
         };
 
+        // RENDERIZADO DE BARRAS: FALLAS
         new Chart(document.getElementById('chartFal'), { 
             type: 'bar', 
             data: { 
@@ -291,17 +304,17 @@ $(document).ready(function() {
             options: {
                 ...barOpt,
                 animations: {
-                    x: { duration: 2000, from: 0 } // Las barras se estiran desde la izquierda
+                    x: { duration: 1500, from: 0 } // Las barras se estiran limpiamente al cargar
                 }
             }
         });
 
+        // RENDERIZADO DE BARRAS: TIPO LLAMADA
         new Chart(document.getElementById('chartLL'), { 
             type: 'bar', 
             data: { 
                 labels: ['Venta Refacciones', 'Información', 'Capacitaciones', 'Soporte'], 
                 datasets: [{ 
-                    // Accedemos a las propiedades una por una para que el orden sea SIEMPRE el mismo
                     data: [
                         data.tipo_llamada.venta, 
                         data.tipo_llamada.info, 
@@ -315,7 +328,7 @@ $(document).ready(function() {
                 ...barOpt, 
                 indexAxis: 'x',
                 animations: {
-                    y: { duration: 2000, from: 500 } // Las barras suben desde el fondo
+                    y: { duration: 1500, from: 500 } // Suben desde el fondo al cargar
                 },
                 scales: {
                     y: { beginAtZero: true, ticks: { stepSize: 1 } }
@@ -323,6 +336,7 @@ $(document).ready(function() {
             } 
         });
 
+        // RENDERIZADO DE BARRAS: ACCIONES
         new Chart(document.getElementById('chartAcc'), { 
             type: 'bar', 
             data: { 
@@ -332,8 +346,8 @@ $(document).ready(function() {
             options: {
                 ...barOpt,
                 animations: {
-                    x: { duration: 2000, from: 0 } // Las barras suben desde el fondo
-                },
+                    x: { duration: 1500, from: 0 }
+                }
             }
         });
 

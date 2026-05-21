@@ -6,7 +6,6 @@
  * @version 1.4
  * @project Soporte Desarrollo Mexicano (DEMEX)
  */
-$pagina_actual = 'maquinas'; 
 require_once 'config/db.php';
 
 /** * KPIs - INDICADORES CLAVE DE DESEMPEÑO */

@@ -13,7 +13,6 @@
  * * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
  */
-$pagina_actual = 'otro'; 
 require_once 'config/db.php';
 
 // 1. VALIDACIÓN DE SEGURIDAD

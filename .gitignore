@@ -8,3 +8,6 @@ backups/
 
 # Bloquear archivos de registro de tiempo
 config/ultimo_respaldo.txt
+
+# Scripts de Configuración Única (Local Only)
+crear_admin.php

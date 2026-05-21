@@ -3,41 +3,36 @@
  * @file procesar_login.php
  * @package Portal_Demex
  * @brief Controlador del Backend encargado de validar y procesar la autenticación.
- * * Recibe los datos del formulario, aplica reglas de sanitización de datos,
- * consulta el repositorio relacional de MySQL y evalúa los hashes criptográficos BCRYPT.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Inyección obligatoria de la capa de persistencia de datos
 require_once 'conexion.php';
 
-/**
- * Restricción de Método: Bloquea cualquier petición que no provenga de un flujo POST legítimo.
- */
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header("Location: login.php");
     exit();
 }
 
-// Recopilación de variables y remoción de espacios colaterales
 $correo_crudo = $_POST['correo'] ?? '';
 $password     = $_POST['password'] ?? '';
 
-// Capa Backend de Seguridad: Sanitización y validación formal de tipos de datos
+// Sanitización del lado del servidor
 $correo = filter_var(trim($correo_crudo), FILTER_SANITIZE_EMAIL);
 
+// Guardamos el correo en la sesión temporalmente por si hay error y queremos mantenerlo en el input
+$_SESSION['old_correo'] = $correo_crudo;
+
 if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
-    header("Location: login.php?error=datos_incorrectos");
+    header("Location: login.php?error=correo_invalido");
     exit();
 }
 
 try {
     /**
-     * Query Preparado (Evita de raíz la Inyección SQL):
-     * Filtra únicamente usuarios cuyo correo coincida y que tengan estatus = 1 (Cuentas activas/verificadas).
+     * Buscamos al usuario ÚNICAMENTE por correo para determinar si existe en el padrón activo.
      */
     $sql = "SELECT id_usuario, nombre, apellidos, correo, password, rol, estatus 
             FROM usuarios 
@@ -48,40 +43,41 @@ try {
     $stmt->execute([$correo]);
     $user = $stmt->fetch();
 
+    if (!$user) {
+        // ERROR: El correo electrónico no existe en la base de datos
+        header("Location: login.php?error=usuario_no_encontrado");
+        exit();
+    }
+
     /**
-     * Evaluación del Hash: password_verify() lee las instrucciones del hash guardado en DB
-     * e identifica si el password en texto plano genera la misma firma matemática.
+     * Si el usuario existe, pasamos a evaluar de forma aislada la firma criptográfica.
      */
-    if ($user && password_verify($password, $user['password'])) {
+    if (password_verify($password, $user['password'])) {
         
-        // Autenticación Exitosa: Se inicializan las variables del alcance Global $_SESSION
+        // Autenticación Exitosa: Limpiamos la papelera de inputs viejos
+        unset($_SESSION['old_correo']);
+
         $_SESSION['id_usuario'] = $user['id_usuario'];
         $_SESSION['nombre']     = $user['nombre'];
         $_SESSION['apellidos']  = $user['apellidos'];
         $_SESSION['correo']     = $user['correo'];
         $_SESSION['rol']        = $user['rol'];
 
-        /**
-         * Enrutamiento Basado en Roles (RBAC - Role-Based Access Control):
-         * Direcciona al usuario de acuerdo a sus privilegios corporativos.
-         */
-        if ($user['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte') {
+        if ($user['rol'] === 'administrador' || $user['rol'] === 'soporte') {
             header("Location: Soporte/index.php");
             exit();
         } else {
-            // Reservado para la futura implementación del módulo autónomo de clientes
             header("Location: vista_cliente.php");
             exit();
         }
 
     } else {
-        // Credenciales incorrectas o usuario inexistente en el padrón activo
-        header("Location: login.php?error=datos_incorrectos");
+        // ERROR: El usuario existe pero la contraseña no hizo match matemático
+        header("Location: login.php?error=password_incorrecto");
         exit();
     }
 
 } catch (\Exception $e) {
-    // Falla inesperada en tiempo de ejecución del motor de Base de Datos
     header("Location: login.php?error=fatal");
     exit();
 }

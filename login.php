@@ -2,19 +2,13 @@
 /**
  * @file login.php
  * @package Portal_Demex
- * @brief Interfaz gráfica y control de redirección previa para el inicio de sesión.
- * * Valida si el cliente/usuario ya posee un token de sesión activo (Cookie de Sesión) 
- * y lo redirige dinámicamente a su módulo correspondiente sin requerir reautenticación.
+ * @brief Interfaz gráfica con validación específica de errores y limpieza sintáctica de URL.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/**
- * Evaluación de la persistencia de sesión (Pulsera VIP).
- * Si el rol está definido, el usuario ya se encuentra autenticado dentro del ecosistema.
- */
 if (isset($_SESSION['rol'])) {
     if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte') {
         header("Location: Soporte/index.php");
@@ -24,6 +18,14 @@ if (isset($_SESSION['rol'])) {
         exit();
     }
 }
+
+// Recuperamos el correo viejo si es que existió un error
+$old_correo = $_SESSION['old_correo'] ?? '';
+// Una vez leído, lo eliminamos de la sesión para que no se quede estancado para siempre
+unset($_SESSION['old_correo']);
+
+// Capturamos el tipo de error
+$error = $_GET['error'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -47,7 +49,7 @@ if (isset($_SESSION['rol'])) {
         .login-card { 
             max-width: 450px; 
             width: 90%; 
-            border-top: 5px solid #C62828; /* Línea de identidad corporativa DEMEX */
+            border-top: 5px solid #C62828; 
         }
     </style>
 </head>
@@ -55,27 +57,30 @@ if (isset($_SESSION['rol'])) {
 
 <div class="card-main login-card shadow-lg text-center">
     <div class="mb-4">
-        <img src="Soporte/img/logo_demex.png" alt="Desarrollo Mexicano S.A. de C.V." width="220" class="filter-drop-shadow">
+        <img src="Soporte/img/logo_demex.png" alt="Desarrollo Mexicano" width="220" class="filter-drop-shadow">
     </div>
     
     <h4 class="fw-bold text-dark mb-1">Control de Acceso</h4>
     <p class="text-muted small mb-4">Ingresa tus credenciales para acceder al portal corporativo</p>
 
-    /**
-     * Renderizado Condicional de Errores (Mensajes de retroalimentación basados en parámetros GET).
-     */
-    <?php if (isset($_GET['error'])): ?>
+    <?php if ($error): ?>
         <div class="alert alert-danger border-0 small py-2 text-start" role="alert">
             <?php 
-                switch ($_GET['error']) {
-                    case 'datos_incorrectos':
-                        echo "El correo electrónico o la contraseña ingresados no coinciden con nuestros registros.";
+                switch ($error) {
+                    case 'usuario_no_encontrado':
+                        echo "El correo electrónico ingresado no está registrado en el sistema.";
+                        break;
+                    case 'password_incorrecto':
+                        echo "La contraseña ingresada es incorrecta. Por favor, verifícala.";
+                        break;
+                    case 'correo_invalido':
+                        echo "El formato del correo electrónico no es válido.";
                         break;
                     case 'no_autorizado':
-                        echo "Acceso denegado. Se requieren credenciales activas para visualizar este módulo.";
+                        echo "Acceso denegado. Se requieren credenciales activas.";
                         break;
                     default:
-                        echo "Ocurrió una anomalía de seguridad en el servidor. Por favor, reintente.";
+                        echo "Ocurrió una anomalía de seguridad en el servidor.";
                         break;
                 }
             ?>
@@ -85,12 +90,19 @@ if (isset($_SESSION['rol'])) {
     <form action="procesar_login.php" method="POST" class="text-start">
         <div class="mb-3">
             <label for="correo" class="form-label small fw-bold text-muted text-uppercase">Correo Electrónico</label>
-            <input type="email" name="correo" id="correo" class="form-control" placeholder="ejemplo@demex.com" required autocomplete="email">
+            <input type="email" name="correo" id="correo" 
+                   class="form-control <?php echo ($error === 'usuario_no_encontrado' || $error === 'correo_invalido') ? 'is-invalid' : ''; ?>" 
+                   placeholder="Correo..." 
+                   value="<?php echo htmlspecialchars($old_correo); ?>" 
+                   required autocomplete="email">
         </div>
 
         <div class="mb-4">
             <label for="password" class="form-label small fw-bold text-muted text-uppercase">Contraseña</label>
-            <input type="password" name="password" id="password" class="form-control" placeholder="••••••••" required>
+            <input type="password" name="password" id="password" 
+                   class="form-control <?php echo ($error === 'password_incorrecto') ? 'is-invalid' : ''; ?>" 
+                   placeholder="Contraseña..." 
+                   required>
         </div>
 
         <button type="submit" class="btn-demex w-100 py-3 rounded-pill shadow-sm">
@@ -98,6 +110,14 @@ if (isset($_SESSION['rol'])) {
         </button>
     </form>
 </div>
+
+<script>
+    if (typeof window.history.replaceState === 'function') {
+        // Reemplaza la URL actual quitándole el "?error=..." de forma silenciosa
+        const limpiaUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({ path: limpiaUrl }, '', limpiaUrl);
+    }
+</script>
 
 </body>
 </html>
