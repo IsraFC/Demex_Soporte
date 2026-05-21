@@ -4,10 +4,10 @@ desktop.ini
 *.log
 
 # Bloquear la carpeta de respaldos completa
-backups/
+Soporte/backups/
 
 # Bloquear archivos de registro de tiempo
-config/ultimo_respaldo.txt
+Soporte/config/ultimo_respaldo.txt
 
 # Scripts de Configuración Única (Local Only)
 crear_admin.php
