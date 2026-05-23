@@ -367,6 +367,12 @@ if (isset($pdo)) {
             <a href="importar_tickets.php" class="sidebar-link py-2">
                 <div class="sidebar-icon"><i class="bi bi-ticket-detailed"></i></div> <span>Imp. Tickets</span>
             </a>
+
+            <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'): ?>
+                <a href="usuarios.php" class="sidebar-link <?= (basename($_SERVER['PHP_SELF']) == 'usuarios.php') ? 'active' : ''; ?>">
+                    <div class="sidebar-icon"><i class="bi bi-shield-lock-fill"></i></div> <span>Personal Staff</span>
+                </a>
+            <?php endif; ?>
         </div>
     </div>
 

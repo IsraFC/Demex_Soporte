@@ -112,3 +112,36 @@ body {
 .bs-tooltip-top .tooltip-arrow::before {
     border-top-color: #dc3545 !important;
 }
+
+/* ==========================================================================
+   CORRECCIÓN VISUAL: BUSCADOR INTERNO DATATABLES (FIX OVERFLOW)
+   ========================================================================== */
+
+/* Normaliza el input nativo que genera DataTables */
+.dataTables_filter input {
+    border: 1px solid #E0E0E0 !important;
+    border-radius: 12px !important;
+    padding: 0.4rem 0.8rem !important;
+    background-color: #FFFFFF !important;
+    box-shadow: none !important;
+    transition: all 0.2s ease-in-out !important;
+    margin-left: 0.5rem !important;
+    display: inline-block !important;
+    width: auto !important;
+    vertical-align: middle !important;
+}
+
+/* Sincroniza el efecto Focus con la línea gráfica del sistema */
+.dataTables_filter input:focus {
+    border-color: var(--primary-red) !important;
+    box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1) !important;
+    outline: none !important;
+}
+
+/* Elimina el contenedor de fondo que genera Bootstrap sobre elementos inválidos */
+.dataTables_wrapper .dataTables_filter {
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
