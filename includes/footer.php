@@ -101,21 +101,23 @@
 <script>
 $(document).ready(function() {
     
-    /* 🎬 1. ANIMACIÓN DE ENTRADA PÁGINAS (FADE-IN DE LA CARD) */
+    /* 1. CONTROL DE ENTRADA CINEMATICA DE LA CARD PRINCIPAL */
     setTimeout(function() {
         $('#master-fade-container').addClass('fade-in-active');
     }, 40);
 
-    /* 🎬 2. INTERCEPTOR CINEMÁTICO CENTRALIZADO (TRANSICIÓN SIMÉTRICA DE SALIDA) */
+    /* 2. INTERCEPTOR CENTRALIZADO DE NAVEGACION Y ANIMACION DE TRANSICION */
     $('#sidebar-menu-list .sidebar-link').on('click', function(e) {
         var destinoUrl = $(this).attr('href');
         var paginaActualFile = window.location.pathname.split("/").pop();
 
+        // Si se hace clic en la pagina donde ya nos encontramos, se aborta la operacion
         if (destinoUrl === paginaActualFile || (paginaActualFile === "" && destinoUrl === "index.php")) return;
 
-        e.preventDefault(); // Congelamos el salto síncrono del navegador
+        // Se detiene la navegacion sincronica para dar tiempo a la ejecucion de la animacion
+        e.preventDefault(); 
 
-        /* Evaluamos el contexto camaleón directamente desde la URL absoluta del clic */
+        // Evaluacion dinamica de rutas absolutas para alternar los esquemas de color del sistema
         var urlAbsoluta = e.currentTarget.href;
         var vaHaciaStaff = urlAbsoluta.includes('usuarios.php') || urlAbsoluta.includes('personal_staff.php');
         var esUrlDeSoporte = urlAbsoluta.includes('/Soporte/');
@@ -134,17 +136,18 @@ $(document).ready(function() {
             }
         }
 
-        /* SIMETRÍA CINEMÁTICA REAL:
-           1. Quitamos la clase active-page del botón viejo (activa el encogido a la izquierda).
-           2. Añadimos la clase active-page al nuevo enlace (activa el llenado horizontal fluido).
-        */
-        $('#sidebar-menu-list .sidebar-link').removeClass('active-page');
-        $(this).addClass('active-page');
+        // CONTROL DE ANIMACION SIMETRICA EN LA BARRA LATERAL
+        // Remueve la clase del boton que la tenia activada originalmente (inicia el efecto de vaciado)
+        $('#sidebar-menu-list .sidebar-link.active-page').removeClass('active-page');
+        
+        // Aplica la clase activa al boton cliqueado (inicia el efecto de llenado)
+        // Se remueve explicitamente '.no-anim' en caso de que viniera renderizada desde PHP
+        $(this).removeClass('no-anim').addClass('active-page');
 
-        /* Fundido hacia arriba de la card principal en paralelo */
+        // Desvanecimiento hacia arriba del contenedor principal de la vista actual
         $('#master-fade-container').addClass('fade-out-active');
 
-        /* Lanzamos el viaje definitivo a los 300ms una vez concluidos los efectos visuales */
+        // Ejecucion del cambio de locacion tras completarse el ciclo visual (300 milisegundos)
         setTimeout(function() {
             window.location.href = destinoUrl;
         }, 300);
@@ -153,7 +156,7 @@ $(document).ready(function() {
     var timerBusqueda;
     var pathDestinoAcciones = "<?= $base_path ?><?= $link_prefix ?>";
 
-    /* MANEJADOR SMART SCROLL NAVBAR */
+    /* 3. MANEJADOR SMART SCROLL PARA OCULTAR LA BARRA DE NAVEGACION SUPERIOR */
     var ultimoScrollTop = 0;
     var navbar = $('#main-top-navbar');
     var contenedorScroll = $('#page-content-wrapper');
@@ -170,7 +173,7 @@ $(document).ready(function() {
         ultimoScrollTop = scrollTopActual;
     });
 
-    /* MANEJADOR SIDEBAR INTERACTIVO (COLAPSO) */
+    /* 4. CONTROL INTERACTIVO DE COLAPSO DE LA BARRA LATERAL (SIDEBAR) */
     $('#menu-toggle').on('click', function(e) {
         e.preventDefault();
         var wrapper = $('#wrapper');
@@ -179,7 +182,7 @@ $(document).ready(function() {
         localStorage.setItem('sidebar_collapsed', isCollapsed);
     });
 
-    /* AJAX: BÚSQUEDA POR SERIE ENRUTADA */
+    /* 5. CONSULTA ASINCRONA (AJAX): BUSQUEDA POR NUMERO DE SERIE */
     $('#inputBusquedaSerie').on('input', function() {
         clearTimeout(timerBusqueda);
         var serie = $(this).val();
@@ -213,7 +216,7 @@ $(document).ready(function() {
         }
     });
 
-    /* AJAX: BÚSQUEDA POR CLIENTE ENRUTADA */
+    /* 6. CONSULTA ASINCRONA (AJAX): BUSQUEDA POR SELECCION DE CLIENTE */
     $('#inputBusquedaCliente').on('input', function() {
         var val = $(this).val();
         var option = $('#listaClientesBusqueda option').filter(function() { return this.value === val; });
@@ -236,7 +239,7 @@ $(document).ready(function() {
         }
     });
 
-    /* LIMPIEZA AUTOMÁTICA AL CERRAR EL MODAL */
+    /* 7. REESTABLECIMIENTO INTEGRAL DE CAMPOS AL CERRAR EL MODAL */
     $('#modalNuevoTicket').on('hidden.bs.modal', function () {
         $(this).find('input').val('');
         $('#resultadoBusquedaRapid, #noEncontrado').hide();
