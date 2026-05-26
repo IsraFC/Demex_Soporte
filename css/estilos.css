@@ -551,3 +551,43 @@ body[data-theme="soporte"] label[for="checkSoloDeuda"].text-danger {
     opacity: 0 !important; 
     margin-left: 0 !important; 
 }
+
+/* ==========================================================================
+   MÓDULO EXCLUSIVO: CONTROL DE ACCESO (LOGIN)
+   ========================================================================== */
+.login-body { 
+    background-color: #F8F9FA !important; 
+    display: flex !important; 
+    align-items: center !important; 
+    justify-content: center !important; 
+    height: 100vh !important; 
+    width: 100vw !important;
+    margin: 0 !important; 
+    font-family: 'Poppins', sans-serif;
+}
+
+.login-card { 
+    max-width: 450px; 
+    width: 90%; 
+    border-top: 5px solid #C62828; 
+}
+
+/* Contenedor relativo estricto para mantener el flujo centralizado */
+.logo-login-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+    width: 100%;
+}
+
+/* Efecto de sombreado perimetral ULTRA reforzado de alta densidad */
+.logo-highlight {
+    /* Combinación cuádruple con mayor opacidad para máximo contraste */
+    filter: drop-shadow(0px 6px 18px rgba(0, 0, 0, 0.45)) 
+            drop-shadow(0px 3px 8px rgba(0, 0, 0, 0.35))
+            drop-shadow(0px 1px 3px rgba(0, 0, 0, 0.25))
+            drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.50)) !important;
+    transition: filter 0.3s ease;
+}

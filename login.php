@@ -35,29 +35,15 @@ $error = $_GET['error'] ?? '';
     <title>Portal DEMEX | Iniciar Sesión</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="Soporte/css/estilos.css">
-    <style>
-        body { 
-            background-color: #F8F9FA; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            margin: 0; 
-            font-family: 'Poppins', sans-serif;
-        }
-        .login-card { 
-            max-width: 450px; 
-            width: 90%; 
-            border-top: 5px solid #C62828; 
-        }
-    </style>
+    <link rel="stylesheet" href="css/estilos.css">
 </head>
-<body>
+<body class="login-body">
 
 <div class="card-main login-card shadow-lg text-center">
-    <div class="mb-4">
-        <img src="Soporte/img/logo_demex.png" alt="Desarrollo Mexicano" width="220" class="filter-drop-shadow">
+    <div class="mb-4 d-flex justify-content-center align-items-center">
+        <div class="logo-login-container">
+            <img src="img/logo_demex.png" alt="Desarrollo Mexicano" width="220" class="logo-highlight">
+        </div>
     </div>
     
     <h4 class="fw-bold text-dark mb-1">Control de Acceso</h4>
@@ -113,7 +99,6 @@ $error = $_GET['error'] ?? '';
 
 <script>
     if (typeof window.history.replaceState === 'function') {
-        // Reemplaza la URL actual quitándole el "?error=..." de forma silenciosa
         const limpiaUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
         window.history.replaceState({ path: limpiaUrl }, '', limpiaUrl);
     }

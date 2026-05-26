@@ -9,7 +9,7 @@
                         </p>
                     </div>
                     <div class="col-md-6 text-center text-md-end d-none d-md-block">
-                        <img src="<?= $base_path ?>img/logo_demex.png" 
+                        <img src="<?= $base_path ?? './' ?>img/logo_demex.png" 
                              alt="Logo DEMEX" 
                              width="90" 
                              style="opacity: 0.25; filter: grayscale(100%);">
@@ -21,6 +21,7 @@
     </div> 
 </div> 
 
+<?php if (isset($_SESSION['rol']) && ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte')): ?>
 <div class="modal fade" id="modalNuevoTicket" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
@@ -62,7 +63,7 @@
                             </datalist>
                         </div>
                         <div class="text-end">
-                            <a href="<?= $base_path ?><?= $link_prefix ?>registro_cliente.php" id="linkClienteNuevo" class="text-danger small fw-bold text-decoration-none">
+                            <a href="#" id="linkClienteNuevo" class="text-danger small fw-bold text-decoration-none">
                                 <i class="bi bi-person-plus-fill me-1"></i> ¿Cliente nuevo? Regístralo aquí
                             </a>
                         </div>
@@ -82,7 +83,7 @@
                         <i class="bi bi-exclamation-triangle-fill fs-4 d-block mb-2"></i>
                         <p class="small fw-bold mb-2">Esta serie no está en el sistema.</p>
                         <div class="d-grid">
-                            <a href="<?= $base_path ?><?= $link_prefix ?>registro_maquina.php" id="btnNuevaMaquinaRapida" class="btn btn-dark btn-sm rounded-pill">
+                            <a href="#" id="btnNuevaMaquinaRapida" class="btn btn-dark btn-sm rounded-pill">
                                 <i class="bi bi-plus-circle me-1"></i> Registrar Máquina Nueva
                             </a>
                         </div>
@@ -97,16 +98,17 @@
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <script>
 $(document).ready(function() {
     
-    /* 1. CONTROL DE ENTRADA CINEMATICA DE LA CARD PRINCIPAL */
+    /* 1. CONTROL DE ENTRADA CINEMÁTICA DE LA CARD PRINCIPAL */
     setTimeout(function() {
         $('#master-fade-container').addClass('fade-in-active');
     }, 40);
 
-    /* 2. INTERCEPTOR CENTRALIZADO DE NAVEGACION Y ANIMACION DE TRANSICION */
+    /* 2. INTERCEPTOR CENTRALIZADO DE NAVEGACIÓN Y ANIMACIÓN DE TRANSICION */
     $('#sidebar-menu-list .sidebar-link').on('click', function(e) {
         var destinoUrl = $(this).attr('href');
         var paginaActualFile = window.location.pathname.split("/").pop();
@@ -133,30 +135,25 @@ $(document).ready(function() {
             }
         }
 
-        // Identificamos el boton que perdera el estado activo
         var botonAnterior = $('#sidebar-menu-list .sidebar-link.active-page');
-        
         if (botonAnterior.length) {
-            // Quitamos la clase activa y le agregamos la clase de vaciado forzado
             botonAnterior.removeClass('active-page').addClass('vaciando-page').blur();
         }
         
-        // Activacion del llenado en el nuevo boton seleccionado
         $(this).removeClass('no-anim').addClass('active-page');
-
-        // Desvanecimiento de la card central
         $('#master-fade-container').addClass('fade-out-active');
 
-        // Esperamos los 300ms exactos para que se aprecien ambas transiciones antes del salto
         setTimeout(function() {
             window.location.href = destinoUrl;
         }, 300);
     });
 
-    var timerBusqueda;
-    var pathDestinoAcciones = "<?= $base_path ?><?= $link_prefix ?>";
+    // MOTOR DE ENRUTAMIENTO DINÁMICO ADAPTATIVO PROTEGIDO
+    // Evaluamos de manera segura la existencia de la variable de ubicacion para evitar advertencias de ejecucion
+    var enSubcarpetaSoporte = <?= (isset($en_subcarpeta) && $en_subcarpeta) ? 'true' : 'false' ?>;
+    var pathModuloSoporte = enSubcarpetaSoporte ? './' : './Soporte/';
 
-    /* 3. MANEJADOR SMART SCROLL PARA OCULTAR LA BARRA DE NAVEGACION SUPERIOR */
+    /* 3. MANEJADOR SMART SCROLL PARA OCULTAR LA BARRA DE NAVEGACIÓN SUPERIOR */
     var ultimoScrollTop = 0;
     var navbar = $('#main-top-navbar');
     var contenedorScroll = $('#page-content-wrapper');
@@ -182,49 +179,46 @@ $(document).ready(function() {
         localStorage.setItem('sidebar_collapsed', isCollapsed);
     });
 
-    /* 5. CONSULTA ASINCRONA (AJAX): BUSQUEDA POR NUMERO DE SERIE */
+    /* 5. CONSULTA ASÍNCRONA (AJAX): BÚSQUEDA POR NÚMERO DE SERIE */
     $('#inputBusquedaSerie').on('input', function() {
-        clearTimeout(timerBusqueda);
         var serie = $(this).val();
         
         if (serie.length > 2) {
-            timerBusqueda = setTimeout(function() {
-                $.ajax({
-                    url: pathDestinoAcciones + 'actions/buscar_cliente_por_serie.php',
-                    method: 'POST',
-                    data: { no_serie: serie },
-                    dataType: 'json',
-                    success: function(res) {
-                        if (res.encontrado) {
-                            $('#resultadoBusquedaRapid').fadeIn();
-                            $('#noEncontrado').hide();
-                            $('#nombreClienteDetectado').text(res.nombre_cliente);
-                            $('#modeloDetectado').text('Modelo: ' + res.modelo);
-                            $('#btnIrARegistro').removeClass('disabled').attr('href', pathDestinoAcciones + 'registro_ticket.php?id_cliente=' + res.id_cliente + '&no_serie=' + serie + '&modelo=' + encodeURIComponent(res.modelo));
-                        } else {
-                            $('#resultadoBusquedaRapid').hide();
-                            $('#noEncontrado').fadeIn();
-                            $('#btnNuevaMaquinaRapida').attr('href', pathDestinoAcciones + 'registro_maquina.php?no_serie=' + encodeURIComponent(serie));
-                            $('#btnIrARegistro').addClass('disabled');
-                        }
+            $.ajax({
+                url: pathModuloSoporte + 'actions/buscar_cliente_por_serie.php',
+                method: 'POST',
+                data: { no_serie: serie },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.encontrado) {
+                        $('#resultadoBusquedaRapid').fadeIn();
+                        $('#noEncontrado').hide();
+                        $('#nombreClienteDetectado').text(res.nombre_cliente);
+                        $('#modeloDetectado').text('Modelo: ' + res.modelo);
+                        $('#btnIrARegistro').removeClass('disabled').attr('href', pathModuloSoporte + 'registro_ticket.php?id_cliente=' + res.id_cliente + '&no_serie=' + serie + '&modelo=' + encodeURIComponent(res.modelo));
+                    } else {
+                        $('#resultadoBusquedaRapid').hide();
+                        $('#noEncontrado').fadeIn();
+                        $('#btnNuevaMaquinaRapida').attr('href', pathModuloSoporte + 'registro_maquina.php?no_serie=' + encodeURIComponent(serie));
+                        $('#btnIrARegistro').addClass('disabled');
                     }
-                });
-            }, 500);
+                }
+            });
         } else {
             $('#resultadoBusquedaRapid, #noEncontrado').hide();
             $('#btnIrARegistro').addClass('disabled');
         }
     });
 
-    /* 6. CONSULTA ASINCRONA (AJAX): BUSQUEDA POR SELECCION DE CLIENTE */
+    /* 6. CONSULTA ASÍNCRONA (AJAX): BÚSQUEDA POR SELECCIÓN DE CLIENTE */
     $('#inputBusquedaCliente').on('input', function() {
         var val = $(this).val();
         var option = $('#listaClientesBusqueda option').filter(function() { return this.value === val; });
 
         if (val.length > 0) {
-            $('#linkClienteNuevo').attr('href', pathDestinoAcciones + 'registro_cliente.php?nombre=' + encodeURIComponent(val));
+            $('#linkClienteNuevo').attr('href', pathModuloSoporte + 'registro_cliente.php?nombre=' + encodeURIComponent(val));
         } else {
-            $('#linkClienteNuevo').attr('href', pathDestinoAcciones + 'registro_cliente.php');
+            $('#linkClienteNuevo').attr('href', pathModuloSoporte + 'registro_cliente.php');
         }
 
         if (option.length) {
@@ -232,7 +226,7 @@ $(document).ready(function() {
             $('#resultadoBusquedaRapid').fadeIn();
             $('#nombreClienteDetectado').text(val);
             $('#modeloDetectado').text('Registro por selección manual de cliente');
-            $('#btnIrARegistro').removeClass('disabled').attr('href', pathDestinoAcciones + 'registro_ticket.php?id_cliente=' + id_cli);
+            $('#btnIrARegistro').removeClass('disabled').attr('href', pathModuloSoporte + 'registro_ticket.php?id_cliente=' + id_cli);
         } else {
             $('#resultadoBusquedaRapid').hide();
             $('#btnIrARegistro').addClass('disabled');
