@@ -31,7 +31,7 @@ body[data-theme="ventas"] {
 }
 
 /* ==========================================================================
-   ESTRUCTURA DEL MAQUETADO BASE (ANTES INTERNO DEL HEADER)
+   ESTRUCTURA DEL MAQUETADO BASE
    ========================================================================== */
 body {
     font-family: 'Poppins', sans-serif;
@@ -102,7 +102,9 @@ body {
     pointer-events: none;
 }
 
-/* --- BOTONES DEL SIDEBAR Y ANIMACIONES --- */
+/* ==========================================================================
+   BOTONES DEL SIDEBAR Y CONTROL SIMÉTRICO DE CORTINA
+   ========================================================================== */
 .sidebar-link {
     padding: 0.8rem 1.5rem;
     color: #B3B3B3 !important;
@@ -118,7 +120,7 @@ body {
     transition: color 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* Cortina de color fluida */
+/* Cortina de color fluida: maneja el llenado y vaciado bidireccional */
 .sidebar-link::before {
     content: '';
     position: absolute;
@@ -129,9 +131,10 @@ body {
     background-color: var(--primary-color);
     z-index: -1;
     transform: scaleX(0);
-    transform-origin: left; /* Al vaciarse hacia 0, parecerá que va de derecha a izquierda */
-    /* Aseguramos que la transición aplique tanto al ponerse como al quitarse */
-    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    /* Forzar origen a la izquierda para simular vaciado de derecha a izquierda */
+    transform-origin: left !important;
+    /* Transición explícita tanto para la activación como para la remoción de clases */
+    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
     border-radius: 10px;
 }
 
@@ -143,8 +146,7 @@ body {
     justify-content: center;
     font-size: 1.2rem;
     flex-shrink: 0;
-    /* Transición tanto de ida como de vuelta */
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 
 .sidebar-link span,
@@ -158,42 +160,48 @@ body {
     margin-left: 10px;
 }
 
-#wrapper.toggled .sidebar-link {
-    padding: 0.8rem 0;
-    margin: 0.2rem 0.6rem;
-    justify-content: center !important;
+/* Interacción hover ordinaria para enlaces inactivos */
+.sidebar-link:hover:not(.active-page) {
+    color: #FFFFFF !important;
+    background-color: rgba(255, 255, 255, 0.04);
 }
 
-#wrapper.toggled .sidebar-link span,
-#wrapper.toggled .seccion-herramientas {
-    max-width: 0;
-    opacity: 0;
-    margin-left: 0 !important;
+/* Blindaje en hover: evita que la cortina se expanda o rompa la salida si no tiene la clase activa */
+.sidebar-link:hover:not(.active-page)::before {
+    transform: scaleX(0) !important;
+    transform-origin: left !important;
 }
 
-/* Estado activo normal: Al ganar la clase, se mantiene lleno */
+/* Estado activo: se mantiene lleno */
 .sidebar-link.active-page {
     color: #FFFFFF !important;
     font-weight: 500;
     box-shadow: var(--shadow-soft);
 }
 
-.sidebar-link.active-page::before {
-    transform: scaleX(1);
+/* Estado temporal de salida: obliga al color a encogerse hacia la izquierda */
+.sidebar-link.vaciando-page::before {
+    transform: scaleX(0) !important;
     transform-origin: left !important;
-    background-color: var(--primary-color);
+    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+/* Evitamos que el hover interfiera visualmente durante la transicion de salida */
+.sidebar-link.vaciando-page {
+    background-color: transparent !important;
+    color: #B3B3B3 !important;
+}
+
+.sidebar-link.active-page::before {
+    transform: scaleX(1) !important;
+    transform-origin: left !important;
 }
 
 .sidebar-link.active-page .sidebar-icon {
-    transform: scale(1.15);
+    transform: scale(1.15) !important;
 }
 
-.sidebar-link:hover:not(.active-page) {
-    color: #FFFFFF !important;
-    background-color: rgba(255, 255, 255, 0.04);
-}
-
-/* BLINDAJE CRÍTICO: Cancela animaciones al renderizar por primera vez desde PHP */
+/* BLINDAJE CRÍTICO: Cancela transiciones al renderizar por primera vez desde PHP */
 .no-anim::before {
     transition: none !important;
     transform: scaleX(1) !important;
@@ -226,7 +234,6 @@ body {
     position: sticky;
     top: 0;
     z-index: 999;
-    /* Transiciona el fondo y el borde de forma liquida durante 0.5 segundos */
     transition: transform 0.3s ease-in-out, background-color 0.5s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.5s cubic-bezier(0.25, 1, 0.5, 1) !important;
     height: 77px;
 }
@@ -514,9 +521,33 @@ body[data-theme="soporte"] label[for="checkSoloDeuda"].text-danger {
     color: #DC3545 !important;
 }
 
-/* 🏁 BLINDAJE ESTRUCTURAL SÍNCRONO: Controla el colapso instantáneo desde la raíz del wrapper */
-#wrapper.toggled #sidebar-wrapper { width: 75px !important; }
-#wrapper.toggled .sidebar-heading { padding: 1.2rem 0 !important; justify-content: center !important; }
-#wrapper.toggled .brand-container { max-width: 0 !important; opacity: 0 !important; pointer-events: none; }
-#wrapper.toggled .sidebar-link { padding: 0.8rem 0 !important; margin: 0.2rem 0.6rem !important; justify-content: center !important; }
-#wrapper.toggled .sidebar-link span, #wrapper.toggled .seccion-herramientas { max-width: 0 !important; opacity: 0 !important; margin-left: 0 !important; }
+/* ==========================================================================
+   BLINDAJE ESTRUCTURAL SÍNCRONO (CONTROL DE COLAPSO)
+   ========================================================================== */
+#wrapper.toggled #sidebar-wrapper { 
+    width: 75px !important; 
+}
+
+#wrapper.toggled .sidebar-heading { 
+    padding: 1.2rem 0 !important; 
+    justify-content: center !important; 
+}
+
+#wrapper.toggled .brand-container { 
+    max-width: 0 !important; 
+    opacity: 0 !important; 
+    pointer-events: none; 
+}
+
+#wrapper.toggled .sidebar-link { 
+    padding: 0.8rem 0 !important; 
+    margin: 0.2rem 0.6rem !important; 
+    justify-content: center !important; 
+}
+
+#wrapper.toggled .sidebar-link span, 
+#wrapper.toggled .seccion-herramientas { 
+    max-width: 0 !important; 
+    opacity: 0 !important; 
+    margin-left: 0 !important; 
+}

@@ -1,16 +1,20 @@
+# Archivos de configuracion del entorno de desarrollo y del sistema operativo
 .vscode/
 Thumbs.db
 desktop.ini
+.DS_Store
 *.log
 
-# Bloquear la carpeta de respaldos completa
+# Bloquear directorios de almacenamiento temporal y respaldos de la aplicacion
 Soporte/backups/
+backups/
 
-# Bloquear archivos de registro de tiempo
+# Bloquear archivos de registro de estado local
 config/ultimo_respaldo.txt
 
-# Scripts de Configuración Única (Local Only)
+# Scripts de instalacion o configuracion unica (Uso local exclusivamente)
 crear_admin.php
 
-# Credenciales privadas de correo electrónico
+# Blindaje de seguridad: Credenciales privadas y parametros de conexion a bases de datos
 config/mail_config.php
+config/db.php

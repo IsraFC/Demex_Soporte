@@ -111,13 +111,10 @@ $(document).ready(function() {
         var destinoUrl = $(this).attr('href');
         var paginaActualFile = window.location.pathname.split("/").pop();
 
-        // Si se hace clic en la pagina donde ya nos encontramos, se aborta la operacion
         if (destinoUrl === paginaActualFile || (paginaActualFile === "" && destinoUrl === "index.php")) return;
 
-        // Se detiene la navegacion sincronica para dar tiempo a la ejecucion de la animacion
         e.preventDefault(); 
 
-        // Evaluacion dinamica de rutas absolutas para alternar los esquemas de color del sistema
         var urlAbsoluta = e.currentTarget.href;
         var vaHaciaStaff = urlAbsoluta.includes('usuarios.php') || urlAbsoluta.includes('personal_staff.php');
         var esUrlDeSoporte = urlAbsoluta.includes('/Soporte/');
@@ -136,18 +133,21 @@ $(document).ready(function() {
             }
         }
 
-        // CONTROL DE ANIMACION SIMETRICA EN LA BARRA LATERAL
-        // Remueve la clase del boton que la tenia activada originalmente (inicia el efecto de vaciado)
-        $('#sidebar-menu-list .sidebar-link.active-page').removeClass('active-page');
+        // Identificamos el boton que perdera el estado activo
+        var botonAnterior = $('#sidebar-menu-list .sidebar-link.active-page');
         
-        // Aplica la clase activa al boton cliqueado (inicia el efecto de llenado)
-        // Se remueve explicitamente '.no-anim' en caso de que viniera renderizada desde PHP
+        if (botonAnterior.length) {
+            // Quitamos la clase activa y le agregamos la clase de vaciado forzado
+            botonAnterior.removeClass('active-page').addClass('vaciando-page').blur();
+        }
+        
+        // Activacion del llenado en el nuevo boton seleccionado
         $(this).removeClass('no-anim').addClass('active-page');
 
-        // Desvanecimiento hacia arriba del contenedor principal de la vista actual
+        // Desvanecimiento de la card central
         $('#master-fade-container').addClass('fade-out-active');
 
-        // Ejecucion del cambio de locacion tras completarse el ciclo visual (300 milisegundos)
+        // Esperamos los 300ms exactos para que se aprecien ambas transiciones antes del salto
         setTimeout(function() {
             window.location.href = destinoUrl;
         }, 300);
