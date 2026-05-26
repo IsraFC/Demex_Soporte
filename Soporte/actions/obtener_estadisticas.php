@@ -7,7 +7,7 @@
  * @version 2.3
  */
 header('Content-Type: application/json');
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 try {
     $fecha_inicio = !empty($_GET['fecha_inicio']) ? trim($_GET['fecha_inicio']) : null;

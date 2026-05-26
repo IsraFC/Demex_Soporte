@@ -10,8 +10,7 @@
  */
 
 // Importación de la conexión (Subiendo un nivel desde la carpeta /actions/)
-require_once '../config/db.php';
-
+require_once '../../config/db.php';
 // Bloque de seguridad: Solo procesa si la petición es vía POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     

@@ -8,7 +8,7 @@
  * @project Soporte Desarrollo Mexicano (DEMEX)
  * @version 1.4
  */
-require_once 'config/db.php';
+require_once '../config/db.php';
 
 /**
  * 1. FASE DE RECUPERACIÓN Y SEGURIDAD
@@ -29,7 +29,8 @@ if (!$cliente) {
     exit();
 }
 
-include 'includes/header.php';
+$modulo_actual = 'soporte';
+include '../includes/header.php';
 ?>
 
 <style>
@@ -157,4 +158,4 @@ $(document).ready(function() {
 });
 </script>
 
-<?php include 'includes/footer.php'; ?>
+<?php include '../includes/footer.php'; ?>

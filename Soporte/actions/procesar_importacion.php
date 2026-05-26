@@ -4,7 +4,7 @@
  * DESCRIPCIÓN: Importador maestro con cálculo automático de garantías faltantes.
  */
 ini_set('max_execution_time', 300);
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 // Función para convertir fecha de DD/MM/YYYY a YYYY-MM-DD y manejar vacíos
 function formatearFechaSQL($fecha_txt) {

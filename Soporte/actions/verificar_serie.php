@@ -10,7 +10,7 @@
  */
 
 // Importación de la conexión a la base de datos (Directorio superior)
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 /**
  * LÓGICA DE VALIDACIÓN:

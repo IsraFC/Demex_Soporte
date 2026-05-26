@@ -9,7 +9,7 @@
  * 4. Estatus de Pago Inteligente: Si el Costo Total es 0.00, se guarda como "NO APLICA".
  * * @author Israel Fernández Carrera
  */
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {

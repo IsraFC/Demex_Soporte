@@ -6,13 +6,14 @@
  * @version 1.4
  * @project Soporte Desarrollo Mexicano (DEMEX)
  */
-require_once 'config/db.php';
+require_once '../config/db.php';
 
 /** * KPIs - INDICADORES CLAVE DE DESEMPEÑO */
 $totalMaquinas = $pdo->query("SELECT COUNT(*) FROM Equipos_Garantia")->fetchColumn();
 $garantiasActivas = $pdo->query("SELECT COUNT(*) FROM Equipos_Garantia WHERE fecha_termino >= CURDATE()")->fetchColumn();
 
-include 'includes/header.php';
+$modulo_actual = 'soporte';
+include '../includes/header.php';
 ?>
 
 <?php if (isset($_GET['msg'])): ?>
@@ -229,4 +230,4 @@ $(document).ready(function() {
 });
 </script>
 
-<?php include 'includes/footer.php'; ?>
+<?php include '../includes/footer.php'; ?>

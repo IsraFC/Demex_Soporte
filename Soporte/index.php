@@ -9,7 +9,7 @@
  * @version 2.0 (Optimizado)
  */
 
-require_once 'config/db.php';
+require_once '../config/db.php';
 
 /**
  * CONSULTAS DE INDICADORES (KPIs):
@@ -27,7 +27,8 @@ $criticos = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte
                          WHERE estatus = 'Abierto' 
                          AND DATEDIFF(CURDATE(), fecha_inicial) >= 14")->fetchColumn();
 
-include 'includes/header.php';
+$modulo_actual = 'soporte';
+include '../includes/header.php';
 ?>
 
 <div class="row mb-4 align-items-center">
@@ -181,7 +182,7 @@ include 'includes/header.php';
     </div>
 </div>
 
-<?php include 'includes/footer.php'; ?>
+<?php include '../includes/footer.php'; ?>
 
 <script>
     /**

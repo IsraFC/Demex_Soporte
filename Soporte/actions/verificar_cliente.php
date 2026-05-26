@@ -9,7 +9,7 @@
  * @version 1.1
  */
 
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 // Verifica que la petición contenga el nombre a validar
 if (isset($_POST['nombre'])) {

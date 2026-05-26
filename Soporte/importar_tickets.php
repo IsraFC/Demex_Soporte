@@ -4,8 +4,9 @@
  * DESCRIPCIÓN: Interfaz de carga masiva para el Historial de Tickets (Estilo Unificado).
  * @author Israel Fernández Carrera
  */
-require_once 'config/db.php';
-include 'includes/header.php';
+require_once '../config/db.php';
+$modulo_actual = 'soporte';
+include '../includes/header.php';
 ?>
 
 <div class="row justify-content-center">
@@ -61,4 +62,4 @@ include 'includes/header.php';
     </div>
 </div>
 
-<?php include 'includes/footer.php'; ?>
+<?php include '../includes/footer.php'; ?>

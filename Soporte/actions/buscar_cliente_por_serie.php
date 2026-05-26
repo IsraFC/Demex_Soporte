@@ -4,7 +4,7 @@
  * DESCRIPCIÓN: Busca el propietario de un equipo mediante su serie.
  */
 header('Content-Type: application/json');
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 if (isset($_POST['no_serie'])) {
     $serie = trim($_POST['no_serie']);

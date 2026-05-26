@@ -10,7 +10,7 @@
  * @version 1.1
  */
 
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 /**
  * 1. EXTRACCIÓN DE DATOS MEDIANTE INTEGRACIÓN MULTI-TABLA (JOIN)

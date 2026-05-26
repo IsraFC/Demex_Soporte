@@ -7,8 +7,9 @@
  * @version 1.6
  */
 
-require_once 'config/db.php';
-include 'includes/header.php';
+require_once '../config/db.php';
+$modulo_actual = 'soporte';
+include '../includes/header.php';
 ?>
 
 <style>
@@ -236,4 +237,4 @@ $(document).ready(function() {
 });
 </script>
 
-<?php include 'includes/footer.php'; ?>
+<?php include '../includes/footer.php'; ?>

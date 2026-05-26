@@ -14,7 +14,7 @@
  */
 
 ini_set('max_execution_time', 600);
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 // ==========================================
 // --- FUNCIONES AUXILIARES ---

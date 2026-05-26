@@ -2,11 +2,13 @@
 /**
  * @file usuarios.php
  * @package Portal_Demex
- * @version 1.3 - Gestión de Personal con Estatus Dinámico TINYINT
- * @date 2026-05-22
- * @brief Interfaz para dar de alta técnicos y administradores con control de roles y estatus.
+ * @version 1.4 - Gestión de Personal en Raíz del Sistema
+ * @date 2026-05-25
+ * @brief Interfaz centralizada para dar de alta técnicos y administradores globales.
  */
 
+// Se adaptan las rutas de los layouts para consumir los componentes del módulo técnico de forma relativa
+$modulo_actual = 'global';
 require_once 'includes/header.php';
 
 // Control de acceso estricto: Solo administradores manejan personal
@@ -22,6 +24,7 @@ if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'administrador') {
     exit();
 }
 
+// Carga directa desde la nueva carpeta config de la raíz
 require_once 'config/db.php';
 ?>
 
@@ -52,12 +55,10 @@ require_once 'config/db.php';
                 </thead>
                 <tbody>
                     <?php
-                    // Consulta modificada para extraer explícitamente la columna estatus
                     $stmt = $pdo->query("SELECT id_usuario, nombre, apellidos, correo, rol, estatus FROM usuarios ORDER BY id_usuario DESC");
                     while ($u = $stmt->fetch()) {
                         $badgeColor = ($u['rol'] === 'administrador') ? 'bg-danger' : 'bg-warning text-dark';
                         
-                        // Evaluación del estado numérico (TINYINT: 0 = Pendiente, 1 = Activo)
                         if ((int)$u['estatus'] === 1) {
                             $badgeEstatus = 'bg-success bg-opacity-10 text-success border border-success border-opacity-25';
                             $textoEstatus = 'Activo';
@@ -158,10 +159,8 @@ $(document).ready(function() {
         dom: 'rtip'
     });
 
-    // Corrección para el posicionamiento del backdrop de Bootstrap
     $('#modalNuevoUsuario').appendTo("body");
 
-    // Escucha el evento de cierre del modal para limpiar los campos del formulario
     $('#modalNuevoUsuario').on('hidden.bs.modal', function () {
         $('#formNuevoUsuario')[0].reset();
     });

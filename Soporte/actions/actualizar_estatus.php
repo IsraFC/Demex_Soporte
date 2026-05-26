@@ -8,7 +8,7 @@
  * @version 1.5
  */
 
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 // Definimos que la respuesta siempre será un objeto JSON para que el JS del Index lo entienda
 header('Content-Type: application/json');

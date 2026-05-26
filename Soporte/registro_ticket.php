@@ -13,7 +13,7 @@
  * * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
  */
-require_once 'config/db.php';
+require_once '../config/db.php';
 
 // 1. VALIDACIÓN DE SEGURIDAD
 $id_cliente = $_GET['id_cliente'] ?? null;
@@ -33,7 +33,8 @@ $equipos_cliente = $stmt_eq->fetchAll(PDO::FETCH_ASSOC);
 $stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM Equipos_Garantia ORDER BY modelo ASC");
 $todos_modelos = $stmt_mod->fetchAll(PDO::FETCH_COLUMN);
 
-include 'includes/header.php';
+$modulo_actual = 'soporte';
+include '../includes/header.php';
 ?>
 
 <div class="row mb-4">
@@ -426,4 +427,4 @@ $(document).ready(function() {
 });
 </script>
 
-<?php include 'includes/footer.php'; ?>
+<?php include '../includes/footer.php'; ?>

@@ -2,14 +2,15 @@
 /**
  * @file verificar.php
  * @package Portal_Demex
- * @version 1.3 - Activación de cuenta con Cierre de Pestaña Automático
- * @date 2026-05-22
+ * @version 1.4 - Activación de Cuenta en Raíz del Sistema
+ * @date 2026-05-25
  */
 
 require_once 'config/db.php';
 
+// Si no hay token, redirige directamente a login.php (ya sin el ../)
 if (!isset($_GET['token']) || empty(trim($_GET['token']))) {
-    header("Location: ../login.php");
+    header("Location: login.php");
     exit();
 }
 
@@ -65,13 +66,13 @@ try {
                 // Intenta cerrar la ventana/pestaña actual de forma automática
                 window.close();
                 
-                // Respaldo de seguridad en caso de que el navegador bloquee el cierre directo
+                // Respaldo de seguridad en caso de que el navegador bloquee el cierre directo (redirige a login.php sin ../)
                 setTimeout(function() {
-                    window.location.href = '../login.php';
+                    window.location.href = 'login.php';
                 }, 500);
             <?php else: ?>
-                // Si el enlace falló o es inválido, redirige al login
-                window.location.href = '../login.php';
+                // Si el enlace falló o es inválido, redirige al login sin ../
+                window.location.href = 'login.php';
             <?php endif; ?>
         });
     </script>

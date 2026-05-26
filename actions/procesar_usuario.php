@@ -2,8 +2,8 @@
 /**
  * @file procesar_usuario.php
  * @package Portal_Demex
- * @version 1.7 - Alta con PHPMailer Local e Inserción Numérica
- * @date 2026-05-22
+ * @version 1.9 - Registro de Personal Global desde la Raíz
+ * @date 2026-05-25
  */
 
 session_start();
@@ -13,15 +13,15 @@ if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'administrador') {
     die("Acceso denegado de forma estricta.");
 }
 
+// Inclusiones subiendo un nivel hacia la nueva carpeta config de la raíz
 require_once '../config/db.php';
-// Inclusión obligatoria del archivo de credenciales privadas
 require_once '../config/mail_config.php';
 
 // Definición de los espacios de nombres de PHPMailer
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-// Carga manual de los archivos descargados
+// Carga manual subiendo un nivel hacia la carpeta libs de la raíz
 require '../libs/PHPMailer/Exception.php';
 require '../libs/PHPMailer/PHPMailer.php';
 require '../libs/PHPMailer/SMTP.php';
@@ -69,15 +69,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$nombre, $apellidos, $correo, $passwordHash, $rol, $token]);
 
-        // 4. Construcción del URL dinámico de verificación incluyendo subcarpetas del proyecto
+        // 4. Construcción del URL dinámico de verificación en la raíz del proyecto
         $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
         $host = $_SERVER['HTTP_HOST'];
 
-        // dirname($_SERVER['SCRIPT_NAME']) devuelve la ruta desde el host hasta la carpeta actual (/desarrollo_mexicano/Soporte/actions)
-        // Usamos dirname() una segunda vez para subir un nivel y situarnos en la raíz de la carpeta Soporte
+        // dirname($_SERVER['SCRIPT_NAME']) devuelve la ruta hasta la carpeta actual (/desarrollo_mexicano/actions)
+        // Usamos un dirname adicional para subir a la raíz del dominio (/desarrollo_mexicano)
         $rutaBase = dirname(dirname($_SERVER['SCRIPT_NAME']));
-
-        // Aseguramos que las barras diagonales queden limpias y consistentes
         $rutaBase = rtrim($rutaBase, '/\\');
 
         $enlaceVerificacion = $protocolo . $host . $rutaBase . "/verificar.php?token=" . $token;
@@ -105,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mail->Body    = "
             <div style='font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #F8F9FA; border-radius: 8px;'>
                 <h2 style='color: #C62828;'>Hola {$nombre},</h2>
-                <p>Se ha generado tu acceso para el sistema de soporte técnico de <strong>DEMEX</strong>.</p>
+                <p>Se ha generado tu acceso para el sistema integral de <strong>DEMEX</strong>.</p>
                 <p>Para activar tu cuenta y poder ingresar al portal, es necesario que verifiques tu dirección de correo haciendo clic en el siguiente enlace:</p>
                 <div style='text-align: center; margin: 30px 0;'>
                     <a href='{$enlaceVerificacion}' style='background-color: #C62828; color: #FFFFFF; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>ACTIVAR MI CUENTA</a>

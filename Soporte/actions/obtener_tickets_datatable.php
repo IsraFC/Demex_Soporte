@@ -12,7 +12,7 @@
  * @version 1.2
  */
 
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 // Define la respuesta como JSON para que DataTables la interprete correctamente
 header('Content-Type: application/json');

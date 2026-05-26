@@ -7,7 +7,7 @@
  * @project Soporte Técnico DEMEX
  * @version 1.5
  */
-require_once '../config/db.php';
+require_once '../../config/db.php';
 
 // Validamos la recepción del ID para evitar errores de consulta
 $id_ticket = $_GET['id_ticket'] ?? null;
