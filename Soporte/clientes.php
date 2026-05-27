@@ -176,7 +176,18 @@ $(document).ready(function() {
         var nombre = $(this).data('nombre');
 
         if (!direccion || direccion === 'Sin dirección') {
-            alert('Este cliente no tiene una dirección válida registrada.');
+            Swal.fire({
+                title: 'Dirección no Registrada',
+                text: 'Este cliente no tiene una dirección válida en el sistema.',
+                icon: 'warning',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: 'var(--primary-color)', /* Se adapta automáticamente si es Global o Soporte */
+                buttonsStyling: true,
+                customClass: {
+                    popup: 'rounded-4 border-0 shadow-lg',
+                    confirmButton: 'btn btn-demex rounded-pill px-4 fw-bold'
+                }
+            });
             return;
         }
         
@@ -188,10 +199,12 @@ $(document).ready(function() {
         var embedUrl = "https://maps.google.com/maps?q=" + encodeURIComponent(direccion) + "&t=&z=16&ie=UTF8&iwloc=&output=embed";
         $('#mapIframe').attr('src', embedUrl);
         
-        var gMapsUrl = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(direccion);
+        var gMapsUrl = "https://maps.google.com/?q=" + encodeURIComponent(direccion);
         $('#btnGoogleMaps').attr('href', gMapsUrl);
         
-        $('#mapModal').modal('show');
+        // --- EL TRUCO INFALIBLE CORREGIDO ---
+        // Desplazamos el modal a la raíz del body para romper el bloqueo de la capa page-fade-wrapper
+        $('#mapModal').appendTo("body").modal('show');
     });
 
     /**
