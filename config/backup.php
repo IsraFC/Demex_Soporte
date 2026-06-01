@@ -1,25 +1,23 @@
 <?php
 /**
  * ARCHIVO: config/backup.php
- * PROYECTO: Soporte Técnico DEMEX
+ * PROYECTO: Sistema de Gestión General DEMEX
  * DESCRIPCIÓN: Gestiona respaldos automáticos de la base de datos MySQL.
  * Implementa una política de retención de los últimos 5 archivos para optimizar
  * el espacio en disco y garantizar la disponibilidad de versiones históricas.
- * 
- * @author Israel Fernández Carrera
- * @version 1.2
+ * * @author Israel Fernández Carrera
+ * @version 1.3
  */
 
 /**
  * Ejecuta un volcado de la base de datos si el intervalo de tiempo ha expirado.
- * 
- * @param PDO $pdo Instancia de conexión a la base de datos.
+ * * @param PDO $pdo Instancia de conexión a la base de datos.
  */
 function ejecutarRespaldoSilencioso($pdo) {
     date_default_timezone_set('America/Mexico_City');
     
-    // Definición de rutas y parámetros de control
-    $archivo_registro = __DIR__ . '/ultimo_respaldo.txt'; // Almacena el timestamp de la última ejecución
+    // Al estar en config/ (en la raíz), el archivo de marcas de tiempo se mantiene local en este directorio
+    $archivo_registro = __DIR__ . '/ultimo_respaldo.txt'; 
     $tiempo_actual = time();
     $intervalo = 3600; // Bloqueo de seguridad: 1 hora (3600 segundos)
 
@@ -37,17 +35,17 @@ function ejecutarRespaldoSilencioso($pdo) {
 
     /**
      * 2. CONFIGURACIÓN DEL ENTORNO Y BASE DE DATOS
-     * Nota: Estas credenciales deben actualizarse al migrar de XAMPP a producción.
+     * Sincronizado con el nuevo nombre global de la base de datos.
      */
     $host = 'localhost';
     $user = 'root';
     $pass = ''; 
-    $db   = 'demex_soporte';
+    $db   = 'portal_demex';
     
-    // Directorio de almacenamiento (Carpeta raíz del proyecto /backups/)
+    // Ajuste de ruta relativo: la carpeta backups/ está saliendo de config/ un nivel hacia atrás
     $folder = __DIR__ . "/../backups/";
     
-    // Generación de nombre de archivo único: db_backup_2026-04-29_1300.sql
+    // Generación de nombre de archivo único
     $timestamp = date('Y-m-d_Hi');
     $nuevo_backup = $folder . "db_backup_{$timestamp}.sql";
     
@@ -56,40 +54,29 @@ function ejecutarRespaldoSilencioso($pdo) {
 
     /**
      * 3. EJECUCIÓN DEL RESPALDO (MYSQL DUMP)
-     * Utiliza el operador de redirección '>' para crear el archivo físico.
-     * El comando incluye '--opt' para optimizar el archivo para importaciones futuras.
      */
-    $pass_param = empty($pass) ? "" : "-p\"{$pass}\""; // No envía -p si la clave está vacía
+    $pass_param = empty($pass) ? "" : "-p\"{$pass}\""; 
     $comando = "\"{$mysqldump}\" --opt -h {$host} -u {$user} {$pass_param} {$db} > \"{$nuevo_backup}\" 2>&1";
     exec($comando);
 
     /**
      * 4. LÓGICA DE ROTACIÓN DE ARCHIVOS (Retention Policy: 5)
-     * Este bloque asegura que solo se conserven los 5 respaldos más recientes.
      */
-    
-    // Escaneo de la carpeta para listar todos los archivos de respaldo existentes
     $archivos = glob($folder . "*.sql");
     
-    // Ordenamiento de la lista por fecha de modificación (de más antiguo a más reciente)
     usort($archivos, function($a, $b) {
         return filemtime($a) - filemtime($b);
     });
 
-    /**
-     * Ciclo de limpieza:
-     * Mientras existan más de 5 archivos, se elimina el más antiguo de la lista.
-     */
     while (count($archivos) > 5) {
-        $viejo = array_shift($archivos); // Extrae el archivo más antiguo (inicio del array)
+        $viejo = array_shift($archivos); 
         if (file_exists($viejo)) {
-            unlink($viejo); // Eliminación física del archivo del sistema de archivos
+            unlink($viejo); 
         }
     }
 
     /**
      * 5. ACTUALIZACIÓN DEL REGISTRO DE CONTROL
-     * Se guarda la marca de tiempo actual para reiniciar el contador de 1 hora.
      */
     file_put_contents($archivo_registro, $tiempo_actual);
 }

@@ -5,7 +5,7 @@
  */
 
 $host = 'localhost';
-$db   = 'demex_soporte';
+$db   = 'portal_demex';
 $user = 'root';
 $pass = ''; // Por defecto en XAMPP es vacío
 $charset = 'utf8mb4';
