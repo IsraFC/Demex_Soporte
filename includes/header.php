@@ -2,16 +2,16 @@
 /**
  * @file header.php
  * @package Portal_Demex
- * @version 4.4 - Absolute Route Fix
- * @date 2026-05-25
- * @brief Layout maestro unificado centralizado en la raíz para ruteo adaptativo multinivel.
+ * @version 4.5 - Absolute Route Fix con Control de Inactividad
+ * @date 2026-06-01
+ * @brief Layout maestro unificado centralizado en la raíz con ruteo adaptativo y guardián de inactividad.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/* 1. SEGURIDAD CENTRALIZADA AUTOMÁTICA */
+/* 1. SEGURIDAD CENTRALIZADA AUTOMÁTICA Y CONTROL DE ACCESO */
 $url_actual = $_SERVER['PHP_SELF'];
 $en_subcarpeta = (strpos($url_actual, '/Soporte/') !== false);
 
@@ -20,6 +20,27 @@ if (!isset($_SESSION['rol']) || ($_SESSION['rol'] !== 'administrador' && $_SESSI
     header("Location: " . $regreso_login . "login.php?error=no_autorizado");
     exit();
 }
+
+/* NUEVO: CONTROL DE INACTIVIDAD (Límite: 15 minutos = 900 segundos) */
+$tiempo_maximo_inactividad = 900; // 15 minutos en segundos
+
+if (isset($_SESSION['ultima_actividad'])) {
+    $tiempo_inactivo = time() - $_SESSION['ultima_actividad'];
+    
+    if ($tiempo_inactivo > $tiempo_maximo_inactividad) {
+        // La sesión expiró por abandono: limpiamos y destruimos la sesión
+        session_unset();
+        session_destroy();
+        
+        // Redirigimos al usuario usando el ruteo adaptativo que ya tienes
+        $regreso_login = $en_subcarpeta ? '../' : './';
+        header("Location: " . $regreso_login . "login.php?error=sesion_expirada");
+        exit();
+    }
+}
+// Actualizamos la estampa de tiempo con la actividad más reciente del usuario
+$_SESSION['ultima_actividad'] = time();
+
 
 /* 2. MOTOR DE RESPALDO SILENCIOSO */
 require_once __DIR__ . '/../config/backup.php';

@@ -6,7 +6,6 @@
  * @date 2026-05-25
  * @brief Interfaz centralizada para dar de alta técnicos y administradores globales.
  */
-
 // Se adaptan las rutas de los layouts para consumir los componentes del módulo técnico de forma relativa
 $modulo_actual = 'global';
 require_once 'includes/header.php';
@@ -91,8 +90,14 @@ require_once 'config/db.php';
                                 </span>
                             </td>
                             <td>
-                                <button class="btn btn-light btn-sm rounded-circle text-muted" title="Editar" disabled>
-                                    <i class="bi bi-pencil-square"></i>
+                                <button class="btn btn-light btn-sm rounded-circle text-dark border btn-editar-usuario" 
+                                        title="Editar Personal"
+                                        data-id="<?= $u['id_usuario'] ?>"
+                                        data-nombre="<?= htmlspecialchars($u['nombre']) ?>"
+                                        data-apellidos="<?= htmlspecialchars($u['apellidos']) ?>"
+                                        data-rol="<?= htmlspecialchars($u['rol']) ?>"
+                                        data-estatus="<?= $u['estatus'] ?>">
+                                    <i class="bi bi-pencil-square text-danger"></i>
                                 </button>
                             </td>
                         </tr>
@@ -125,14 +130,11 @@ require_once 'config/db.php';
                             <label class="form-label small fw-bold text-muted text-uppercase">Correo Electrónico</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-light border-0"><i class="bi bi-envelope text-muted"></i></span>
-                                <input type="email" name="correo" class="form-control bg-light border-0 py-2" required placeholder="usuario@demex.com">
+                                <input type="email" name="correo" id="correo_usuario" class="form-control bg-light border-0 py-2" required placeholder="usuario@demex.com">
+                                <div id="correo-feedback" class="invalid-feedback fw-semibold"></div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted text-uppercase">Contraseña de Acceso</label>
-                            <input type="password" name="password" class="form-control bg-light border-0 py-2" required placeholder="Contraseña...">
-                        </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label small fw-bold text-muted text-uppercase">Rol del Sistema</label>
                             <select name="rol" class="form-select bg-light border-0 py-2" required>
                                 <option value="soporte" selected>Soporte Técnico</option>
@@ -143,7 +145,52 @@ require_once 'config/db.php';
                 </div>
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold shadow">Guardar Acceso</button>
+                    <button type="submit" id="btnGuardarUsuario" class="btn btn-danger rounded-pill px-4 fw-bold shadow">Guardar Acceso</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i>Modificar Personal</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formEditarUsuario" action="actions/editar_usuario.php" method="POST">
+                <input type="hidden" name="id_usuario" id="edit_id_usuario">
+                
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Nombre(s)</label>
+                            <input type="text" name="nombre" id="edit_nombre" class="form-control bg-light border-0 py-2" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Apellidos</label>
+                            <input type="text" name="apellidos" id="edit_apellidos" class="form-control bg-light border-0 py-2" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Rol del Sistema</label>
+                            <select name="rol" id="edit_rol" class="form-select bg-light border-0 py-2" required>
+                                <option value="soporte">Soporte Técnico</option>
+                                <option value="administrador">Administrador Global</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Estatus de Acceso</label>
+                            <select name="estatus" id="edit_estatus" class="form-select bg-light border-0 py-2" required>
+                                <option value="1">Activo / Permitir Acceso</option>
+                                <option value="0">Inactivo / Bloquear Acceso</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold shadow">Actualizar Cambios</button>
                 </div>
             </form>
         </div>
@@ -152,6 +199,7 @@ require_once 'config/db.php';
 
 <script>
 $(document).ready(function() {
+    // Inicialización de DataTable existente
     $('#tablaUsuarios').DataTable({
         language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
         pageLength: 10,
@@ -160,9 +208,71 @@ $(document).ready(function() {
     });
 
     $('#modalNuevoUsuario').appendTo("body");
+    // Asegurar que el modal de edición se mueva correctamente al body
+    $('#modalEditarUsuario').appendTo("body");
 
+    // Al cerrar el modal, limpiamos los formularios y los estilos de validación anteriores
     $('#modalNuevoUsuario').on('hidden.bs.modal', function () {
         $('#formNuevoUsuario')[0].reset();
+        $('#correo_usuario').removeClass('is-invalid is-valid');
+        $('#btnGuardarUsuario').prop('disabled', false);
+    });
+
+    // NUEVO: Validación de correo en tiempo real mediante AJAX
+    $('#correo_usuario').on('input', function() {
+        const correo = $(this).val().trim();
+        const inputCorreo = $(this);
+        const feedback = $('#correo-feedback');
+        const btnGuardar = $('#btnGuardarUsuario');
+
+        // Si el campo está vacío, reseteamos el estado visual y habilitamos el botón
+        if (correo === '') {
+            inputCorreo.removeClass('is-invalid is-valid');
+            btnGuardar.prop('disabled', false);
+            return;
+        }
+
+        // Petición asíncrona al verificador
+        $.ajax({
+            url: 'actions/verificar_correo_disponible.php',
+            type: 'GET',
+            data: { correo: correo },
+            dataType: 'json',
+            success: function(response) {
+                if (response.disponible === false) {
+                    // Si el correo ya existe en la BD
+                    inputCorreo.addClass('is-invalid').removeClass('is-valid');
+                    feedback.text('Este correo ya pertenece a un miembro del staff.');
+                    btnGuardar.prop('disabled', true); // Bloqueamos el botón de guardar
+                } else {
+                    // Si el correo está libre
+                    inputCorreo.addClass('is-valid').removeClass('is-invalid');
+                    btnGuardar.prop('disabled', false); // Habilitamos el botón
+                }
+            },
+            error: function() {
+                console.log('Error al validar el correo electrónico.');
+            }
+        });
+    });
+
+    // NUEVO: Escuchar clics en los botones de editar para cargar datos en el modal
+    $(document).on('click', '.btn-editar-usuario', function() {
+        const id = $(this).data('id');
+        const nombre = $(this).data('nombre');
+        const apellidos = $(this).data('apellidos');
+        const rol = $(this).data('rol');
+        const estatus = $(this).data('estatus');
+
+        // Insertar valores en los inputs del modal de edición
+        $('#edit_id_usuario').val(id);
+        $('#edit_nombre').val(nombre);
+        $('#edit_apellidos').val(apellidos);
+        $('#edit_rol').val(rol);
+        $('#edit_estatus').val(estatus);
+
+        // Desplegar el modal de edición de Bootstrap
+        $('#modalEditarUsuario').modal('show');
     });
 });
 </script>

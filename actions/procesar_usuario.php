@@ -2,8 +2,8 @@
 /**
  * @file procesar_usuario.php
  * @package Portal_Demex
- * @version 1.9 - Registro de Personal Global desde la Raíz
- * @date 2026-05-25
+ * @version 2.0 - Registro sin contraseña previa (Establecimiento vía Token)
+ * @date 2026-05-29
  */
 
 session_start();
@@ -13,27 +13,24 @@ if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'administrador') {
     die("Acceso denegado de forma estricta.");
 }
 
-// Inclusiones subiendo un nivel hacia la nueva carpeta config de la raíz
 require_once '../config/db.php';
 require_once '../config/mail_config.php';
 
-// Definición de los espacios de nombres de PHPMailer
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-// Carga manual subiendo un nivel hacia la carpeta libs de la raíz
 require '../libs/PHPMailer/Exception.php';
 require '../libs/PHPMailer/PHPMailer.php';
 require '../libs/PHPMailer/SMTP.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nombre = trim($_POST['nombre']);
+    $nombre    = trim($_POST['nombre']);
     $apellidos = trim($_POST['apellidos']);
-    $correo = trim($_POST['correo']);
-    $password = $_POST['password'];
-    $rol = $_POST['rol'];
+    $correo    = trim($_POST['correo']);
+    $rol       = $_POST['rol'];
 
-    if (empty($nombre) || empty($apellidos) || empty($correo) || empty($password) || empty($rol)) {
+    // Validamos únicamente los campos disponibles ahora
+    if (empty($nombre) || empty($apellidos) || empty($correo) || empty($rol)) {
         die("Todos los campos obligatorios deben ser completados.");
     }
 
@@ -59,31 +56,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
 
-        // 2. Procesamiento criptográfico de contraseña y token de activación
-        $passwordHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+        // 2. Generación del token de activación seguro
         $token = bin2hex(random_bytes(32)); 
 
-        // 3. Inserción con Estatus Fijo en 0 (Pendiente - TINYINT)
+        // 3. Inserción con Estatus Fijo en 0 y contraseña vacía/provisional temporalmente
         $sql = "INSERT INTO usuarios (nombre, apellidos, correo, password, rol, estatus, token_verificacion) 
-                VALUES (?, ?, ?, ?, ?, 0, ?)";
+                VALUES (?, ?, ?, '', ?, 0, ?)";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$nombre, $apellidos, $correo, $passwordHash, $rol, $token]);
+        $stmt->execute([$nombre, $apellidos, $correo, $rol, $token]);
 
-        // 4. Construcción del URL dinámico de verificación en la raíz del proyecto
+        // 4. Construcción del URL dinámico de verificación
         $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
         $host = $_SERVER['HTTP_HOST'];
-
-        // dirname($_SERVER['SCRIPT_NAME']) devuelve la ruta hasta la carpeta actual (/desarrollo_mexicano/actions)
-        // Usamos un dirname adicional para subir a la raíz del dominio (/desarrollo_mexicano)
         $rutaBase = dirname(dirname($_SERVER['SCRIPT_NAME']));
         $rutaBase = rtrim($rutaBase, '/\\');
 
         $enlaceVerificacion = $protocolo . $host . $rutaBase . "/verificar.php?token=" . $token;
 
-        // 5. Instanciación y Configuración del objeto PHPMailer
+        // 5. Configuración y envío mediante PHPMailer
         $mail = new PHPMailer(true);
-
-        // Configuración protegida mediante las constantes globales de mail_config.php
         $mail->isSMTP();
         $mail->Host       = SMTP_HOST;                     
         $mail->SMTPAuth   = true;                                 
@@ -97,16 +88,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mail->addAddress($correo, $nombre . ' ' . $apellidos);
 
         $mail->isHTML(true);
-        $mail->Subject = 'Activación de Cuenta - Portal Staff DEMEX';
+        $mail->Subject = 'Activación de Cuenta y Asignación de Contraseña - DEMEX';
         
-        // Estructura visual del correo electrónico
         $mail->Body    = "
             <div style='font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #F8F9FA; border-radius: 8px;'>
-                <h2 style='color: #C62828;'>Hola {$nombre},</h2>
-                <p>Se ha generado tu acceso para el sistema integral de <strong>DEMEX</strong>.</p>
-                <p>Para activar tu cuenta y poder ingresar al portal, es necesario que verifiques tu dirección de correo haciendo clic en el siguiente enlace:</p>
+                <h2 style='color: #C62828;'>Bienvenido {$nombre},</h2>
+                <p>Se ha generado tu perfil de acceso para el sistema corporativo de <strong>DEMEX</strong>.</p>
+                <p>Para activar tu cuenta, confirmar tu correo y **establecer tu contraseña de seguridad**, haz clic en el siguiente enlace:</p>
                 <div style='text-align: center; margin: 30px 0;'>
-                    <a href='{$enlaceVerificacion}' style='background-color: #C62828; color: #FFFFFF; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>ACTIVAR MI CUENTA</a>
+                    <a href='{$enlaceVerificacion}' style='background-color: #C62828; color: #FFFFFF; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>CONFIGURAR MI CUENTA</a>
                 </div>
                 <p style='font-size: 12px; color: #757575;'>Si el botón no funciona, copia y pega esta URL en tu navegador:<br>{$enlaceVerificacion}</p>
             </div>";
@@ -119,8 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <script>
             Swal.fire({
                 icon: 'success',
-                title: '¡Acceso Registrado!',
-                text: 'El usuario ha sido creado en estado pendiente. Se envió el correo de activación.',
+                title: '¡Invitación Enviada!',
+                text: 'El usuario fue registrado. Se envió el correo para que configure su propia contraseña.',
                 confirmButtonColor: '#C62828'
             }).then(() => { window.location.href = '../usuarios.php'; });
         </script>
@@ -130,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->rollBack();
         $errorMessage = isset($mail) ? $mail->ErrorInfo : $e->getMessage();
         die("Error en el despacho del correo: {$errorMessage}");
-    } catch (PDOException $e) {
+    } catch (\PDOException $e) {
         $pdo->rollBack();
         die("Error crítico de base de datos: " . $e->getMessage());
     }
