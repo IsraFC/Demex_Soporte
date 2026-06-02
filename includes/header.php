@@ -109,43 +109,14 @@ $pagina_actual_php = basename($_SERVER['PHP_SELF']);
         <div class="list-group list-group-flush flex-grow-1 mt-3" id="sidebar-menu-list">
 
             <?php if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte'): ?>
-                <div class="seccion-herramientas mx-3">
-                    <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Soporte</span>
-                </div>
-
-                <a href="<?= $link_prefix ?>index.php" class="sidebar-link <?= ($pagina_actual_php === 'index.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-house-door"></i></div> <span>Inicio</span>
-                </a>
-                <a href="<?= $link_prefix ?>maquinas.php" class="sidebar-link <?= ($pagina_actual_php === 'maquinas.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-cpu"></i></div> <span>Máquinas</span>
-                </a>
-                <a href="<?= $link_prefix ?>clientes.php" class="sidebar-link <?= ($pagina_actual_php === 'clientes.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-people"></i></div> <span>Clientes</span>
-                </a>
-                <a href="<?= $link_prefix ?>estadisticas.php" class="sidebar-link <?= ($pagina_actual_php === 'estadisticas.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-bar-chart-line"></i></div> <span>Estadísticas</span>
-                </a>
-
-                <div class="seccion-herramientas border-top border-secondary border-opacity-25 pt-3 mt-2 mx-3">
-                    <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Herramientas</span>
-                </div>
-                
-                <a href="<?= $link_prefix ?>importar_clientes.php" class="sidebar-link py-2 <?= ($pagina_actual_php === 'importar_clientes.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-person-plus"></i></div> <span>Imp. Clientes</span>
-                </a>
-                <a href="<?= $link_prefix ?>importar_tickets.php" class="sidebar-link py-2 <?= ($pagina_actual_php === 'importar_tickets.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-ticket-detailed"></i></div> <span>Imp. Tickets</span>
-                </a>
+                <?php include __DIR__ . '/sidebar/menu_soporte.php'; ?>
             <?php endif; ?>
 
-            <?php if ($_SESSION['rol'] === 'administrador'): ?>
-                <div class="seccion-herramientas border-top border-secondary border-opacity-25 pt-3 mt-2 mx-3">
-                    <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Global</span>
-                </div>
-                <a href="<?= $staff_link ?>" class="sidebar-link <?= (($pagina_actual_php === 'usuarios.php' || $pagina_actual_php === 'personal_staff.php') && !$en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-shield-lock-fill"></i></div> <span>Personal Staff</span>
-                </a>
+            <?php if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'ventas'): ?>
+                <?php // include __DIR__ . '/sidebar/menu_ventas.php'; ?>
             <?php endif; ?>
+            
+            <?php include __DIR__ . '/sidebar/menu_global.php'; ?>
             
         </div>
     </div>
