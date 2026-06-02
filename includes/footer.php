@@ -55,9 +55,12 @@
                             <input type="text" id="inputBusquedaCliente" list="listaClientesBusqueda" class="form-control bg-light border-0 fw-bold" placeholder="Buscar cliente...">
                             <datalist id="listaClientesBusqueda">
                                 <?php
-                                $stmt_c = $pdo->query("SELECT id_cliente, nombre_cliente FROM Clientes ORDER BY nombre_cliente ASC");
-                                while($c = $stmt_c->fetch()) {
-                                    echo "<option data-id='".$c['id_cliente']."' value='".htmlspecialchars($c['nombre_cliente'])."'>";
+                                // Blindaje de seguridad: Solo consultamos si la conexión PDO está activa
+                                if (isset($pdo)) {
+                                    $stmt_c = $pdo->query("SELECT id_cliente, nombre_cliente FROM Clientes ORDER BY nombre_cliente ASC");
+                                    while($c = $stmt_c->fetch()) {
+                                        echo "<option data-id='".$c['id_cliente']."' value='".htmlspecialchars($c['nombre_cliente'])."'>";
+                                    }
                                 }
                                 ?>
                             </datalist>
