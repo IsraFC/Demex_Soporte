@@ -2,8 +2,9 @@
 /**
  * @file procesar_usuario.php
  * @package Portal_Demex
- * @version 2.0 - Registro sin contraseña previa (Establecimiento vía Token)
- * @date 2026-05-29
+ * @version 2.1 - Registro con Plantilla de Correo Unificada
+ * @date 2026-06-02
+ * @brief Registro sin contraseña previa (Establecimiento vía Token) con layout de mail corporativo.
  */
 
 session_start();
@@ -29,7 +30,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $correo    = trim($_POST['correo']);
     $rol       = $_POST['rol'];
 
-    // Validamos únicamente los campos disponibles ahora
     if (empty($nombre) || empty($apellidos) || empty($correo) || empty($rol)) {
         die("Todos los campos obligatorios deben ser completados.");
     }
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // 2. Generación del token de activación seguro
         $token = bin2hex(random_bytes(32)); 
 
-        // 3. Inserción con Estatus Fijo en 0 y contraseña vacía/provisional temporalmente
+        // 3. Inserción con Estatus Fijo en 0 y contraseña vacía temporalmente
         $sql = "INSERT INTO usuarios (nombre, apellidos, correo, password, rol, estatus, token_verificacion) 
                 VALUES (?, ?, ?, '', ?, 0, ?)";
         $stmt = $pdo->prepare($sql);
@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mail->Host       = SMTP_HOST;                     
         $mail->SMTPAuth   = true;                                 
         $mail->Username   = SMTP_USER;     
-        $mail->Password   = SMTP_PASS;                  
+        $mail->Password   = SMTP_PASS;                                  
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;       
         $mail->Port       = SMTP_PORT;                                  
         $mail->CharSet    = 'UTF-8';
@@ -90,16 +90,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mail->isHTML(true);
         $mail->Subject = 'Activación de Cuenta y Asignación de Contraseña - DEMEX';
         
-        $mail->Body    = "
-            <div style='font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #F8F9FA; border-radius: 8px;'>
-                <h2 style='color: #C62828;'>Bienvenido {$nombre},</h2>
-                <p>Se ha generado tu perfil de acceso para el sistema corporativo de <strong>DEMEX</strong>.</p>
-                <p>Para activar tu cuenta, confirmar tu correo y **establecer tu contraseña de seguridad**, haz clic en el siguiente enlace:</p>
-                <div style='text-align: center; margin: 30px 0;'>
-                    <a href='{$enlaceVerificacion}' style='background-color: #C62828; color: #FFFFFF; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>CONFIGURAR MI CUENTA</a>
+        // 6. PLANTILLA UNIFICADA CON LA MISMA PALETA DE COLORES Y DISEÑO
+        $mail->Body = "
+            <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;'>
+                <div style='text-align: center; margin-bottom: 20px;'>
+                    <h2 style='color: #d15b00; margin: 0;'>Portal DEMEX</h2>
+                    <p style='color: #777; font-size: 14px; margin: 5px 0 0 0;'>Control de Acceso Corporativo</p>
                 </div>
-                <p style='font-size: 12px; color: #757575;'>Si el botón no funciona, copia y pega esta URL en tu navegador:<br>{$enlaceVerificacion}</p>
-            </div>";
+                <hr style='border: 0; border-top: 1px solid #eee;'>
+                <p>Hola, <strong>" . htmlspecialchars($nombre) . "</strong>,</p>
+                <p>Se ha generado exitosamente tu perfil de acceso para el sistema de <strong>Desarrollo Mexicano</strong>.</p>
+                <p>Para activar tu cuenta, confirmar tu dirección de correo electrónico y <strong>establecer tu contraseña</strong>, por favor haz clic en el siguiente botón seguro:</p>
+                
+                <div style='text-align: center; margin: 30px 0;'>
+                    <a href='" . $enlaceVerificacion . "' style='background-color: #d15b00; color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-transform: uppercase; font-size: 13px;'>Configurar mi Cuenta</a>
+                </div>
+                
+                <p style='font-size: 12px; color: #666;'>Si el botón superior no responde de forma correcta, puedes copiar y pegar la siguiente URL en tu navegador web:</p>
+                <p style='font-size: 11px; color: #0066cc; word-break: break-all;'>" . $enlaceVerificacion . "</p>
+                <hr style='border: 0; border-top: 1px solid #eee;'>
+                <p style='font-size: 11px; color: #999; text-align: center; margin: 0;'>Este es un correo automático generado por el sistema de seguridad de DEMEX. Por favor no respondas a este mensaje.</p>
+            </div>
+        ";
 
         $mail->send();
         $pdo->commit();
@@ -110,8 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Swal.fire({
                 icon: 'success',
                 title: '¡Invitación Enviada!',
-                text: 'El usuario fue registrado. Se envió el correo para que configure su propia contraseña.',
-                confirmButtonColor: '#C62828'
+                text: 'El usuario fue registrado con éxito. Se envió el correo corporativo para la asignación de su contraseña.',
+                confirmButtonColor: '#d15b00'
             }).then(() => { window.location.href = '../usuarios.php'; });
         </script>
         </body>";
@@ -125,3 +137,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         die("Error crítico de base de datos: " . $e->getMessage());
     }
 }
+?>

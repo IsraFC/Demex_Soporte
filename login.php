@@ -107,6 +107,13 @@ if (!empty($old_correo)) {
         </div>
     <?php endif; ?>
 
+    <!-- ALERTA DE ÉXITO EXCLUSIVA PARA RECUPERACIÓN DE CLAVE -->
+    <?php if (isset($_GET['status']) && $_GET['status'] === 'password_actualizada'): ?>
+        <div class="alert alert-success border-0 small py-2 text-start" role="alert">
+            <strong>¡Contraseña actualizada!</strong> Tu nueva contraseña ha sido registrada con éxito. Ya puedes ingresar al portal corporativo.
+        </div>
+    <?php endif; ?>
+
     <form action="actions/procesar_login.php" method="POST" class="text-start">
         <div class="mb-3">
             <label for="correo" class="form-label small fw-bold text-muted text-uppercase">Correo Electrónico</label>
@@ -118,7 +125,10 @@ if (!empty($old_correo)) {
         </div>
 
         <div class="mb-4">
-            <label for="password" class="form-label small fw-bold text-muted text-uppercase">Contraseña</label>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <label for="password" class="form-label small fw-bold text-muted text-uppercase mb-0">Contraseña</label>
+                <a href="recuperar.php" class="text-decoration-none small text-muted fw-semibold" style="font-size: 0.75rem; color: #d15b00 !important;">¿Olvidaste tu contraseña?</a>
+            </div>
             <div class="input-group">
                 <input type="password" name="password" id="password" 
                     class="form-control <?php echo ($error === 'password_incorrecto') ? 'is-invalid' : ''; ?>" 

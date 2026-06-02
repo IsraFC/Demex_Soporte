@@ -37,6 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error_msg = "Las contraseñas ingresadas no coinciden.";
     } else {
         try {
+            $pdo->beginTransaction();
+
             // Generamos el hash criptográfico robusto de la contraseña real del usuario
             $passwordHash = password_hash($pass1, PASSWORD_BCRYPT, ['cost' => 12]);
 
@@ -44,7 +46,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $update = $pdo->prepare("UPDATE usuarios SET password = ?, estatus = 1, token_verificacion = NULL WHERE id_usuario = ?");
             $update->execute([$passwordHash, $usuario['id_usuario']]);
 
-            // Renderizamos un aviso estético de éxito y redirigimos al login
+            $pdo->commit();
+
+            // TRUCO DE SEGURIDAD: Destruimos cualquier rastro de la sesión del Admin en este navegador
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            $_SESSION = array();
+            if (ini_get("session.use_cookies")) {
+                $params = session_get_cookie_params();
+                setcookie(session_name(), '', time() - 42000,
+                    $params["path"], $params["domain"],
+                    $params["secure"], $params["httponly"]
+                );
+            }
+            session_destroy();
+
+            // Renderizamos un aviso estético de éxito y redirigimos al login de forma limpia
             ?>
             <!DOCTYPE html>
             <html lang="es">
@@ -61,15 +79,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     Swal.fire({
                         icon: 'success',
                         title: '¡Cuenta Activada Exitosamente!',
-                        text: 'Tu contraseña ha sido registrada. Ya puedes ingresar al portal de DEMEX.',
-                        confirmButtonColor: '#C62828'
-                    }).then(() => { window.location.href = 'login.php'; });
+                        text: 'Tu contraseña ha sido registrada. Por seguridad, ingresa tus nuevas credenciales para acceder.',
+                        confirmButtonColor: '#d15b00'
+                    }).then(() => { 
+                        // Redirigimos al login informando el estatus para mostrar un banner verde opcional
+                        window.location.href = 'login.php?status=cuenta_activada'; 
+                    });
                 </script>
             </body>
             </html>
             <?php
             exit();
         } catch (\PDOException $e) {
+            $pdo->rollBack();
             $error_msg = "Error al activar la cuenta: " . $e->getMessage();
         }
     }
@@ -102,7 +124,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             padding: 3rem 2rem; 
             max-width: 480px; 
             width: 90%;
-            border-top: 5px solid #C62828;
+            border-top: 5px solid #d15b00; /* Unificado al color corporativo */
+        }
+        .btn-demex-act {
+            background-color: #d15b00; 
+            border: none;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-demex-act:hover {
+            background-color: #b85000;
+            color: white;
+            transform: translateY(-1px);
         }
     </style>
 </head>
@@ -127,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <label for="password" class="form-label small fw-bold text-muted text-uppercase">Nueva Contraseña</label>
             <div class="input-group">
                 <input type="password" name="password" id="password" class="form-control" placeholder="Mínimo 8 caracteres" required>
-                <button class="input-group-text bg-white border-start-0 toggle-password" type="button" data-target="#password">
+                <button class="input-group-text bg-white border-start-0 toggle-password" type="button" data-target="#password" style="border-color: #dee2e6;">
                     <i class="bi bi-eye text-muted"></i>
                 </button>
             </div>
@@ -137,26 +170,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <label for="password_confirm" class="form-label small fw-bold text-muted text-uppercase">Confirmar Contraseña</label>
             <div class="input-group">
                 <input type="password" name="password_confirm" id="password_confirm" class="form-control" placeholder="Repite tu contraseña" required>
-                <button class="input-group-text bg-white border-start-0 toggle-password" type="button" data-target="#password_confirm">
+                <button class="input-group-text bg-white border-start-0 toggle-password" type="button" data-target="#password_confirm" style="border-color: #dee2e6;">
                     <i class="bi bi-eye text-muted"></i>
                 </button>
             </div>
         </div>
 
-        <button type="submit" class="btn btn-danger w-100 py-2.5 rounded-pill fw-bold shadow-sm" style="background-color: #C62828; border: none;">
-            Activar Perfil y Entrar
+        <button type="submit" class="btn btn-demex-act w-100 py-3 rounded-pill fw-bold shadow-sm">
+            Activar Perfil e Ir al Inicio
         </button>
     </form>
 </div>
 
 <script>
-    // Script existente para limpiar URL
+    // Limpieza sintáctica de URL
     if (typeof window.history.replaceState === 'function') {
         const limpiaUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
         window.history.replaceState({ path: limpiaUrl }, '', limpiaUrl);
     }
 
-    // NUEVO: Alternador de contraseñas
+    // Alternador dinámico de contraseñas (Ojito)
     document.querySelectorAll('.toggle-password').forEach(button => {
         button.addEventListener('click', function() {
             const targetSelector = this.getAttribute('data-target');
