@@ -13,9 +13,11 @@ if (session_status() === PHP_SESSION_NONE) {
 
 /* 1. SEGURIDAD CENTRALIZADA AUTOMÁTICA Y CONTROL DE ACCESO */
 $url_actual = $_SERVER['PHP_SELF'];
-$en_subcarpeta = (strpos($url_actual, '/Soporte/') !== false);
+$en_soporte = (strpos($url_actual, '/Soporte/') !== false);
+$en_ventas = (strpos($url_actual, '/Ventas/') !== false);
+$en_subcarpeta = ($en_soporte || $en_ventas);
 
-if (!isset($_SESSION['rol']) || ($_SESSION['rol'] !== 'administrador' && $_SESSION['rol'] !== 'soporte')) {
+if (!isset($_SESSION['rol']) || ($_SESSION['rol'] !== 'administrador' && $_SESSION['rol'] !== 'soporte' && $_SESSION['rol'] !== 'ventas')) {
     $regreso_login = $en_subcarpeta ? '../' : './';
     header("Location: " . $regreso_login . "login.php?error=no_autorizado");
     exit();
@@ -54,12 +56,18 @@ if (isset($pdo)) {
  */
 if ($en_subcarpeta) {
     $base_path = "../";
-    $link_prefix = "";          /* Si ya estoy dentro, mis enlaces son limpios (ej: index.php) */
+    // Si estoy dentro de Ventas, mis enlaces locales de ventas no llevan prefijo, pero los de soporte sí
+    if ($en_ventas) {
+        $link_prefix = "../Soporte/"; // Si el menú de soporte pide algo, lo mandamos a su carpeta
+    } else {
+        $link_prefix = ""; /* Si estoy en Soporte, sus enlaces son limpios */
+    }
+    
     $staff_link = "../usuarios.php";
     $logout_link = "../logout.php";
 } else {
     $base_path = "./";
-    $link_prefix = "Soporte/";  /* Si estoy en la raíz, obligo a entrar a la subcarpeta */
+    $link_prefix = "Soporte/"; /* Si estoy en la raíz, obligo a entrar a la subcarpeta de soporte */
     $staff_link = "usuarios.php";
     $logout_link = "logout.php";
 }
@@ -113,7 +121,7 @@ $pagina_actual_php = basename($_SERVER['PHP_SELF']);
             <?php endif; ?>
 
             <?php if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'ventas'): ?>
-                <?php // include __DIR__ . '/sidebar/menu_ventas.php'; ?>
+                <?php include __DIR__ . '/sidebar/menu_ventas.php'; ?>
             <?php endif; ?>
             
             <?php include __DIR__ . '/sidebar/menu_global.php'; ?>
