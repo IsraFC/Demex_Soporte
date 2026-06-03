@@ -2,69 +2,83 @@
 /**
  * @file header.php
  * @package Portal_Demex
- * @version 4.5 - Absolute Route Fix con Control de Inactividad
- * @date 2026-06-01
- * @brief Layout maestro unificado centralizado en la raíz con ruteo adaptativo y guardián de inactividad.
+ * @version 4.7 - Arquitectura Adaptativa Multi-Módulo Unificada
+ * @brief Layout maestro centralizado con ruteo inteligente bidireccional y guardián estricto.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/* 1. SEGURIDAD CENTRALIZADA AUTOMÁTICA Y CONTROL DE ACCESO */
+/* 1. SEGURIDAD CENTRALIZADA Y CONTROL DE ACCESO MULTI-ROL */
 $url_actual = $_SERVER['PHP_SELF'];
-$en_subcarpeta = (strpos($url_actual, '/Soporte/') !== false);
+$en_soporte = (strpos($url_actual, '/Soporte/') !== false);
+$en_ventas = (strpos($url_actual, '/Ventas/') !== false);
+$en_subcarpeta = ($en_soporte || $en_ventas);
 
-if (!isset($_SESSION['rol']) || ($_SESSION['rol'] !== 'administrador' && $_SESSION['rol'] !== 'soporte')) {
+if (!isset($_SESSION['rol']) || ($_SESSION['rol'] !== 'administrador' && $_SESSION['rol'] !== 'soporte' && $_SESSION['rol'] !== 'ventas')) {
     $regreso_login = $en_subcarpeta ? '../' : './';
     header("Location: " . $regreso_login . "login.php?error=no_autorizado");
     exit();
 }
 
-/* NUEVO: CONTROL DE INACTIVIDAD (Límite: 15 minutos = 900 segundos) */
-$tiempo_maximo_inactividad = 900; // 15 minutos en segundos
-
+/* 2. GUARDIÁN DE INACTIVIDAD AUTOMÁTICO (15 Minutos) */
+$tiempo_maximo_inactividad = 900;
 if (isset($_SESSION['ultima_actividad'])) {
     $tiempo_inactivo = time() - $_SESSION['ultima_actividad'];
-    
     if ($tiempo_inactivo > $tiempo_maximo_inactividad) {
-        // La sesión expiró por abandono: limpiamos y destruimos la sesión
         session_unset();
         session_destroy();
-        
-        // Redirigimos al usuario usando el ruteo adaptativo que ya tienes
         $regreso_login = $en_subcarpeta ? '../' : './';
         header("Location: " . $regreso_login . "login.php?error=sesion_expirada");
         exit();
     }
 }
-// Actualizamos la estampa de tiempo con la actividad más reciente del usuario
 $_SESSION['ultima_actividad'] = time();
 
-
-/* 2. MOTOR DE RESPALDO SILENCIOSO */
+/* 3. RESPALDO SILENCIOSO DE SEGURIDAD */
 require_once __DIR__ . '/../config/backup.php';
 if (isset($pdo)) {
     ejecutarRespaldoSilencioso($pdo);
 }
 
-/**
- * 3. BLINDAJE DE ENRUTAMIENTO ESTRICTO
- * Asignamos las rutas relativas correspondientes analizando la ubicación del script
- */
+/* 4. MOTOR DE ENRUTAMIENTO GEOMÉTRICO (PREFIJOS INDEPENDIENTES) */
 if ($en_subcarpeta) {
     $base_path = "../";
-    $link_prefix = "";          /* Si ya estoy dentro, mis enlaces son limpios (ej: index.php) */
     $staff_link = "../usuarios.php";
     $logout_link = "../logout.php";
+    
+    // Si estás físicamente en Ventas, el acceso a Soporte debe subir un nivel
+    if ($en_ventas) {
+        $link_prefix_soporte = "../Soporte/";
+        $link_prefix_ventas  = "./";
+    } else {
+        // Si estás físicamente en Soporte, el acceso a Ventas debe subir un nivel
+        $link_prefix_soporte = "./";
+        $link_prefix_ventas  = "../Ventas/";
+    }
 } else {
+    // Si estás parado en la raíz del proyecto
     $base_path = "./";
-    $link_prefix = "Soporte/";  /* Si estoy en la raíz, obligo a entrar a la subcarpeta */
+    $link_prefix_soporte = "Soporte/";
+    $link_prefix_ventas  = "Ventas/";
     $staff_link = "usuarios.php";
     $logout_link = "logout.php";
 }
 
-$tema_sistema = $modulo_actual ?? 'global';
+// Si no se definió manualmente el módulo en la vista, lo forzamos analizando la URL actual de PHP
+if (!isset($modulo_actual)) {
+    if (strpos($url_actual, '/Soporte/') !== false) {
+        $tema_sistema = 'soporte';
+    } elseif (strpos($url_actual, '/Ventas/') !== false) {
+        $tema_sistema = 'ventas';
+    } else {
+        $tema_sistema = 'global';
+    }
+} else {
+    $tema_sistema = $modulo_actual;
+}
+
 $pagina_actual_php = basename($_SERVER['PHP_SELF']);
 ?>
 <!DOCTYPE html>
@@ -72,14 +86,15 @@ $pagina_actual_php = basename($_SERVER['PHP_SELF']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DEMEX | Panel de Control</title>
+    <title>DEMEX | <?= htmlspecialchars($page_title ?? 'Panel de Control') ?></title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
     
-    <link rel="stylesheet" href="<?= $base_path ?>css/estilos.css">
+    <link rel="stylesheet" href="/desarrollo_mexicano/css/estilos.css">
 
     <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -89,6 +104,21 @@ $pagina_actual_php = basename($_SERVER['PHP_SELF']);
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body data-theme="<?= $tema_sistema ?>">
+
+<script>
+    (function() {
+        const temaAnterior = localStorage.getItem('demex_last_module_theme');
+        const temaNuevo = '<?= $tema_sistema ?>';
+        
+        if (temaAnterior && temaAnterior !== temaNuevo && temaAnterior !== 'global') {
+            document.body.setAttribute('data-theme', temaAnterior);
+            window.requestAnimationFrame(() => {
+                document.body.setAttribute('data-theme', temaNuevo);
+            });
+        }
+        localStorage.setItem('demex_last_module_theme', temaNuevo);
+    })();
+</script>
 
 <div id="wrapper" class="shadow-sm">
     <script>
@@ -106,21 +136,22 @@ $pagina_actual_php = basename($_SERVER['PHP_SELF']);
             </button>
         </div>
         
-        <div class="list-group list-group-flush flex-grow-1 mt-3" id="sidebar-menu-list">
+        <div class="sidebar-menu-scroll">
+            <div class="list-group list-group-flush mt-2" id="sidebar-menu-list">
 
-            <?php if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte'): ?>
-                <?php include __DIR__ . '/sidebar/menu_soporte.php'; ?>
-            <?php endif; ?>
+                <?php if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte'): ?>
+                    <?php include __DIR__ . '/sidebar/menu_soporte.php'; ?>
+                <?php endif; ?>
 
-            <?php if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'ventas'): ?>
-                <?php // include __DIR__ . '/sidebar/menu_ventas.php'; ?>
-            <?php endif; ?>
-            
-            <?php include __DIR__ . '/sidebar/menu_global.php'; ?>
-            
-        </div>
+                <?php if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'ventas'): ?>
+                    <?php include __DIR__ . '/sidebar/menu_ventas.php'; ?>
+                <?php endif; ?>
+                
+                <?php include __DIR__ . '/sidebar/menu_global.php'; ?>
+                
+            </div>
+        </div> 
     </div>
-
     <div id="page-content-wrapper">
         <nav class="navbar top-navbar d-flex align-items-center justify-content-between shadow-sm" id="main-top-navbar">
             <div></div>
@@ -158,5 +189,24 @@ $pagina_actual_php = basename($_SERVER['PHP_SELF']);
                 </div>
             </div>
         </nav>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                const sidebarScroll = document.querySelector('.sidebar-menu-scroll');
+                
+                if (sidebarScroll) {
+                    // 1. Recuperar la posición guardada al cargar la página
+                    const posicionGuardada = localStorage.getItem('sidebar_scroll_position');
+                    if (posicionGuardada) {
+                        sidebarScroll.scrollTop = posicionGuardada;
+                    }
+
+                    // 2. Escuchar el evento de scroll para guardar la posición en tiempo real
+                    sidebarScroll.addEventListener('scroll', function() {
+                        localStorage.setItem('sidebar_scroll_position', sidebarScroll.scrollTop);
+                    });
+                }
+            });
+        </script>
 
         <div class="container-fluid px-4 py-4 flex-grow-1 page-fade-wrapper" id="master-fade-container">

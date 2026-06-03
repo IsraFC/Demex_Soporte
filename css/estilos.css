@@ -1,45 +1,23 @@
 /* ==========================================================================
-   CONFIGURACIÓN DE TEMAS DINÁMICOS & TRANSICIONES LÍQUIDAS
+   CONFIGURACIÓN UNIFICADA DE IDENTIDAD CORPORATIVA (ROJO SEMÁNTICO PREMIUM)
    ========================================================================== */
 
-/* --- TEMA GLOBAL / ACCESOS GENERALES (NARANJA CORPORATIVO) --- */
-body, 
-body[data-theme="global"] {
-    --primary-color: #E65100;      /* Naranja oscuro premium */
-    --dark-color: #BF360C;         /* Naranja profundo para hovers */
-    --focus-glow: rgba(230, 81, 0, 0.12);
-    --bg-light: #F8F9FA;
-    --shadow-soft: 0 8px 30px rgba(230, 81, 0, 0.05);
-}
-
-/* --- TEMA DEPARTAMENTO DE SOPORTE TÉCNICO (NAVY TECH) --- */
-body[data-theme="soporte"] {
-    --primary-color: #0F4C81;      /* Azul confianza y estabilidad */
-    --dark-color: #0B3A62;         /* Azul profundo para hovers */
-    --focus-glow: rgba(15, 76, 129, 0.15);
-    --bg-light: #F4F6F9;           /* Fondo sutilmente más frío */
-    --shadow-soft: 0 8px 30px rgba(15, 76, 129, 0.06);
-}
-
-/* --- TEMA DEPARTAMENTO DE VENTAS (PRODUCCIÓN FUTURA) --- */
-body[data-theme="ventas"] {
-    --primary-color: #2E7D32;      /* Verde éxito transaccional */
-    --dark-color: #1B5E20;
-    --focus-glow: rgba(46, 125, 50, 0.15);
-    --bg-light: #F5F7F6;
-    --shadow-soft: 0 8px 30px rgba(46, 125, 50, 0.06);
+:root {
+    --primary-color: #DC3545;      /* Rojo exacto de text-danger (#DC3545) */
+    --dark-color: #BD2130;         /* Rojo profundo para hovers y bordes activos */
+    --focus-glow: rgba(220, 53, 69, 0.15);
+    --bg-light: #F8F9FA;           /* Fondo gris claro unificado */
+    --shadow-soft: 0 8px 30px rgba(220, 53, 69, 0.05);
 }
 
 /* ==========================================================================
-   ESTRUCTURA DEL MAQUETADO BASE
+   ESTRUCTURA DEL MAQUETADO BASE (REVISADO Y BLINDADO)
    ========================================================================== */
 body {
     font-family: 'Poppins', sans-serif;
     background-color: var(--bg-light);
     color: #2D3436;
     overflow-x: hidden;
-    /* Transición global para cambios de módulo adaptativos */
-    transition: background-color 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 #wrapper {
@@ -50,18 +28,31 @@ body {
 }
 
 #sidebar-wrapper {
-    min-height: 100vh;
+    height: 100vh !important;
     width: 280px;
     background-color: #1E1E1E;
     transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     display: flex;
     flex-direction: column;
     z-index: 1000;
-    overflow: hidden;
 }
 
 #wrapper.toggled #sidebar-wrapper {
     width: 75px;
+}
+
+/* --- AISLAMIENTO Y MOTOR DE DESPLAZAMIENTO VERTICAL INDEPENDIENTE --- */
+.sidebar-menu-scroll {
+    display: block !important;          
+    flex: 1 !important;                 
+    overflow-y: auto !important;        
+    overflow-x: hidden !important;      
+    max-height: calc(100vh - 77px) !important; 
+}
+
+#sidebar-menu-list {
+    display: block !important;
+    height: auto !important;
 }
 
 #page-content-wrapper {
@@ -102,6 +93,24 @@ body {
     pointer-events: none;
 }
 
+/* --- DISEÑO DE LA BARRITA DE SCROLL ULTRA DELGADA --- */
+.sidebar-menu-scroll::-webkit-scrollbar {
+    width: 5px !important;              
+}
+
+.sidebar-menu-scroll::-webkit-scrollbar-track {
+    background: transparent !important; 
+}
+
+.sidebar-menu-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.12) !important; 
+    border-radius: 10px !important;
+}
+
+.sidebar-menu-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.28) !important; 
+}
+
 /* ==========================================================================
    BOTONES DEL SIDEBAR Y CONTROL SIMÉTRICO DE CORTINA
    ========================================================================== */
@@ -120,7 +129,6 @@ body {
     transition: color 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* Cortina de color fluida: maneja el llenado y vaciado bidireccional */
 .sidebar-link::before {
     content: '';
     position: absolute;
@@ -131,9 +139,7 @@ body {
     background-color: var(--primary-color);
     z-index: -1;
     transform: scaleX(0);
-    /* Forzar origen a la izquierda para simular vaciado de derecha a izquierda */
     transform-origin: left !important;
-    /* Transición explícita tanto para la activación como para la remoción de clases */
     transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
     border-radius: 10px;
 }
@@ -160,33 +166,29 @@ body {
     margin-left: 10px;
 }
 
-/* Interacción hover ordinaria para enlaces inactivos */
 .sidebar-link:hover:not(.active-page) {
     color: #FFFFFF !important;
     background-color: rgba(255, 255, 255, 0.04);
 }
 
-/* Blindaje en hover: evita que la cortina se expanda o rompa la salida si no tiene la clase activa */
 .sidebar-link:hover:not(.active-page)::before {
     transform: scaleX(0) !important;
     transform-origin: left !important;
 }
 
-/* Estado activo: se mantiene lleno */
 .sidebar-link.active-page {
     color: #FFFFFF !important;
     font-weight: 500;
     box-shadow: var(--shadow-soft);
 }
 
-/* Estado temporal de salida: obliga al color a encogerse hacia la izquierda */
 .sidebar-link.vaciando-page::before {
     transform: scaleX(0) !important;
     transform-origin: left !important;
     transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+    border-radius: 10px;
 }
 
-/* Evitamos que el hover interfiera visualmente durante la transicion de salida */
 .sidebar-link.vaciando-page {
     background-color: transparent !important;
     color: #B3B3B3 !important;
@@ -201,7 +203,6 @@ body {
     transform: scale(1.15) !important;
 }
 
-/* BLINDAJE CRÍTICO: Cancela transiciones al renderizar por primera vez desde PHP */
 .no-anim::before {
     transition: none !important;
     transform: scaleX(1) !important;
@@ -234,7 +235,7 @@ body {
     position: sticky;
     top: 0;
     z-index: 999;
-    transition: transform 0.3s ease-in-out, background-color 0.5s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.5s cubic-bezier(0.25, 1, 0.5, 1) !important;
+    transition: transform 0.3s ease-in-out !important;
     height: 77px;
 }
 
@@ -444,84 +445,6 @@ body {
 }
 
 /* ==========================================================================
-   INTEGRACIÓN SEMÁNTICA: AISLAMIENTO DE ALERTAS CRÍTICAS
-   ========================================================================== */
-body[data-theme="soporte"] h1.text-danger {
-    color: var(--primary-color) !important;
-}
-
-body[data-theme="soporte"] .card-main.border-danger {
-    border-color: var(--primary-color) !important;
-}
-
-body[data-theme="soporte"] .bi-search.text-danger {
-    color: var(--primary-color) !important;
-}
-
-body[data-theme="soporte"] .modal-header.bg-danger {
-    background-color: var(--primary-color) !important;
-    border-bottom: 3px solid var(--dark-color);
-}
-
-body[data-theme="soporte"] .spinner-border.text-danger {
-    color: var(--primary-color) !important;
-}
-
-body[data-theme="soporte"] .border-start.border-danger {
-    border-left-color: var(--primary-color) !important;
-}
-
-/* SECCIÓN DE ALERTAS ROJAS SEMÁNTICAS PROTEGIDAS */
-body[data-theme="soporte"] #kpi_criticos.text-danger,
-body[data-theme="soporte"] #alertaCriticos .text-danger,
-body[data-theme="soporte"] #alertaCriticos .bi-exclamation-triangle-fill {
-    color: #DC3545 !important;
-}
-
-body[data-theme="soporte"] div:has(#kpi_criticos).border-start {
-    border-left-color: #DC3545 !important;
-}
-
-body[data-theme="soporte"] .alert-danger#alertaCriticos {
-    background-color: #FFFFFF !important;
-    border-left: 5px solid #DC3545 !important;
-    border-top: 1px solid #E0E0E0 !important;
-    border-right: 1px solid #E0E0E0 !important;
-    border-bottom: 1px solid #E0E0E0 !important;
-    color: #2D3436 !important;
-    box-shadow: var(--shadow-soft);
-}
-
-body[data-theme="soporte"] #btnFiltrarCriticos.btn-danger {
-    background-color: #DC3545 !important;
-    border-color: #BD2130 !important;
-    color: #FFFFFF !important;
-}
-
-body[data-theme="soporte"] #btnFiltrarCriticos.btn-danger:hover {
-    background-color: #BD2130 !important;
-    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
-}
-
-body[data-theme="soporte"] #tablaTickets .text-danger.ms-1-animate,
-body[data-theme="soporte"] #tablaTickets span.text-danger.fw-bold {
-    color: #DC3545 !important;
-}
-
-body[data-theme="soporte"] #tablaTickets span.text-danger.fw-bold:contains("Pendiente"),
-body[data-theme="soporte"] #tablaTickets .text-danger {
-    color: #DC3545 !important;
-}
-
-body[data-theme="soporte"] #tablaTickets span.text-danger:not(.text-nowrap) {
-    color: #DC3545 !important; 
-}
-
-body[data-theme="soporte"] label[for="checkSoloDeuda"].text-danger {
-    color: #DC3545 !important;
-}
-
-/* ==========================================================================
    BLINDAJE ESTRUCTURAL SÍNCRONO (CONTROL DE COLAPSO)
    ========================================================================== */
 #wrapper.toggled #sidebar-wrapper { 
@@ -572,7 +495,6 @@ body[data-theme="soporte"] label[for="checkSoloDeuda"].text-danger {
     border-top: 5px solid #C62828; 
 }
 
-/* Contenedor relativo estricto para mantener el flujo centralizado */
 .logo-login-container {
     position: relative;
     display: flex;
@@ -582,9 +504,7 @@ body[data-theme="soporte"] label[for="checkSoloDeuda"].text-danger {
     width: 100%;
 }
 
-/* Efecto de sombreado perimetral ULTRA reforzado de alta densidad */
 .logo-highlight {
-    /* Combinación cuádruple con mayor opacidad para máximo contraste */
     filter: drop-shadow(0px 6px 18px rgba(0, 0, 0, 0.45)) 
             drop-shadow(0px 3px 8px rgba(0, 0, 0, 0.35))
             drop-shadow(0px 1px 3px rgba(0, 0, 0, 0.25))
