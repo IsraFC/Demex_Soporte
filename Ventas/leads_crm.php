@@ -3,7 +3,7 @@
  * ARCHIVO: leads_crm.php
  * DESCRIPCIÓN: Panel de Control de Leads CRM con Motor de Búsqueda Asíncrono.
  * Mantiene la consistencia de interfaz premium, KPIs, filtros y DataTables de Isra.
- * @author Israel Fernández Carrera
+ * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
  * @version 3.3 (Modelos ENUM Sincronizados)
  */
@@ -40,7 +40,7 @@ include '../includes/header.php';
 
 <div class="row mb-4 align-items-center">
     <div class="col-md-5">
-        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-funnel"></i> Control de Leads Web</h1>
+        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-funnel"></i> Control de Prospectos a Clientes</h1>
         <p class="text-muted small">Prospectos capturados desde el formulario público de la página web.</p>
     </div>
     <div class="col-md-7 text-md-end">
@@ -84,11 +84,14 @@ include '../includes/header.php';
             </div>
         </div>
         <div class="col-md-4">
-            <select id="filterOrigen" class="form-select border-0 bg-light fw-bold text-muted shadow-sm">
-                <option value="">Todos los Orígenes</option>
-                <option value="Formulario Web">Formulario Web</option>
-                <option value="Facebook Ads">Facebook Ads</option>
+            
+            <select id="filterCanal" class="form-select border-0 bg-light fw-bold text-muted shadow-sm">
+                <option value="">Todos los Canales de Origen</option>
+                <option value="Página Web">Página Web</option>
+                <option value="Facebook">Facebook</option>
+                <option value="YouTube">YouTube</option>
                 <option value="WhatsApp">WhatsApp</option>
+                <option value="Recomendación">Recomendación</option>
             </select>
         </div>
         <div class="col-md-4">
@@ -146,6 +149,7 @@ include '../includes/header.php';
                             $rowClass = 'table-danger-sutil';
                         }
                         ?>
+                        <!-- Tu fila ya tiene perfectamente inyectadas las clases de control y atributos data -->
                         <tr class="<?= $rowClass ?>" data-origen="<?= htmlspecialchars($lead['canal_origen']) ?>" data-equipo="<?= htmlspecialchars($lead['maquina_interes']) ?>" data-urgente="<?= ($diasInactivo > 5) ? '1' : '0' ?>">
                             <td class="small fw-semibold text-secondary"><?= date('d/m/Y g:i A', strtotime($lead['fecha_registro'])) ?></td>
                             <td>
@@ -213,20 +217,24 @@ $(document).ready(function() {
         table.search(this.value).draw();
     });
 
+    // MOTOR DE FILTRADO AVANZADO DE DATATABLES
     $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
         var row = $(table.row(dataIndex).node());
-        var filterOrigen = $('#filterOrigen').val();
+        // CORREGIDO: Apuntamos al ID real '#filterCanal' que lee tu ENUM
+        var filterCanal  = $('#filterCanal').val();
         var filterEquipo = $('#filterEquipo').val();
         var soloUrgentes = $('#btnFiltrarCriticos').hasClass('btn-dark') ? '1' : '';
 
-        var matchOrigen  = filterOrigen === "" || row.attr('data-origen') === filterOrigen;
+        // Comparamos contra los atributos data- de las filas correspondientes
+        var matchOrigen  = filterCanal === "" || row.attr('data-origen') === filterCanal;
         var matchEquipo  = filterEquipo === "" || row.attr('data-equipo') === filterEquipo;
         var matchUrgente = soloUrgentes === "" || row.attr('data-urgente') === soloUrgentes;
 
         return matchOrigen && matchEquipo && matchUrgente;
     });
 
-    $('#filterOrigen, #filterEquipo').on('change', function() {
+    // CORREGIDO: Listener apuntando a '#filterCanal' para redibujar la tabla al vuelo
+    $('#filterCanal, #filterEquipo').on('change', function() {
         table.draw();
     });
 
