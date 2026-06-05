@@ -2,9 +2,12 @@
 /**
  * ARCHIVO: registro_maquina.php
  * DESCRIPCIÓN: Formulario de alta para equipos con modal de cliente integrado.
- * @author Israel Fernández Carrera
+ * * ACTUALIZACIÓN V1.6.1:
+ * - Fix de Validaciones: Se limpian de forma estricta las clases is-valid e is-invalid para alternar correctamente los iconos.
+ * - Unificación Semántica: Corrección de minúsculas para la tabla clientes según el esquema real.
+ * * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.6
+ * @version 1.6.1
  */
 
 require_once '../config/db.php';
@@ -54,7 +57,7 @@ include '../includes/header.php';
                 </div>
                 <datalist id="listaClientes">
                     <?php
-                    $clientes = $pdo->query("SELECT nombre_cliente FROM Clientes ORDER BY nombre_cliente ASC");
+                    $clientes = $pdo->query("SELECT nombre_cliente FROM clientes ORDER BY nombre_cliente ASC");
                     while ($c = $clientes->fetch()) {
                         echo "<option value='".htmlspecialchars($c['nombre_cliente'])."'>";
                     }
@@ -154,14 +157,18 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
+    // Intercepta el modal antes de renderizar para mandarlo a la raíz del body
+    $('#modalNuevoCliente').on('show.bs.modal', function () {
+        $(this).appendTo("body");
+    });
+
     // 1. VALIDACIÓN DE SERIE
     var typingTimer;
     $('#no_serie').on('input', function() {
         clearTimeout(typingTimer);
-        var serie = $(this).val();
+        var serie = $(this).val().trim();
         var input = $(this);
         var msg = $('#status_serie');
-        input.css('border', 'none'); msg.hide();
 
         if (serie.length >= 3) {
             typingTimer = setTimeout(function() {
@@ -170,18 +177,23 @@ $(document).ready(function() {
                     method: 'POST',
                     data: { no_serie: serie },
                     success: function(response) {
+                        // 🎯 CORRECCIÓN VISUAL DE ICONOS DE VALIDACIÓN
                         if (response === 'existe') {
-                            input.addClass('is-invalid').css('border', '2px solid #dc3545');
+                            input.removeClass('is-valid').addClass('is-invalid').css('border', '2px solid #dc3545');
                             msg.text('⚠️ Existe').css('color', '#dc3545').show();
                             $('#btnGuardar').attr('disabled', true);
                         } else {
-                            input.addClass('is-valid').css('border', '2px solid #198754');
+                            input.removeClass('is-invalid').addClass('is-valid').css('border', '2px solid #198754');
                             msg.text('✅ OK').css('color', '#198754').show();
                             $('#btnGuardar').attr('disabled', false);
                         }
                     }
                 });
             }, 500);
+        } else {
+            // Si el usuario borra texto y cae abajo de 3 caracteres, reiniciamos el estado limpio
+            input.removeClass('is-invalid is-valid').css('border', 'none');
+            msg.hide();
         }
     });
 
@@ -212,7 +224,7 @@ $(document).ready(function() {
                 nombre_cliente: nombre,
                 telefono: $('#m_telefono').val(),
                 ubicacion: $('#m_ubicacion').val(),
-                es_ajax: true // BANDERA PARA EL PHP
+                es_ajax: true
             },
             success: function(response) {
                 if(response.trim() === "ok") {
@@ -230,7 +242,7 @@ $(document).ready(function() {
         });
     });
 
-    // Si el campo ya viene con texto, dispara la validación de una vez
+    // Si el campo ya viene con texto de inicio, gatillamos la validación
     if ($('#no_serie').val().length >= 3) {
         $('#no_serie').trigger('input');
     }

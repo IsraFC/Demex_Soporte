@@ -2,18 +2,28 @@
 /**
  * ARCHIVO: actions/procesar_ticket.php
  * DESCRIPCIÓN: Motor unificado de persistencia para Tickets y Detalles de Costos.
- * * LÓGICA DE INTEGRIDAD V2.6 (Corrección de Desglose Financiero):
- * 1. Captura Completa: Se reintegran las variables de costos individuales para que se guarden en la DB.
- * 2. Auto-registro de Equipos: Crea la máquina si no existe usando la fecha del modal.
- * 3. Validación de Garantía: Calcula si es "Válida" o "No válida" según la fecha de compra elegida.
- * 4. Estatus de Pago Inteligente: Si el Costo Total es 0.00, se guarda como "NO APLICA".
+ * * LÓGICA DE INTEGRIDAD V2.7 (Doble Auditoría de Usuarios):
+ * 1. Captura de Operador: Recupera el id_usuario desde la sesión activa para auditoría.
+ * 2. Creador vs Editor: Separa la persistencia para id_usuario_creador e id_usuario_editor.
+ * 3. Auto-registro de Equipos: Crea la máquina si no existe usando la fecha del modal.
+ * 4. Validación de Garantía: Calcula si es "Válida" o "No válida" según la fecha de compra elegida.
  * * @author Israel Fernández Carrera
+ * @project Soporte Técnico DEMEX
+ * @version 2.7
  */
 require_once '../../config/db.php';
+
+// Aseguramos que la sesión esté iniciada para recuperar al operador activo
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $pdo->beginTransaction();
+
+        // --- 0. RECUPERACIÓN DEL OPERADOR LOGUEADO ---
+        $id_usuario = $_SESSION['id_usuario'] ?? null;
 
         // --- 1. RECEPCIÓN DE DATOS TÉCNICOS ---
         $id_ticket      = $_POST['id_ticket'] ?? null;
@@ -33,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // --- 2. FASE DE INTEGRIDAD Y CÁLCULO DE GARANTÍA ---
         if (!empty($no_serie)) {
-            $checkEq = $pdo->prepare("SELECT no_serie FROM Equipos_Garantia WHERE no_serie = ?");
+            $checkEq = $pdo->prepare("SELECT no_serie FROM equipos_garantia WHERE no_serie = ?");
             $checkEq->execute([$no_serie]);
             
             if (!$checkEq->fetch()) {
@@ -44,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $fecha_termino = date('Y-m-d', strtotime($fecha_compra . " + $vigencia_anios year"));
                 $hoy = date('Y-m-d');
 
-                $sqlEq = "INSERT INTO Equipos_Garantia (no_serie, id_cliente, modelo, fecha_inicio, fecha_termino) 
+                $sqlEq = "INSERT INTO equipos_garantia (no_serie, id_cliente, modelo, fecha_inicio, fecha_termino) 
                         VALUES (?, ?, ?, ?, ?)";
                 $pdo->prepare($sqlEq)->execute([$no_serie, $id_cliente, $modelo, $fecha_compra, $fecha_termino]);
                 
@@ -53,11 +63,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // --- 3. RECEPCIÓN DE DATOS FINANCIEROS (CORREGIDO) ---
+        // --- 3. RECEPCIÓN DE DATOS FINANCIEROS ---
         $f_inicio  = !empty($_POST['fecha_inicio_acc']) ? $_POST['fecha_inicio_acc'] : null;
         $f_fin     = !empty($_POST['fecha_fin_acc']) ? $_POST['fecha_fin_acc'] : null;
 
-        // NUEVA LÓGICA DE AUDITORÍA: Recalcular días directamente en el servidor
+        // LÓGICA DE AUDITORÍA: Recalcular días directamente en el servidor
         $t_acc_recalculado = 0;
         if ($f_inicio && $f_fin) {
             $d_ini = new DateTime($f_inicio);
@@ -71,7 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $t_accion  = $t_acc_recalculado;
         
-        // Aquí estaba el error: No se estaban capturando estas variables del POST
         $c_refac_v = (float)($_POST['costo_refac_venta'] ?? 0);
         $c_refac_g = (float)($_POST['costo_refac_garantia'] ?? 0);
         $c_base    = (float)($_POST['costo_base'] ?? 0);
@@ -89,13 +98,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pago = (isset($_POST['estatus_pago']) && $_POST['estatus_pago'] === 'Pagado') ? 'Pagado' : 'Pendiente';
         }
 
-        // --- 4. PERSISTENCIA EN TABLAS ---
+        // --- 4. PERSISTENCIA EN TABLAS (AUDITORÍA DOBLE) ---
         if ($id_ticket) {
-            // MODO EDICIÓN
-            $sqlT = "UPDATE Tickets_Soporte SET no_serie = ?, tipo_llamada = ?, tipo_falla = ?, maquina_func = ?, garantia_valida = ?, no_llamadas = ?, observaciones = ? WHERE id_ticket = ?";
-            $pdo->prepare($sqlT)->execute([$no_serie, $tipo_llamada, $tipo_falla, $maquina_func, $garantia_valida, $no_llamadas, $observaciones, $id_ticket]);
+            // MODO EDICIÓN: Dejamos intacto al creador original y sobreescribimos únicamente id_usuario_editor
+            $sqlT = "UPDATE tickets_soporte SET no_serie = ?, tipo_llamada = ?, tipo_falla = ?, maquina_func = ?, garantia_valida = ?, no_llamadas = ?, observaciones = ?, id_usuario_editor = ? WHERE id_ticket = ?";
+            $pdo->prepare($sqlT)->execute([$no_serie, $tipo_llamada, $tipo_falla, $maquina_func, $garantia_valida, $no_llamadas, $observaciones, $id_usuario, $id_ticket]);
 
-            $sqlD = "UPDATE Detalles_Costos_Tiempos SET 
+            $sqlD = "UPDATE detalles_costos_tiempos SET 
                         accion = ?, fecha_inicio_acc = ?, fecha_fin_acc = ?, tiempo_accion = ?, 
                         costo_refac_garantia = ?, costo_refac_venta = ?, costo_base = ?, 
                         costo_tecnico = ?, costo_envio = ?, costo_total = ?, 
@@ -107,15 +116,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $no_cotiz, $factura, $pago, $id_ticket
             ]);
         } else {
-            // MODO NUEVO REGISTRO
-            $sqlT = "INSERT INTO Tickets_Soporte (no_serie, id_cliente, tipo_llamada, tipo_falla, maquina_func, garantia_valida, estatus, fecha_inicial, no_llamadas, observaciones) 
-                     VALUES (?, ?, ?, ?, ?, ?, 'Abierto', NOW(), ?, ?)";
+            // MODO NUEVO REGISTRO: Al crear el ticket, guardamos tu ID tanto en el creador como en el editor inicial
+            $sqlT = "INSERT INTO tickets_soporte (no_serie, id_cliente, tipo_llamada, tipo_falla, maquina_func, garantia_valida, estatus, fecha_inicial, no_llamadas, observaciones, id_usuario_creador, id_usuario_editor) 
+                     VALUES (?, ?, ?, ?, ?, ?, 'Abierto', NOW(), ?, ?, ?, ?)";
             $stmtT = $pdo->prepare($sqlT);
-            $stmtT->execute([$no_serie, $id_cliente, $tipo_llamada, $tipo_falla, $maquina_func, $garantia_valida, $no_llamadas, $observaciones]);
+            $stmtT->execute([$no_serie, $id_cliente, $tipo_llamada, $tipo_falla, $maquina_func, $garantia_valida, $no_llamadas, $observaciones, $id_usuario, $id_usuario]);
             
             $nuevo_id = $pdo->lastInsertId();
 
-            $sqlD = "INSERT INTO Detalles_Costos_Tiempos (id_ticket, accion, fecha_inicio_acc, fecha_fin_acc, tiempo_accion, costo_refac_garantia, costo_refac_venta, costo_base, costo_tecnico, costo_envio, costo_total, no_cotizacion, requiere_factura, estatus_pago) 
+            $sqlD = "INSERT INTO detalles_costos_tiempos (id_ticket, accion, fecha_inicio_acc, fecha_fin_acc, tiempo_accion, costo_refac_garantia, costo_refac_venta, costo_base, costo_tecnico, costo_envio, costo_total, no_cotizacion, requiere_factura, estatus_pago) 
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $pdo->prepare($sqlD)->execute([
                 $nuevo_id, $accion, $f_inicio, $f_fin, $t_accion, 

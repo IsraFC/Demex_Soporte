@@ -152,6 +152,7 @@ include '../includes/header.php';
                     <th>Pago</th> 
                     <th>Estatus</th> 
                     <th>Inicio</th> 
+                    <th>Registrado Por</th>
                     <th class="text-center">Acción</th>
                     <th>Envios</th>
                 </tr>
@@ -189,7 +190,7 @@ include '../includes/header.php';
      * AJAX: Recupera el desglose técnico y financiero del ticket.
      */
     function abrirModalVisualizar(id) {
-        $('#modalVisualizar').modal('show');
+        $('#modalVisualizar').appendTo("body").modal('show');
         $('#contenidoTicket').html('<div class="text-center p-5"><div class="spinner-border text-danger"></div></div>');
         $.ajax({
             url: 'actions/obtener_detalles_ticket.php',
@@ -290,43 +291,59 @@ include '../includes/header.php';
                 },
                 "columns": [
                     { 
-                        "data": "id_ticket", // 1. #
+                        "data": "id_ticket",
                         "render": function(data, type, row) {
                             let alerta = row.es_urgente ? 
                                 `<i class="bi bi-exclamation-triangle-fill text-danger ms-1-animate me-1" title="Urgente: ${row.diff_dias} días abierto" data-bs-toggle="tooltip"></i>` : '';
-                            // El triángulo va ANTES del data (ID) y todo en color rojo negrita
                             return `<span class="fw-bold text-danger text-nowrap">${alerta}${data}</span>`;
                         }
                     },
-                    { "data": "nombre_cliente" }, // 2. Cliente
-                    { "data": "modelo_serie" },   // 3. Equipo / Serie
-                    { "data": "tipo_llamada", "visible": false }, // 4. Oculta
-                    { "data": "tipo_falla" },     // 5. Falla
-                    { "data": "accion_realizada", "visible": false }, // 6. Oculta
+                    { "data": "nombre_cliente" },
+                    { "data": "modelo_serie" },
+                    { "data": "tipo_llamada", "visible": false },
+                    { "data": "tipo_falla" },
+                    { "data": "accion_realizada", "visible": false },
                     { 
-                        "data": "garantia_valida", // 7. Garantía
+                        "data": "garantia_valida",
                         "render": function(data) {
                             let color = data === 'Válida' ? 'text-success' : 'text-danger';
                             return `<span class="small fw-bold ${color}">${data}</span>`;
                         }
                     },
                     { 
-                        "data": "estatus_pago", // 8. Pago
+                        "data": "estatus_pago",
                         "render": function(data) {
                             let color = data === 'Pendiente' ? 'text-danger fw-bold' : 'text-success fw-bold';
                             return `<span class="small ${color}">${data}</span>`;
                         }
                     },
                     { 
-                        "data": "estatus", // 9. Estatus
+                        "data": "estatus",
                         "render": function(data) {
                             let badge = data === 'Abierto' ? 'bg-warning text-dark' : (data === 'Cerrado' ? 'bg-success' : 'bg-secondary text-white');
                             return `<span class="badge ${badge}" style="font-size: 0.65rem;">${data}</span>`;
                         }
                     },
-                    { "data": "fecha_inicial" }, // 10. Inicio
+                    { "data": "fecha_inicial" },
                     { 
-                        "data": null, // 11. Botones de Acción
+                        "data": null, // Usamos null para poder evaluar de forma simultánea 'creador' y 'editor'
+                        "render": function(data, type, row) {
+                            // 1. Pintamos de golpe la insignia neumórfica premium del Creador Original
+                            let html = `<span class="badge bg-dark bg-opacity-10 text-dark border border-secondary border-opacity-25" style="font-size: 0.7rem; font-weight: 500; padding: 0.35rem 0.6rem; border-radius: 6px;">
+                                            <i class="bi bi-person-fill text-muted me-1"></i>${row.creador}
+                                        </span>`;
+                            
+                            // 2. Si el ticket fue editado por alguien diferente al creador, añadimos la traza de auditoría abajo
+                            if (row.editor && row.editor !== row.creador) {
+                                html += `<br><small class="text-muted d-block" style="font-size: 0.6rem; margin-top: 4px;">
+                                            <i class="bi bi-pencil-square text-secondary me-1"></i>Edición: ${row.editor}
+                                        </small>`;
+                            }
+                            return html;
+                        }
+                    },
+                    { 
+                        "data": null,
                         "orderable": false,
                         "className": "text-center",
                         "render": function(data, type, row) {
@@ -340,7 +357,7 @@ include '../includes/header.php';
                         }
                     },
                     { 
-                        "data": null, // 12. Envios (Lógica 1.7 de iconos)
+                        "data": null,
                         "className": "text-center",
                         "render": function(data, type, row) {
                             const iconMap = {
@@ -351,7 +368,7 @@ include '../includes/header.php';
                             };
                             
                             let iconClass = iconMap[row.accion_realizada] || 'bi bi-question-circle';
-                            let bgClass = 'bg-secondary text-white'; // Default: N/A o Acción desconocida
+                            let bgClass = 'bg-secondary text-white';
                             let suffix = '';
 
                             if (iconMap[row.accion_realizada]) {
