@@ -23,7 +23,7 @@ global $link_prefix, $pagina_actual_php, $en_soporte; ?>
     <div class="sidebar-icon"><i class="bi bi-bar-chart-line"></i></div> <span>Estadísticas</span>
 </a>
 
-<div class="seccion-herramientas border-top border-secondary border-opacity-25 pt-3 mt-2 mx-3">
+<div class="seccion-herramientas pt-3 mt-2 mx-3">
     <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Herramientas</span>
 </div>
 

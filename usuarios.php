@@ -2,16 +2,16 @@
 /**
  * @file usuarios.php
  * @package Portal_Demex
- * @version 1.4 - Gestión de Personal en Raíz del Sistema
- * @date 2026-05-25
- * @brief Interfaz centralizada para dar de alta técnicos y administradores globales.
+ * @version 2.2 - Gestión de Personal con Envío Asíncrono de Formularios
+ * @date 2026-06-08
+ * @brief Interfaz centralizada para gestionar personal con interceptores Fetch API instalados en los flujos de actualización.
  */
-// Se adaptan las rutas de los layouts para consumir los componentes del módulo técnico de forma relativa
+
 $modulo_actual = 'global';
 require_once 'includes/header.php';
 
 // Control de acceso estricto: Solo administradores manejan personal
-if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'administrador') {
+if (!tieneAcceso(['Administrador'])) {
     echo "<script>
         Swal.fire({
             icon: 'error',
@@ -23,15 +23,34 @@ if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'administrador') {
     exit();
 }
 
-// Carga directa desde la nueva carpeta config de la raíz
+// Carga directa desde la carpeta config de la raíz
 require_once 'config/db.php';
+
+try {
+    $sql_usuarios = "SELECT u.id_usuario, u.nombre, u.apellidos, u.correo, u.estatus, u.foto_perfil,
+                            GROUP_CONCAT(r.nombre_rol SEPARATOR ', ') AS roles_asignados
+                     FROM usuarios u
+                     LEFT JOIN usuario_roles ur ON u.id_usuario = ur.id_usuario
+                     LEFT JOIN roles r ON ur.id_rol = r.id_rol
+                     GROUP BY u.id_usuario
+                     ORDER BY u.id_usuario DESC";
+    $stmt = $pdo->query($sql_usuarios);
+    $usuarios = $stmt->fetchAll();
+
+    $roles_catalogo = $pdo->query("SELECT id_rol, nombre_rol FROM roles ORDER BY nombre_rol ASC")->fetchAll();
+
+} catch (\Exception $e) {
+    echo "<div class='alert alert-danger m-4'>Error en el servidor: " . htmlspecialchars($e->getMessage()) . "</div>";
+    require_once 'includes/footer.php';
+    exit();
+}
 ?>
 
 <div class="row mb-4 animate-fade-in">
     <div class="col-12 d-flex justify-content-between align-items-center">
         <div>
             <h2 class="fw-bold text-dark mb-1"><i class="bi bi-shield-lock-fill text-danger me-2"></i>Personal del Sistema</h2>
-            <p class="text-muted small mb-0">Administra los accesos de los ingenieros de soporte y administradores de DEMEX.</p>
+            <p class="text-muted small mb-0">Administra los accesos y los múltiples perfiles de seguridad de los ingenieros de soporte y administradores de DEMEX.</p>
         </div>
         <button class="btn btn-dark btn-sm rounded-3 px-3 py-2 fw-semibold shadow-sm d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#modalNuevoUsuario">
             <i class="bi bi-person-plus-fill fs-5"></i> Registrar Personal
@@ -47,17 +66,13 @@ require_once 'config/db.php';
                     <tr>
                         <th>Nombre Completo</th>
                         <th>Correo Electrónico</th>
-                        <th>Rol Asignado</th>
+                        <th>Roles Asignados</th>
                         <th>Estatus</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php
-                    $stmt = $pdo->query("SELECT id_usuario, nombre, apellidos, correo, rol, estatus FROM usuarios ORDER BY id_usuario DESC");
-                    while ($u = $stmt->fetch()) {
-                        $badgeColor = ($u['rol'] === 'administrador') ? 'bg-danger' : 'bg-warning text-dark';
-                        
+                    <?php foreach ($usuarios as $u): 
                         if ((int)$u['estatus'] === 1) {
                             $badgeEstatus = 'bg-success bg-opacity-10 text-success border border-success border-opacity-25';
                             $textoEstatus = 'Activo';
@@ -69,9 +84,17 @@ require_once 'config/db.php';
                         <tr>
                             <td>
                                 <div class="d-flex align-items-center">
-                                    <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center fw-bold me-3" style="width: 40px; height: 40px;">
-                                        <?= strtoupper(substr($u['nombre'], 0, 1)) ?>
-                                    </div>
+                                    <?php if (!empty($u['foto_perfil'])): ?>
+                                        <img src="data:image/jpeg;base64,<?= base64_encode($u['foto_perfil']) ?>" 
+                                             alt="Foto" 
+                                             class="rounded-circle shadow-sm object-fit-cover me-3" 
+                                             style="width: 40px; height: 40px;">
+                                    <?php else: ?>
+                                        <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center fw-bold me-3" style="width: 40px; height: 40px; min-width: 40px;">
+                                            <?= strtoupper(substr($u['nombre'], 0, 1)) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    
                                     <div>
                                         <span class="fw-semibold d-block text-dark"><?= htmlspecialchars($u['nombre'] . ' ' . $u['apellidos']) ?></span>
                                         <small class="text-muted" style="font-size: 11px;">ID: #<?= $u['id_usuario'] ?></small>
@@ -80,9 +103,23 @@ require_once 'config/db.php';
                             </td>
                             <td class="fw-medium text-secondary"><?= htmlspecialchars($u['correo']) ?></td>
                             <td>
-                                <span class="badge <?= $badgeColor ?> px-3 py-2 rounded-pill text-uppercase" style="font-size: 10px; letter-spacing: 0.5px;">
-                                    <?= htmlspecialchars($u['rol']) ?>
-                                </span>
+                                <?php if (!empty($u['roles_asignados'])): ?>
+                                    <?php 
+                                    $lista_roles = explode(', ', $u['roles_asignados']);
+                                    foreach ($lista_roles as $rol_item): 
+                                        $badgeColor = 'bg-secondary';
+                                        if ($rol_item === 'Administrador') $badgeColor = 'bg-danger';
+                                        if ($rol_item === 'Soporte') $badgeColor = 'bg-info text-dark';
+                                        if ($rol_item === 'Ventas') $badgeColor = 'bg-warning text-dark';
+                                        if ($rol_item === 'Cliente') $badgeColor = 'bg-success';
+                                    ?>
+                                        <span class="badge <?= $badgeColor ?> px-2 py-1 rounded-pill text-uppercase me-1" style="font-size: 9px; letter-spacing: 0.5px;">
+                                            <?= htmlspecialchars($rol_item) ?>
+                                        </span>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <span class="badge bg-light text-muted px-2 py-1 rounded">Sin roles</span>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <span class="badge <?= $badgeEstatus ?> px-2 py-1 rounded">
@@ -95,13 +132,13 @@ require_once 'config/db.php';
                                         data-id="<?= $u['id_usuario'] ?>"
                                         data-nombre="<?= htmlspecialchars($u['nombre']) ?>"
                                         data-apellidos="<?= htmlspecialchars($u['apellidos']) ?>"
-                                        data-rol="<?= htmlspecialchars($u['rol']) ?>"
+                                        data-roles="<?= htmlspecialchars($u['roles_asignados'] ?? '') ?>"
                                         data-estatus="<?= $u['estatus'] ?>">
                                     <i class="bi bi-pencil-square text-danger"></i>
                                 </button>
                             </td>
                         </tr>
-                    <?php } ?>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
@@ -135,11 +172,18 @@ require_once 'config/db.php';
                             </div>
                         </div>
                         <div class="col-12">
-                            <label class="form-label small fw-bold text-muted text-uppercase">Rol del Sistema</label>
-                            <select name="rol" class="form-select bg-light border-0 py-2" required>
-                                <option value="soporte" selected>Soporte Técnico</option>
-                                <option value="administrador">Administrador Global</option>
-                            </select>
+                            <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Roles del Sistema</label>
+                            <div class="card bg-light border-0 py-2 px-3">
+                                <?php foreach ($roles_catalogo as $rol): ?>
+                                    <div class="form-check my-1">
+                                        <input class="form-check-input check-rol-nuevo" type="checkbox" name="roles[]" value="<?= $rol['id_rol'] ?>" id="rol_nuevo_<?= $rol['id_rol'] ?>">
+                                        <label class="form-check-label small fw-semibold text-dark" for="rol_nuevo_<?= $rol['id_rol'] ?>">
+                                            <?= htmlspecialchars($rol['nombre_rol']) ?>
+                                        </label>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="text-danger small d-none" id="error-roles-nuevo">Debe seleccionar al menos un rol para continuar.</div>
                         </div>
                     </div>
                 </div>
@@ -172,14 +216,21 @@ require_once 'config/db.php';
                             <label class="form-label small fw-bold text-muted text-uppercase">Apellidos</label>
                             <input type="text" name="apellidos" id="edit_apellidos" class="form-control bg-light border-0 py-2" required>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted text-uppercase">Rol del Sistema</label>
-                            <select name="rol" id="edit_rol" class="form-select bg-light border-0 py-2" required>
-                                <option value="soporte">Soporte Técnico</option>
-                                <option value="administrador">Administrador Global</option>
-                            </select>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Roles del Sistema</label>
+                            <div class="card bg-light border-0 py-2 px-3">
+                                <?php foreach ($roles_catalogo as $rol): ?>
+                                    <div class="form-check my-1">
+                                        <input class="form-check-input check-rol-editar" type="checkbox" name="roles[]" value="<?= $rol['id_rol'] ?>" id="rol_edit_<?= $rol['id_rol'] ?>" data-nombre="<?= htmlspecialchars($rol['nombre_rol']) ?>">
+                                        <label class="form-check-label small fw-semibold text-dark" for="rol_edit_<?= $rol['id_rol'] ?>">
+                                            <?= htmlspecialchars($rol['nombre_rol']) ?>
+                                        </label>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="text-danger small d-none" id="error-roles-editar">Debe seleccionar al menos un rol para continuar.</div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label small fw-bold text-muted text-uppercase">Estatus de Acceso</label>
                             <select name="estatus" id="edit_estatus" class="form-select bg-light border-0 py-2" required>
                                 <option value="1">Activo / Permitir Acceso</option>
@@ -190,7 +241,7 @@ require_once 'config/db.php';
                 </div>
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold shadow">Actualizar Cambios</button>
+                    <button type="submit" id="btnActualizarUsuario" class="btn btn-danger rounded-pill px-4 fw-bold shadow">Actualizar Cambios</button>
                 </div>
             </form>
         </div>
@@ -199,7 +250,6 @@ require_once 'config/db.php';
 
 <script>
 $(document).ready(function() {
-    // Inicialización de DataTable existente
     $('#tablaUsuarios').DataTable({
         language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
         pageLength: 10,
@@ -208,31 +258,87 @@ $(document).ready(function() {
     });
 
     $('#modalNuevoUsuario').appendTo("body");
-    // Asegurar que el modal de edición se mueva correctamente al body
     $('#modalEditarUsuario').appendTo("body");
 
-    // Al cerrar el modal, limpiamos los formularios y los estilos de validación anteriores
     $('#modalNuevoUsuario').on('hidden.bs.modal', function () {
         $('#formNuevoUsuario')[0].reset();
+        $('.check-rol-nuevo').prop('checked', false);
         $('#correo_usuario').removeClass('is-invalid is-valid');
+        $('#error-roles-nuevo').addClass('d-none');
         $('#btnGuardarUsuario').prop('disabled', false);
     });
 
-    // NUEVO: Validación de correo en tiempo real mediante AJAX
+    $('#formNuevoUsuario').on('submit', function(e) {
+        if ($('.check-rol-nuevo:checked').length === 0) {
+            e.preventDefault();
+            $('#error-roles-nuevo').removeClass('d-none');
+            return false;
+        }
+        $('#error-roles-nuevo').addClass('d-none');
+    });
+
+    // INTERCEPTOR ASÍNCRONO PARA EL FORMULARIO DE EDICIÓN (FETCH API)
+    $('#formEditarUsuario').on('submit', function(e) {
+        e.preventDefault(); // Impedimos la redirección nativa del navegador hacia el controlador
+
+        if ($('.check-rol-editar:checked').length === 0) {
+            $('#error-roles-editar').removeClass('d-none');
+            return false;
+        }
+        $('#error-roles-editar').addClass('d-none');
+
+        const formulario = this;
+        const datosFormulario = new FormData(formulario);
+
+        fetch(formulario.action, {
+            method: formulario.method,
+            body: datosFormulario
+        })
+        .then(respuesta => {
+            if (!respuesta.ok) {
+                throw new Error('Falla en la comunicación con el servidor de bases de datos.');
+            }
+            return respuesta.json();
+        })
+        .then(data => {
+            // Ocultamos el modal de forma limpia antes de detonar el SweetAlert2
+            $('#modalEditarUsuario').modal('hide');
+
+            Swal.fire({
+                icon: data.status,
+                title: data.title,
+                text: data.text,
+                confirmButtonColor: data.status === 'success' ? '#d15b00' : '#C62828'
+            }).then(() => {
+                if (data.status === 'success') {
+                    window.location.reload(); // Recarga para actualizar las celdas y badges de la Datatable
+                } else {
+                    $('#modalEditarUsuario').modal('show'); // Re-abrimos el modal en caso de advertencia/error
+                }
+            });
+        })
+        .catch(error => {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Procesamiento',
+                text: error.message,
+                confirmButtonColor: '#C62828'
+            });
+        });
+    });
+
     $('#correo_usuario').on('input', function() {
         const correo = $(this).val().trim();
         const inputCorreo = $(this);
         const feedback = $('#correo-feedback');
         const btnGuardar = $('#btnGuardarUsuario');
 
-        // Si el campo está vacío, reseteamos el estado visual y habilitamos el botón
         if (correo === '') {
             inputCorreo.removeClass('is-invalid is-valid');
             btnGuardar.prop('disabled', false);
             return;
         }
 
-        // Petición asíncrona al verificador
         $.ajax({
             url: 'actions/verificar_correo_disponible.php',
             type: 'GET',
@@ -240,14 +346,12 @@ $(document).ready(function() {
             dataType: 'json',
             success: function(response) {
                 if (response.disponible === false) {
-                    // Si el correo ya existe en la BD
                     inputCorreo.addClass('is-invalid').removeClass('is-valid');
                     feedback.text('Este correo ya pertenece a un miembro del staff.');
-                    btnGuardar.prop('disabled', true); // Bloqueamos el botón de guardar
+                    btnGuardar.prop('disabled', true);
                 } else {
-                    // Si el correo está libre
                     inputCorreo.addClass('is-valid').removeClass('is-invalid');
-                    btnGuardar.prop('disabled', false); // Habilitamos el botón
+                    btnGuardar.prop('disabled', false);
                 }
             },
             error: function() {
@@ -256,22 +360,31 @@ $(document).ready(function() {
         });
     });
 
-    // NUEVO: Escuchar clics en los botones de editar para cargar datos en el modal
     $(document).on('click', '.btn-editar-usuario', function() {
         const id = $(this).data('id');
         const nombre = $(this).data('nombre');
         const apellidos = $(this).data('apellidos');
-        const rol = $(this).data('rol');
+        const rolesString = $(this).data('roles');
         const estatus = $(this).data('estatus');
 
-        // Insertar valores en los inputs del modal de edición
         $('#edit_id_usuario').val(id);
         $('#edit_nombre').val(nombre);
         $('#edit_apellidos').val(apellidos);
-        $('#edit_rol').val(rol);
         $('#edit_estatus').val(estatus);
+        $('#error_roles-editar').addClass('d-none');
 
-        // Desplegar el modal de edición de Bootstrap
+        $('.check-rol-editar').prop('checked', false);
+
+        if (rolesString) {
+            const rolesArray = rolesString.split(', ');
+            $('.check-rol-editar').each(function() {
+                const nombreCheckbox = $(this).data('nombre');
+                if (rolesArray.includes(nombreCheckbox)) {
+                    $(this).prop('checked', true);
+                }
+            });
+        }
+
         $('#modalEditarUsuario').modal('show');
     });
 });

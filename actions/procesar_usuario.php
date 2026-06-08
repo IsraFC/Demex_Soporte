@@ -2,19 +2,22 @@
 /**
  * @file procesar_usuario.php
  * @package Portal_Demex
- * @version 2.1 - Registro con Plantilla de Correo Unificada
- * @date 2026-06-02
- * @brief Registro sin contraseña previa (Establecimiento vía Token) con layout de mail corporativo.
+ * @version 3.0 - Registro Multi-Rol con Plantilla de Correo Unificada
+ * @date 2026-06-08
+ * @brief Registro de usuarios con soporte para múltiples perfiles y vinculación en tabla intermedia.
  */
 
 session_start();
 header('Content-Type: text/html; charset=utf-8');
 
-if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'administrador') {
+require_once '../config/db.php';
+require_once '../includes/header.php'; // Requerido para consumir la función global tieneAcceso()
+
+// Control de acceso adaptado al entorno de múltiples roles
+if (!tieneAcceso(['Administrador'])) {
     die("Acceso denegado de forma estricta.");
 }
 
-require_once '../config/db.php';
 require_once '../config/mail_config.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
@@ -28,10 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nombre    = trim($_POST['nombre']);
     $apellidos = trim($_POST['apellidos']);
     $correo    = trim($_POST['correo']);
-    $rol       = $_POST['rol'];
+    $roles     = $_POST['roles'] ?? []; // Recupera el arreglo de IDs de roles seleccionados
 
-    if (empty($nombre) || empty($apellidos) || empty($correo) || empty($rol)) {
-        die("Todos los campos obligatorios deben ser completados.");
+    if (empty($nombre) || empty($apellidos) || empty($correo) || empty($roles)) {
+        die("Todos los campos obligatorios deben ser completados, incluyendo al menos un rol.");
     }
 
     try {
@@ -59,13 +62,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // 2. Generación del token de activación seguro
         $token = bin2hex(random_bytes(32)); 
 
-        // 3. Inserción con Estatus Fijo en 0 y contraseña vacía temporalmente
-        $sql = "INSERT INTO usuarios (nombre, apellidos, correo, password, rol, estatus, token_verificacion) 
-                VALUES (?, ?, ?, '', ?, 0, ?)";
+        // 3. Inserción del usuario sin columna obsoleta 'rol'
+        $sql = "INSERT INTO usuarios (nombre, apellidos, correo, password, estatus, token_verificacion) 
+                VALUES (?, ?, ?, '', 0, ?)";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$nombre, $apellidos, $correo, $rol, $token]);
+        $stmt->execute([$nombre, $apellidos, $correo, $token]);
 
-        // 4. Construcción del URL dinámico de verificación
+        // Recuperamos el ID autogenerado para el nuevo usuario
+        $id_usuario_nuevo = $pdo->lastInsertId();
+
+        // 4. Inserción de los múltiples roles asignados en la tabla intermedia
+        $sql_intermedia = "INSERT INTO usuario_roles (id_usuario, id_rol) VALUES (?, ?)";
+        $stmt_intermedia = $pdo->prepare($sql_intermedia);
+
+        foreach ($roles as $id_rol) {
+            $stmt_intermedia->execute([$id_usuario_nuevo, $id_rol]);
+        }
+
+        // 5. Construcción del URL dinámico de verificación
         $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
         $host = $_SERVER['HTTP_HOST'];
         $rutaBase = dirname(dirname($_SERVER['SCRIPT_NAME']));
@@ -73,15 +87,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $enlaceVerificacion = $protocolo . $host . $rutaBase . "/verificar.php?token=" . $token;
 
-        // 5. Configuración y envío mediante PHPMailer
+        // 6. Configuración y envío mediante PHPMailer
         $mail = new PHPMailer(true);
         $mail->isSMTP();
         $mail->Host       = SMTP_HOST;                     
-        $mail->SMTPAuth   = true;                                 
+        $mail->SMTPAuth   = true;                                                 
         $mail->Username   = SMTP_USER;     
-        $mail->Password   = SMTP_PASS;                                  
+        $mail->Password   = SMTP_PASS;                                                   
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;       
-        $mail->Port       = SMTP_PORT;                                  
+        $mail->Port       = SMTP_PORT;                                                   
         $mail->CharSet    = 'UTF-8';
 
         $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
@@ -90,7 +104,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mail->isHTML(true);
         $mail->Subject = 'Activación de Cuenta y Asignación de Contraseña - DEMEX';
         
-        // 6. PLANTILLA UNIFICADA CON LA MISMA PALETA DE COLORES Y DISEÑO
         $mail->Body = "
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;'>
                 <div style='text-align: center; margin-bottom: 20px;'>
