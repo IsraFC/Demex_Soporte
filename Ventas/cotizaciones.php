@@ -24,14 +24,14 @@ $maquinas_reales = [
 
 // Matriz de precios oficiales (Público y Distribuidor)
 $catalogo_precios = [
-    'SPICE MT15'  => ['publico' => 45885.00,  'distribuidor' => 38900.00],
-    'SPICE MV89'  => ['publico' => 49335.00,  'distribuidor' => 41800.00],
-    'DEMEX 313T'  => ['publico' => 50000.00,  'distribuidor' => 41500.00],
-    'DEMEX 313'   => ['publico' => 66000.00,  'distribuidor' => 55000.00],
-    'DEMEX 513'   => ['publico' => 78000.00,  'distribuidor' => 64000.00],
-    'DEMEX 613'   => ['publico' => 88000.00,  'distribuidor' => 74000.00],
-    'DEMEX 125'   => ['publico' => 98000.00,  'distribuidor' => 82000.00],
-    'DEMEX 1020'  => ['publico' => 150000.00, 'distribuidor' => 130000.00]
+        'SPICE MT15'  => ['publico' => 45885.00,  'distribuidor' => 38900.00],
+        'SPICE MV89'  => ['publico' => 49335.00,  'distribuidor' => 41800.00],
+        'DEMEX 313T'  => ['publico' => 50000.00,  'distribuidor' => 41500.00],
+        'DEMEX 313'   => ['publico' => 66000.00,  'distribuidor' => 55000.00],
+        'DEMEX 513'   => ['publico' => 78000.00,  'distribuidor' => 64000.00],
+        'DEMEX 613'   => ['publico' => 88000.00,  'distribuidor' => 74000.00],
+        'DEMEX 125'   => ['publico' => 98000.00,  'distribuidor' => 82000.00],
+        'DEMEX 1020'  => ['publico' => 150000.00, 'distribuidor' => 130000.00]
 ];
 
 // Detección de Prospecto enlazado si viene de la Bandeja de Leads
@@ -237,7 +237,8 @@ function calcularFlujoComercial() {
 
     // 1. Extraemos el precio del catálogo estático
     const precioBaseOriginal = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
-    $('#precio_base_origen').val(precioBaseOriginal.toFixed(2));
+    // Cambia esa línea por esta versión protegida:
+    $('#precio_base_origen').off('change input').val(precioBaseOriginal.toFixed(2));
 
     // 2. Rellenado dinámico de especificaciones técnicas
     $('#especificion_cotizada').val(especificacionesMaquinas[modeloTexto] || "");
@@ -283,9 +284,17 @@ function calcularFlujoComercial() {
 }
 
 $(document).ready(function() {
-    $('#maquina_select, #tipo_cliente').on('change', calcularFlujoComercial);
-    $('#descuento_porcentaje, #costo_envio, #cantidad').on('keyup change', calcularFlujoComercial);
+    // 1. Para los selects usamos solo 'change'
+    $('#maquina_select, #tipo_cliente').on('change', function() {
+        calcularFlujoComercial();
+    });
     
+    // 2. Para los campos numéricos usamos solo 'input' para evitar el bucle infinito del keyup/change
+    $('#descuento_porcentaje, #costo_envio, #cantidad').on('input', function() {
+        calcularFlujoComercial();
+    });
+    
+    // 3. Ejecución inicial limpia al cargar la página
     calcularFlujoComercial();
 });
 </script>

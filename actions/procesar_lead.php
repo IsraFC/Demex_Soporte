@@ -160,12 +160,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Inicia el llenado fluido de la barra de progreso
                     setTimeout(() => {
                         bar.style.width = '100%';
-                    }, 200);
+                    }, 600);
 
                     // Redirección automática tras 3.2 segundos
                     setTimeout(() => {
                         window.location.href = '../formulario.php';
-                    }, 4200);
+                    }, 6200);
                 });
             </script>
             </body>
