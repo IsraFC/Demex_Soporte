@@ -2,9 +2,9 @@
 /**
  * @file usuarios.php
  * @package Portal_Demex
- * @version 2.2 - Gestión de Personal con Envío Asíncrono de Formularios
+ * @version 2.3 - Gestión de Personal Completa con Captura Síncrona y Asíncrona
  * @date 2026-06-08
- * @brief Interfaz centralizada para gestionar personal con interceptores Fetch API instalados en los flujos de actualización.
+ * @brief Interfaz de administración de personal con interceptores AJAX/Fetch instalados en la creación y edición.
  */
 
 $modulo_actual = 'global';
@@ -269,18 +269,65 @@ $(document).ready(function() {
         $('#btnGuardarUsuario').prop('disabled', false);
     });
 
+    // INTERCEPTOR ASÍNCRONO PARA EL FORMULARIO DE ALTA (FETCH API)
     $('#formNuevoUsuario').on('submit', function(e) {
+        e.preventDefault(); // Impedimos la redirección nativa del navegador
+
         if ($('.check-rol-nuevo:checked').length === 0) {
-            e.preventDefault();
             $('#error-roles-nuevo').removeClass('d-none');
             return false;
         }
         $('#error-roles-nuevo').addClass('d-none');
+
+        // Ponemos un estado visual de carga en el botón para prevenir clicks dobles mientras PHPMailer procesa
+        const btnGuardar = $('#btnGuardarUsuario');
+        const textoOriginal = btnGuardar.html();
+        btnGuardar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Enviando...');
+
+        const formulario = this;
+        const datosFormulario = new FormData(formulario);
+
+        fetch(formulario.action, {
+            method: formulario.method,
+            body: datosFormulario
+        })
+        .then(respuesta => {
+            if (!respuesta.ok) {
+                throw new Error('Falla en la comunicación con el servidor de correos.');
+            }
+            return respuesta.json();
+        })
+        .then(data => {
+            $('#modalNuevoUsuario').modal('hide');
+
+            Swal.fire({
+                icon: data.status,
+                title: data.title,
+                text: data.text,
+                confirmButtonColor: data.status === 'success' ? '#d15b00' : '#C62828'
+            }).then(() => {
+                if (data.status === 'success') {
+                    window.location.reload(); // Recargamos para ver al usuario en la tabla con estatus "Pendiente"
+                } else {
+                    btnGuardar.prop('disabled', false).html(textoOriginal);
+                    $('#modalNuevoUsuario').modal('show'); 
+                }
+            });
+        })
+        .catch(error => {
+            btnGuardar.prop('disabled', false).html(textoOriginal);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Despacho',
+                text: error.message,
+                confirmButtonColor: '#C62828'
+            });
+        });
     });
 
     // INTERCEPTOR ASÍNCRONO PARA EL FORMULARIO DE EDICIÓN (FETCH API)
     $('#formEditarUsuario').on('submit', function(e) {
-        e.preventDefault(); // Impedimos la redirección nativa del navegador hacia el controlador
+        e.preventDefault(); 
 
         if ($('.check-rol-editar:checked').length === 0) {
             $('#error-roles-editar').removeClass('d-none');
@@ -302,7 +349,6 @@ $(document).ready(function() {
             return respuesta.json();
         })
         .then(data => {
-            // Ocultamos el modal de forma limpia antes de detonar el SweetAlert2
             $('#modalEditarUsuario').modal('hide');
 
             Swal.fire({
@@ -312,9 +358,9 @@ $(document).ready(function() {
                 confirmButtonColor: data.status === 'success' ? '#d15b00' : '#C62828'
             }).then(() => {
                 if (data.status === 'success') {
-                    window.location.reload(); // Recarga para actualizar las celdas y badges de la Datatable
+                    window.location.reload(); 
                 } else {
-                    $('#modalEditarUsuario').modal('show'); // Re-abrimos el modal en caso de advertencia/error
+                    $('#modalEditarUsuario').modal('show'); 
                 }
             });
         })

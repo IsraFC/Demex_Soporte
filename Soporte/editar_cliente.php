@@ -1,12 +1,13 @@
 <?php
 /**
  * ARCHIVO: editar_cliente.php
- * DESCRIPCIÓN: Interfaz de modificación de datos de clientes.
+ * DESCRIPCIÓN: Interfaz de modificación de datos de clientes de forma asíncrona.
  * Implementa recuperación de datos vía PDO y validación asíncrona (AJAX) 
  * que discrimina entre el nombre propio del registro y duplicados externos.
  * * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.4
+ * @version 1.5 - Integración de Interceptor Fetch API para Alertas
+ * @date 2026-06-08
  */
 require_once '../config/db.php';
 $page_title = "Editar Cliente - Soporte";
@@ -142,7 +143,7 @@ $(document).ready(function() {
                         id_cliente: idActual 
                     },
                     success: function(response) {
-                        if (response === 'existe') {
+                        if (response.trim() === 'existe') {
                             input.addClass('is-invalid').css('border', '2px solid #dc3545');
                             msg.text('⚠️ Este nombre ya lo ocupa otro cliente').css('color', '#dc3545').show();
                             $('#btnGuardar').attr('disabled', true);
@@ -155,6 +156,54 @@ $(document).ready(function() {
                 });
             }, doneTypingInterval);
         }
+    });
+
+    // 3. INTERCEPTOR ASÍNCRONO DEL FORMULARIO DE EDICIÓN (NUEVO)
+    $('#formEditarCliente').on('submit', function(e) {
+        e.preventDefault(); // Detiene la redirección o recarga tradicional del navegador
+
+        const btnGuardar = $('#btnGuardar');
+        const textoOriginal = btnGuardar.html();
+
+        // Estado visual de carga y deshabilitado para evitar clicks repetidos
+        btnGuardar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Actualizando...');
+
+        const formulario = this;
+        const datosFormulario = new FormData(formulario);
+
+        fetch(formulario.action, {
+            method: formulario.method,
+            body: datosFormulario
+        })
+        .then(respuesta => {
+            if (!respuesta.ok) {
+                throw new Error('Falla en la comunicación de red con el servidor.');
+            }
+            return respuesta.json(); // Parsea la respuesta JSON estructurada de tu backend híbrido
+        })
+        .then(data => {
+            Swal.fire({
+                icon: data.status,
+                title: data.title,
+                text: data.text,
+                confirmButtonColor: data.status === 'success' ? '#d15b00' : '#C62828'
+            }).then(() => {
+                if (data.status === 'success') {
+                    window.location.href = 'clientes.php'; // Redirección limpia al catálogo
+                } else {
+                    btnGuardar.prop('disabled', false).html(textoOriginal); // Reactiva si fue advertencia o fallo controlado
+                }
+            });
+        })
+        .catch(error => {
+            btnGuardar.prop('disabled', false).html(textoOriginal);
+            Swal.fire({
+                icon: 'error',
+                title: 'Falla Operativa',
+                text: error.message,
+                confirmButtonColor: '#C62828'
+            });
+        });
     });
 });
 </script>

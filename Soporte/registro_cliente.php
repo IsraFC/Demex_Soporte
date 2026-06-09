@@ -121,7 +121,7 @@ $(document).ready(function() {
                     method: 'POST',
                     data: { nombre: nombre },
                     success: function(response) {
-                        if (response === 'existe') {
+                        if (response.trim() === 'existe') {
                             input.addClass('is-invalid').css('border', '2px solid #dc3545');
                             msg.text('⚠️ Este cliente ya está registrado').css('color', '#dc3545').show();
                             $('#btnGuardar').attr('disabled', true);
@@ -134,6 +134,54 @@ $(document).ready(function() {
                 });
             }, doneTypingInterval);
         }
+    });
+
+    // 3. INTERCEPTOR ASÍNCRONO DEL FORMULARIO DE ALTA (NUEVO)
+    $('#formRegistroCliente').on('submit', function(e) {
+        e.preventDefault(); // Congela la redirección por defecto
+
+        const btnGuardar = $('#btnGuardar');
+        const textoOriginal = btnGuardar.html();
+
+        // Evita clics dobles deshabilitando el botón mientras procesa
+        btnGuardar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Registrando...');
+
+        const formulario = this;
+        const datosFormulario = new FormData(formulario);
+
+        fetch(formulario.action, {
+            method: formulario.method,
+            body: datosFormulario
+        })
+        .then(respuesta => {
+            if (!respuesta.ok) {
+                throw new Error('Error en la comunicación de red con el servidor.');
+            }
+            return respuesta.json(); // Lee la respuesta JSON del controlador híbrido
+        })
+        .then(data => {
+            Swal.fire({
+                icon: data.status,
+                title: data.title,
+                text: data.text,
+                confirmButtonColor: data.status === 'success' ? '#d15b00' : '#C62828'
+            }).then(() => {
+                if (data.status === 'success') {
+                    window.location.href = 'clientes.php'; // Redirección limpia hacia el catálogo
+                } else {
+                    btnGuardar.prop('disabled', false).html(textoOriginal); // Reactiva el botón si fue una advertencia
+                }
+            });
+        })
+        .catch(error => {
+            btnGuardar.prop('disabled', false).html(textoOriginal);
+            Swal.fire({
+                icon: 'error',
+                title: 'Falla Operativa',
+                text: error.message,
+                confirmButtonColor: '#C62828'
+            });
+        });
     });
 
     // Si ya viene un nombre en la URL, valida si existe de una vez

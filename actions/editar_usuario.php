@@ -2,13 +2,12 @@
 /**
  * @file editar_usuario.php
  * @package Portal_Demex
- * @version 2.1 - Edición Asíncrona con Respuesta JSON
+ * @version 2.2 - Edición Asíncrona con Blindaje Auto-Bloqueo
  * @date 2026-06-08
- * @brief Controlador transaccional que procesa modificaciones de personal y retorna estados legibles en formato JSON.
+ * @brief Controlador transaccional que procesa modificaciones de personal e impide la auto-desactivación del Administrador.
  */
 
 session_start();
-// Declaramos el tipo de contenido como JSON antes de cualquier salida de datos
 header('Content-Type: application/json; charset=utf-8');
 
 require_once '../config/db.php';
@@ -29,6 +28,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($id_usuario === 0 || empty($nombre) || empty($apellidos) || empty($roles)) {
         echo json_encode(['status' => 'error', 'title' => 'Datos Incompletos', 'text' => 'Parámetros obligatorios incompletos, incluyendo al menos un rol.']);
         exit();
+    }
+
+    // 👈 BLINDAJE DE SEGURIDAD: Prevenir el auto-bloqueo del administrador actual
+    $id_usuario_sesion = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : 0;
+
+    if ($id_usuario === $id_usuario_sesion) {
+        // 1. Validar que no intente ponerse como Inactivo
+        if ($estatus === 0) {
+            echo json_encode([
+                'status' => 'warning',
+                'title' => 'Operación Cancelada',
+                'text' => 'Por seguridad, no puedes cambiar tu propio estatus a Inactivo ya que perderías acceso al sistema.'
+            ]);
+            exit();
+        }
+
+        // 2. Validar que no se intente quitar a sí mismo el rol de Administrador (ID de rol de Administrador en BD)
+        // Nota: Asumiendo que el id_rol para Administrador es 1. Cámbialo si en tu catálogo de roles tiene otro ID.
+        $id_rol_admin = 1; 
+        if (!in_array($id_rol_admin, $roles)) {
+            echo json_encode([
+                'status' => 'warning',
+                'title' => 'Acción Restringida',
+                'text' => 'No puedes remover tu propio rol de Administrador. Se requiere que mantengas tus privilegios para gestionar el portal.'
+            ]);
+            exit();
+        }
     }
 
     try {
@@ -56,7 +82,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $pdo->commit();
 
-        // Retornamos el objeto de éxito correspondiente para ser procesado por el frontend
         echo json_encode([
             'status' => 'success',
             'title' => '¡Cambios Guardados!',
@@ -65,7 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
 
     } catch (\PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         echo json_encode(['status' => 'error', 'title' => 'Error de Servidor', 'text' => $e->getMessage()]);
         exit();
     }

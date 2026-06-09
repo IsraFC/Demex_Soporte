@@ -2,8 +2,8 @@
 /**
  * @file header.php
  * @package Portal_Demex
- * @version 5.2 - Arquitectura Adaptativa con Avatar Dinámico Integrado (LONGBLOB)
- * @brief Layout maestro centralizado con ruteo inteligente y validación estricta multi-rol.
+ * @version 5.3 - Arquitectura Adaptativa con Control Cinemático de Contexto (Soporte)
+ * @brief Layout maestro centralizado con ruteo inteligente y validación de visibilidad de tickets.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -205,9 +205,12 @@ if (!isset($modulo_actual)) {
         <nav class="navbar top-navbar d-flex align-items-center justify-content-between shadow-sm" id="main-top-navbar">
             <div></div>
             <div class="d-flex align-items-center gap-3">
-                <button class="btn btn-ticket-premium shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuevoTicket">
-                    <i class="bi bi-plus-circle-fill"></i> NUEVO TICKET
-                </button>
+                
+                <?php if (tieneAcceso(['Administrador', 'Soporte']) && isset($en_soporte) && $en_soporte): ?>
+                    <button class="btn btn-ticket-premium shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuevoTicket">
+                        <i class="bi bi-plus-circle-fill"></i> NUEVO TICKET
+                    </button>
+                <?php endif; ?>
 
                 <div class="vr bg-white opacity-25" style="height: 24px;"></div>
 

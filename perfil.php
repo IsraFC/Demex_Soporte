@@ -2,9 +2,9 @@
 /**
  * @file perfil.php
  * @package Portal_Demex
- * @version 1.5 - Mi Perfil con Compresión Perimetral en Cliente
+ * @version 1.8 - Mi Perfil con Visores de Contraseña e Interceptores Asíncronos
  * @date 2026-06-08
- * @brief Interfaz de autogestión de usuario con pre-procesamiento y reducción de imágenes antes de su envío.
+ * @brief Interfaz de autogestión de usuario con validación de correo en tiempo real, Canvas API y switches de visibilidad de claves.
  */
 
 $page_title = "Mi Perfil";
@@ -102,67 +102,177 @@ try {
     </div>
 
     <div class="col-md-8">
-        <div class="card border-0 shadow-sm rounded-4 bg-white">
-            <div class="card-body p-4">
-                <h5 class="fw-bold text-dark mb-4">Información de la Cuenta</h5>
-                
-                <form id="formPerfilUsuario" method="POST" action="actions/procesar_perfil.php" enctype="multipart/form-data">
-                    
-                    <input type="file" id="foto_perfil" class="d-none" accept="image/jpeg, image/png, image/webp, image/gif" onchange="procesarYComprimirFoto(this)">
-                    
-                    <input type="hidden" name="foto_comprimida_base64" id="foto_comprimida_base64" value="">
-                    <input type="hidden" name="eliminar_foto" id="eliminar_foto" value="0">
+        <div class="row g-4">
+            
+            <div class="col-12">
+                <div class="card border-0 shadow-sm rounded-4 bg-white">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold text-dark mb-4">Información de la Cuenta</h5>
+                        
+                        <form id="formPerfilUsuario" method="POST" action="actions/procesar_perfil.php" enctype="multipart/form-data">
+                            <input type="file" id="foto_perfil" class="d-none" accept="image/jpeg, image/png, image/webp, image/gif" onchange="procesarYComprimirFoto(this)">
+                            <input type="hidden" name="foto_comprimida_base64" id="foto_comprimida_base64" value="">
+                            <input type="hidden" name="eliminar_foto" id="eliminar_foto" value="0">
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold text-secondary">Nombre(s)</label>
-                            <input type="text" name="nombre" class="form-control rounded-3" value="<?= htmlspecialchars($usuario['nombre']) ?>" required>
-                        </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold text-secondary">Nombre(s)</label>
+                                    <input type="text" name="nombre" class="form-control rounded-3" value="<?= htmlspecialchars($usuario['nombre']) ?>" required>
+                                </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold text-secondary">Apellidos</label>
-                            <input type="text" name="apellidos" class="form-control rounded-3" value="<?= htmlspecialchars($usuario['apellidos']) ?>" required>
-                        </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold text-secondary">Apellidos</label>
+                                    <input type="text" name="apellidos" class="form-control rounded-3" value="<?= htmlspecialchars($usuario['apellidos']) ?>" required>
+                                </div>
 
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold text-secondary">Correo Electrónico</label>
-                            <input type="email" name="correo" class="form-control rounded-3" value="<?= htmlspecialchars($usuario['correo']) ?>" required>
-                            <div class="form-text text-muted mt-2" style="font-size: 11px;">
-                                <i class="bi bi-info-circle-fill me-1"></i> Las imágenes de alta resolución se optimizarán automáticamente antes de guardarse para asegurar la estabilidad del servidor.
+                                <div class="col-12">
+                                    <label class="form-label small fw-semibold text-secondary">Correo Electrónico</label>
+                                    <input type="email" name="correo" id="correo_perfil" class="form-control rounded-3" value="<?= htmlspecialchars($usuario['correo']) ?>" required>
+                                    <div id="correo-feedback" class="invalid-feedback fw-semibold"></div>
+                                    <div class="form-text text-muted mt-2" style="font-size: 11px;">
+                                        <i class="bi bi-info-circle-fill me-1"></i> Las imágenes de alta resolución se optimizarán automáticamente antes de guardarse para asegurar la estabilidad del servidor.
+                                    </div>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label small fw-semibold text-muted">Roles Asignados (Solo Lectura)</label>
+                                    <input type="text" class="form-control bg-light rounded-3 text-muted small" value="<?= htmlspecialchars(implode(', ', $_SESSION['roles'])) ?>" disabled>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold text-muted">Roles Asignados (Solo Lectura)</label>
-                            <input type="text" class="form-control bg-light rounded-3 text-muted small" value="<?= htmlspecialchars(implode(', ', $_SESSION['roles'])) ?>" disabled>
-                        </div>
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <a href="<?= $base_path ?>index.php" class="btn btn-light rounded-3 px-4 small fw-semibold">Cancelar</a>
+                                <button type="submit" class="btn btn-primary rounded-3 px-4 small fw-semibold shadow-sm">
+                                    <i class="bi bi-save2-fill me-2"></i>Guardar Cambios
+                                </button>
+                            </div>
+                        </form>
                     </div>
-
-                    <div class="d-flex justify-content-end gap-2 mt-4">
-                        <a href="<?= $base_path ?>index.php" class="btn btn-light rounded-3 px-4 small fw-semibold">Cancelar</a>
-                        <button type="submit" class="btn btn-primary rounded-3 px-4 small fw-semibold shadow-sm">
-                            <i class="bi bi-save2-fill me-2"></i>Guardar Cambios
-                        </button>
-                    </div>
-                </form>
-
+                </div>
             </div>
+
+            <div class="col-12">
+                <div class="card border-0 shadow-sm rounded-4 bg-white">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold text-dark mb-4">Seguridad de la Cuenta</h5>
+                        
+                        <form id="formPasswordUsuario" method="POST" action="actions/cambiar_password.php">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label small fw-semibold text-secondary">Contraseña Actual</label>
+                                    <div class="input-group">
+                                        <input type="password" name="password_actual" id="password_actual" class="form-control rounded-start-3" placeholder="Ingresa tu clave vigente" required>
+                                        <button class="input-group-text bg-light border text-secondary rounded-end-3" type="button" tabindex="-1" onclick="alternarVisibilidad('password_actual', this)">
+                                            <i class="bi bi-eye-fill"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold text-secondary">Nueva Contraseña</label>
+                                    <div class="input-group">
+                                        <input type="password" name="nueva_password" id="nueva_password" class="form-control rounded-start-3" placeholder="Mínimo 8 caracteres" required>
+                                        <button class="input-group-text bg-light border text-secondary rounded-end-3" type="button" tabindex="-1" onclick="alternarVisibilidad('nueva_password', this)">
+                                            <i class="bi bi-eye-fill"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold text-secondary">Confirmar Nueva Contraseña</label>
+                                    <div class="input-group">
+                                        <input type="password" id="confirmar_password" class="form-control rounded-start-3" placeholder="Repite la nueva clave" required>
+                                        <button class="input-group-text bg-light border text-secondary rounded-end-3" type="button" tabindex="-1" onclick="alternarVisibilidad('confirmar_password', this)">
+                                            <i class="bi bi-eye-fill"></i>
+                                        </button>
+                                        <div id="password-feedback" class="invalid-feedback fw-semibold">Las contraseñas nuevas no coinciden.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <button type="submit" class="btn btn-danger rounded-3 px-4 small fw-semibold shadow-sm">
+                                    <i class="bi bi-key-fill me-2"></i>Actualizar Contraseña
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
 
 <script>
 /**
- * Captura el envío del formulario de forma asíncrona para procesar datos 
- * en segundo plano y renderizar alertas sin redirección de interfaz.
+ * Alterna el tipo de atributo del input de contraseña para ocultar o mostrar el texto plano
+ */
+function alternarVisibilidad(idInput, boton) {
+    const input = document.getElementById(idInput);
+    const icono = boton.querySelector('i');
+
+    if (input.type === 'password') {
+        input.type = 'text';
+        icono.classList.remove('bi-eye-fill');
+        icono.classList.add('bi-eye-slash-fill');
+    } else {
+        input.type = 'password';
+        icono.classList.remove('bi-eye-slash-fill');
+        icono.classList.add('bi-eye-fill');
+    }
+}
+
+/**
+ * Intercepta la disponibilidad del correo electrónico ingresado en tiempo real
+ */
+document.getElementById('correo_perfil').addEventListener('input', function() {
+    const correo = this.value.trim();
+    const inputCorreo = this;
+    const feedback = document.getElementById('correo-feedback');
+    const btnGuardar = document.querySelector('#formPerfilUsuario button[type="submit"]');
+
+    if (correo === '') {
+        inputCorreo.classList.remove('is-invalid', 'is-valid');
+        btnGuardar.disabled = false;
+        return;
+    }
+
+    $.ajax({
+        url: 'actions/verificar_correo_disponible.php',
+        type: 'GET',
+        data: { 
+            correo: correo, 
+            id_excluir: <?= (int)$id_usuario_sesion ?> 
+        },
+        dataType: 'json',
+        success: function(response) {
+            if (response.disponible === false) {
+                inputCorreo.classList.add('is-invalid');
+                inputCorreo.classList.remove('is-valid');
+                feedback.innerText = 'Este correo electrónico ya pertenece a otro miembro de DEMEX.';
+                btnGuardar.disabled = true;
+            } else {
+                inputCorreo.classList.remove('is-invalid');
+                inputCorreo.classList.add('is-valid');
+                btnGuardar.disabled = false;
+            }
+        },
+        error: function() {
+            console.log('Error al validar la disponibilidad del correo.');
+        }
+    });
+});
+
+/**
+ * Captura el envío del formulario de información básica
  */
 document.getElementById('formPerfilUsuario').addEventListener('submit', function(e) {
-    e.preventDefault(); // Detiene el viaje físico del navegador a /actions/procesar_perfil.php
+    e.preventDefault(); 
 
     const formulario = this;
     const datosFormulario = new FormData(formulario);
 
-    // Despachamos la petición asíncrona mediante Fetch API
     fetch(formulario.action, {
         method: formulario.method,
         body: datosFormulario
@@ -171,18 +281,16 @@ document.getElementById('formPerfilUsuario').addEventListener('submit', function
         if (!respuesta.ok) {
             throw new Error('Error en la comunicación de red con el servidor.');
         }
-        return respuesta.json(); // Convierte la respuesta JSON pura del backend a objeto JS
+        return respuesta.json(); 
     })
     .then(data => {
-        // Dispara la alerta correspondiente basada en la respuesta del backend
         Swal.fire({
-            icon: data.status, // Recibe 'success', 'warning' o 'error'
+            icon: data.status, 
             title: data.title,
             text: data.text,
             confirmButtonColor: data.status === 'success' ? '#d15b00' : '#C62828'
         }).then(() => {
             if (data.status === 'success') {
-                // Al dar clic en OK, recargamos la página actual para refrescar el layout y la navbar
                 window.location.reload();
             }
         });
@@ -195,6 +303,74 @@ document.getElementById('formPerfilUsuario').addEventListener('submit', function
             confirmButtonColor: '#C62828'
         });
     });
+});
+
+/**
+ * INTERCEPTOR ASÍNCRONO PARA EL CAMBIO DE CONTRASEÑA (FETCH API)
+ */
+document.getElementById('formPasswordUsuario').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const formulario = this;
+    const nuevaPassword = document.getElementById('nueva_password').value;
+    const confirmarPassword = document.getElementById('confirmar_password').value;
+    const inputConfirmar = document.getElementById('confirmar_password');
+
+    // Validación intermedia de coincidencia del lado del cliente
+    if (nuevaPassword !== confirmarPassword) {
+        inputConfirmar.classList.add('is-invalid');
+        return false;
+    }
+    inputConfirmar.classList.remove('is-invalid');
+
+    // Validación intermedia de longitud mínima
+    if (nuevaPassword.length < 8) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Contraseña Débil',
+            text: 'La nueva contraseña debe contener al menos 8 caracteres para asegurar tu cuenta.',
+            confirmButtonColor: '#C62828'
+        });
+        return false;
+    }
+
+    const datosFormulario = new FormData(formulario);
+
+    fetch(formulario.action, {
+        method: formulario.method,
+        body: datosFormulario
+    })
+    .then(respuesta => {
+        if (!respuesta.ok) {
+            throw new Error('Error al procesar el cambio de seguridad en el servidor.');
+        }
+        return respuesta.json();
+    })
+    .then(data => {
+        Swal.fire({
+            icon: data.status,
+            title: data.title,
+            text: data.text,
+            confirmButtonColor: data.status === 'success' ? '#d15b00' : '#C62828'
+        }).then(() => {
+            if (data.status === 'success') {
+                formulario.reset(); 
+            }
+        });
+    })
+    .catch(error => {
+        Swal.fire({
+            icon: 'error',
+            title: 'Falla Operativa',
+            text: error.message,
+            confirmButtonColor: '#C62828'
+        });
+    });
+});
+
+// Limpia el estado de error de coincidencia mientras el usuario vuelve a escribir
+document.getElementById('confirmar_password').addEventListener('input', function() {
+    this.classList.remove('is-invalid');
 });
 
 function procesarYComprimirFoto(input) {

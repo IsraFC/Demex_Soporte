@@ -134,7 +134,7 @@ if (!empty($old_correo)) {
                 <input type="password" name="password" id="password" 
                     class="form-control <?php echo ($error === 'password_incorrecto') ? 'is-invalid' : ''; ?>" 
                     placeholder="Contraseña..." <?php echo $bloqueado ? 'disabled' : ''; ?> required>
-                <button class="input-group-text bg-white border-start-0 toggle-password" type="button" data-target="#password" style="border-color: #dee2e6;">
+                <button class="input-group-text bg-white border-start-0 toggle-password" tabindex="-1" type="button" data-target="#password" style="border-color: #dee2e6;">
                     <i class="bi bi-eye text-muted"></i>
                 </button>
             </div>

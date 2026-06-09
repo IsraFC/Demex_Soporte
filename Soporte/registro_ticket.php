@@ -1,18 +1,11 @@
 <?php
 /**
  * ARCHIVO: registro_ticket.php
- * DESCRIPCIÓN: Panel de control unificado para la creación de folios de soporte técnico.
- * * CARACTERÍSTICAS TÉCNICAS:
- * 1. Integración Fase 1 (Técnica) y Fase 2 (Financiera) en tiempo real.
- * 2. Inteligencia de Modelos: Genera automáticamente series genéricas (S/N-XXX) si se elige un modelo manual.
- * 3. Validación de Garantía: Consulta vía AJAX si el equipo tiene cobertura vigente.
- * 4. Cálculos Automáticos: Sumatoria de costos y cálculo de días de servicio al vuelo.
- * * ACTUALIZACIÓN V1.8.7:
- * - Fix de Bloqueo Visual: Integración del método nativo .appendTo("body") emulando la lógica funcional de clientes.php.
- * - Saneo de Flujo: Interceptación basada en el evento submit nativo de Bootstrap.
- * - Unificación Semántica: Ajuste de minúsculas en consultas según esquema físico real de la BD.
- * * @author Israel Fernández Carrera
+ * DESCRIPCIÓN: Panel de control unificado asíncrono para la creación de folios de soporte técnico.
+ * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
+ * @version 2.0 - Despacho Asíncrono Integrado (Fetch API)
+ * @date 2026-06-08
  */
 require_once '../config/db.php';
 $page_title = "Registrar Ticket - Soporte";
@@ -211,7 +204,7 @@ include '../includes/header.php';
 
     <div class="text-center mt-4 d-flex justify-content-center gap-3">
         <a href="clientes.php" class="btn btn-light border px-5 rounded-pill fw-bold text-dark">Cancelar <i class="bi bi-x-lg ms-1"></i></a>
-        <button type="submit" class="btn btn-success px-5 rounded-pill fw-bold shadow btn-guardar">
+        <button type="submit" id="btnGuardarTicket" class="btn btn-success px-5 rounded-pill fw-bold shadow btn-guardar">
             <span id="btnText">Finalizar Registro</span> <i class="bi bi-check-circle ms-1"></i>
         </button>
     </div>
@@ -303,7 +296,7 @@ $(document).ready(function() {
     }
     $('#accion_select').on('change', toggleSeccionCostos);
 
-    // 5. EVALUADOR ASÍNCRONO DE GARANTÍA (AJAX) + SELECCIÓN AUTOMÁTICA DE MODELO
+    // 5. EVALUADOR ASÍNCRONO DE GARANTÍA (AJAX)
     var typingTimer;
     $('#no_serie_input').on('input', function() {
         clearTimeout(typingTimer);
@@ -311,22 +304,17 @@ $(document).ready(function() {
         var msgDiv = $('#status_garantia');
         var txtStatus = $('#txt_status_garantia');
 
-        // 🎯 LÓGICA DE AUTO-SELECCIÓN DE MODELO:
-        // Buscamos si el valor ingresado coincide exactamente con una de las opciones del datalist
         var opcionSeleccionada = $('#series_cliente option').filter(function() {
             return $(this).val() === val;
         });
 
         if (opcionSeleccionada.length > 0) {
-            // Extraemos el modelo mapeado en el data-model
             var modeloAsociado = opcionSeleccionada.data('model');
             if (modeloAsociado) {
-                // Seteamos el valor en tu select y disparamos el trigger change por si tienes otra lógica acoplada
                 $('#modelo_select').val(modeloAsociado).trigger('change');
             }
         }
 
-        // Continúa tu validación normal de fechas por AJAX...
         if (val.length > 2) {
             msgDiv.show();
             txtStatus.text('🔍 Validando...').css('color', '#6c757d');
@@ -349,13 +337,15 @@ $(document).ready(function() {
         } else { msgDiv.hide(); serieExiste = false; }
     });
 
-    // 6. INTERCEPTAR SUBMIT NATIVO USANDO TU TRUCO INFALIBLE CORREGIDO
+    // 🎯 6. INTERCEPTOR ASÍNCRONO DEFINITIVO (FETCH API)
     $('#formTicket').on('submit', function(e) {
+        e.preventDefault(); // Detiene el envío físico tradicional
+
         const serie = $('#no_serie_input').val().trim();
         const modelo = $('#modelo_select').val();
 
+        // Si el equipo no existe en catálogo, detonamos tu modal relocalizado en el body
         if (!serieExiste && serie !== "" && !serie.startsWith("S/N-")) {
-            e.preventDefault(); // Congelamos el envío
             $('#txtSerieNueva').text(serie);
             
             if (modelo === "") {
@@ -366,43 +356,77 @@ $(document).ready(function() {
                 $('#btnConfirmarRegistro').prop('disabled', false).removeClass('opacity-50');
             }
             
-            // 🎯 AQUÍ APLICAMOS TU MAGIA: Desplazamos el modal a la raíz para romper el page-fade-wrapper
             $('#modalSerieNueva').appendTo("body").modal('show');
+            return false;
         }
-    });
 
-    // Escucha cambios en caliente del modelo
-    $('#modelo_select').on('change', function() {
-        if ($(this).val() !== "") {
-            $('#error_modelo_modal').fadeOut();
-            $('#btnConfirmarRegistro').prop('disabled', false).removeClass('opacity-50');
-        } else {
-            $('#error_modelo_modal').fadeIn();
-            $('#btnConfirmarRegistro').prop('disabled', true).addClass('opacity-50');
-        }
+        // Si la serie ya es válida o genérica, despachamos de forma asíncrona mediante Fetch
+        ejecutarEnvioAsincrono(this);
     });
 
     // Procesamiento definitivo desde el modal blanco relocalizado
     $('#btnConfirmarRegistro').on('click', function() {
-        if ($('#modelo_select').val() === "") {
-            return false; 
-        }
+        if ($('#modelo_select').val() === "") return false; 
         
         $('#fecha_compra_nueva').val($('#modal_fecha_compra').val());
         const valorVigencia = $('input[name="modal_vigencia"]:checked').val();
         $('#vigencia_nueva_input').val(valorVigencia);
 
-        // Saltamos la bandera y hacemos submit
+        $('#modalSerieNueva').modal('hide');
         serieExiste = true; 
-        $('#formTicket').submit();
+        
+        // Disparamos el despacho Fetch pasando el elemento nativo del formulario
+        ejecutarEnvioAsincrono(document.getElementById('formTicket'));
     });
 
-    // 7. SUMATORIA DE COSTOS & INTERRUPTOR DE PAGO AUTOMÁTICO
+    // Función unificada de despacho Fetch API + SweetAlert2
+    function ejecutarEnvioAsincrono(formElement) {
+        const btn = $('#btnGuardarTicket');
+        const txtBtn = $('#btnText');
+        const originalHtml = btn.html();
+
+        btn.prop('disabled', true);
+        txtBtn.text('Procesando...');
+
+        const datosFormulario = new FormData(formElement);
+
+        fetch(formElement.action, {
+            method: formElement.method,
+            body: datosFormulario
+        })
+        .then(respuesta => {
+            if (!respuesta.ok) throw new Error('Fallo de red en el servidor de soporte.');
+            return respuesta.json();
+        })
+        .then(data => {
+            Swal.fire({
+                icon: data.status,
+                title: data.title,
+                text: data.text,
+                confirmButtonColor: data.status === 'success' ? '#198754' : '#C62828'
+            }).then(() => {
+                if (data.status === 'success') {
+                    window.location.href = 'index.php'; // Redirección al panel técnico
+                } else {
+                    btn.prop('disabled', false).html(originalHtml);
+                }
+            });
+        })
+        .catch(error => {
+            btn.prop('disabled', false).html(originalHtml);
+            Swal.fire({
+                icon: 'error',
+                title: 'Falla Operativa',
+                text: error.message,
+                confirmButtonColor: '#C62828'
+            });
+        });
+    }
+
+    // 7. SUMATORIA DE COSTOS
     $('.costo-input').on('input', function() {
         let total = 0;
-        $('.costo-input').each(function() {
-            total += parseFloat($(this).val()) || 0;
-        });
+        $('.costo-input').each(function() { total += parseFloat($(this).val()) || 0; });
         $('#label_total').text(total.toFixed(2));
         $('#input_total').val(total.toFixed(2));
 
@@ -429,7 +453,6 @@ $(document).ready(function() {
         }
     });
 
-    // 9. EVENTO MANUAL DEL SWITCH DE COBRO
     $('#pago_switch').on('change', function() {
         const txt = $(this).is(':checked') ? '<span class="text-success">Pagado</span>' : '<span class="text-danger">Pendiente</span>';
         $('#label_pago').html('Estatus: ' + txt);

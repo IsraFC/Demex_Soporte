@@ -1,9 +1,16 @@
 <?php
 /**
  * ARCHIVO: actions/procesar_importacion.php
- * DESCRIPCIÓN: Importador maestro con cálculo automático de garantías faltantes.
+ * DESCRIPCIÓN: Importador maestro asíncrono con cálculo automático de garantías y respuesta JSON.
+ * @author Israel Fernández Carrera
+ * @version 2.0 - Arquitectura Asíncrona Sanitizada
+ * @date 2026-06-08
  */
+
 ini_set('max_execution_time', 300);
+session_start();
+header('Content-Type: application/json; charset=utf-8');
+
 require_once '../../config/db.php';
 
 // Función para convertir fecha de DD/MM/YYYY a YYYY-MM-DD y manejar vacíos
@@ -14,7 +21,6 @@ function formatearFechaSQL($fecha_txt) {
     $partes = explode('/', $fecha_txt);
     
     if (count($partes) === 3) {
-        // Aseguramos que el año tenga 4 dígitos
         $anio = (strlen($partes[2]) == 2) ? '20' . $partes[2] : $partes[2];
         return $anio . '-' . $partes[1] . '-' . $partes[0];
     }
@@ -24,15 +30,24 @@ function formatearFechaSQL($fecha_txt) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
     $file = $_FILES['archivo_csv']['tmp_name'];
     
+    if (empty($file) || !is_uploaded_file($file)) {
+        echo json_encode([
+            'status' => 'error',
+            'title' => 'Archivo Inválido',
+            'text' => 'No se pudo leer el archivo cargado, intente nuevamente.'
+        ]);
+        exit();
+    }
+
     if (($handle = fopen($file, "r")) !== FALSE) {
         $firstLine = fgets($handle);
         $separador = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
         rewind($handle);
 
-        $pdo->beginTransaction();
-        $insertados = 0; $duplicados = 0; $fila = 0;
-
         try {
+            $pdo->beginTransaction();
+            $insertados = 0; $duplicados = 0; $fila = 0;
+
             while (($data = fgetcsv($handle, 1000, $separador)) !== FALSE) {
                 $fila++;
 
@@ -43,10 +58,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                 $modelo    = isset($data[3]) ? trim($data[3]) : '';
                 $serie     = isset($data[4]) ? trim($data[4]) : '';
                 
-                // Procesar fechas del CSV
                 $f_ini_csv = isset($data[5]) ? formatearFechaSQL($data[5]) : null;
                 $f_fin_csv = isset($data[6]) ? formatearFechaSQL($data[6]) : null;
 
+                // Salto perimetral de cabeceras
                 if ($fila === 1 && (strtoupper($nombre) === 'NOMBRE' || strpos(strtoupper($serie), 'SERIE') !== false)) {
                     continue;
                 }
@@ -57,12 +72,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                 $fecha_final_inicio = $f_ini_csv;
                 $fecha_final_fin    = $f_fin_csv;
 
-                // Si no hay fecha de inicio en el CSV, usamos la de hoy
                 if (!$fecha_final_inicio) {
                     $fecha_final_inicio = date('Y-m-d');
                 }
 
-                // Si no hay fecha de término, le sumamos 1 año a la de inicio
                 if (!$fecha_final_fin) {
                     $fecha_final_fin = date('Y-m-d', strtotime($fecha_final_inicio . ' + 1 year'));
                 }
@@ -90,12 +103,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
             }
 
             $pdo->commit();
-            header("Location: ../maquinas.php?msg=import_success&count=$insertados&dups=$duplicados");
+            fclose($handle);
+
+            echo json_encode([
+                'status' => 'success',
+                'title' => '¡Importación Completada!',
+                'text' => "Se procesaron exitosamente {$fila} registros. Nuevos incorporados: {$insertados}, Duplicados omitidos: {$duplicados}."
+            ]);
+            exit();
 
         } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            die("Error en la fila $fila: " . $e->getMessage());
+            fclose($handle);
+            
+            echo json_encode([
+                'status' => 'error',
+                'title' => 'Falla en Fila ' . $fila,
+                'text' => 'Error de consistencia de datos: ' . $e->getMessage()
+            ]);
+            exit();
         }
-        fclose($handle);
     }
+} else {
+    echo json_encode(['status' => 'error', 'title' => 'Acceso Denegado', 'text' => 'Petición incorrecta.']);
+    exit();
 }

@@ -2,20 +2,20 @@
 /**
  * @file procesar_usuario.php
  * @package Portal_Demex
- * @version 3.0 - Registro Multi-Rol con Plantilla de Correo Unificada
+ * @version 3.4 - Registro Multi-Rol Asíncrono Sanitizado (Sin contaminación HTML)
  * @date 2026-06-08
- * @brief Registro de usuarios con soporte para múltiples perfiles y vinculación en tabla intermedia.
+ * @brief Registro de usuarios con soporte para múltiples perfiles, envío SMTP y respuesta JSON pura.
  */
 
 session_start();
-header('Content-Type: text/html; charset=utf-8');
+header('Content-Type: application/json; charset=utf-8');
 
 require_once '../config/db.php';
-require_once '../includes/header.php'; // Requerido para consumir la función global tieneAcceso()
 
-// Control de acceso adaptado al entorno de múltiples roles
-if (!tieneAcceso(['Administrador'])) {
-    die("Acceso denegado de forma estricta.");
+// Si vive en header.php, validamos la sesión de forma perimetral directa para el JSON:
+if (!isset($_SESSION['roles']) || !in_array('Administrador', $_SESSION['roles'])) {
+    echo json_encode(['status' => 'error', 'title' => 'Acceso denegado', 'text' => 'No tienes privilegios de Administrador para gestionar el personal.']);
+    exit();
 }
 
 require_once '../config/mail_config.php';
@@ -28,13 +28,14 @@ require '../libs/PHPMailer/PHPMailer.php';
 require '../libs/PHPMailer/SMTP.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nombre    = trim($_POST['nombre']);
-    $apellidos = trim($_POST['apellidos']);
-    $correo    = trim($_POST['correo']);
-    $roles     = $_POST['roles'] ?? []; // Recupera el arreglo de IDs de roles seleccionados
+    $nombre    = trim($_POST['nombre'] ?? '');
+    $apellidos = trim($_POST['apellidos'] ?? '');
+    $correo    = trim($_POST['correo'] ?? '');
+    $roles     = $_POST['roles'] ?? []; 
 
     if (empty($nombre) || empty($apellidos) || empty($correo) || empty($roles)) {
-        die("Todos los campos obligatorios deben ser completados, incluyendo al menos un rol.");
+        echo json_encode(['status' => 'error', 'title' => 'Datos Incompletos', 'text' => 'Todos los campos obligatorios deben ser completados, incluyendo al menos un rol.']);
+        exit();
     }
 
     try {
@@ -45,30 +46,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $checkEmail->execute([$correo]);
         
         if ($checkEmail->fetch()) {
-            echo "<script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
-            <body style='font-family: sans-serif;'>
-            <script>
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Correo Duplicado',
-                    text: 'El correo electrónico ingresado ya pertenece a un miembro del staff.',
-                    confirmButtonColor: '#C62828'
-                }).then(() => { window.history.back(); });
-            </script>
-            </body>";
+            echo json_encode([
+                'status' => 'warning',
+                'title' => 'Correo Duplicado',
+                'text' => 'El correo electrónico ingresado ya pertenece a un miembro del staff.'
+            ]);
             exit();
         }
 
         // 2. Generación del token de activación seguro
         $token = bin2hex(random_bytes(32)); 
 
-        // 3. Inserción del usuario sin columna obsoleta 'rol'
+        // 3. Inserción del usuario 
         $sql = "INSERT INTO usuarios (nombre, apellidos, correo, password, estatus, token_verificacion) 
                 VALUES (?, ?, ?, '', 0, ?)";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$nombre, $apellidos, $correo, $token]);
 
-        // Recuperamos el ID autogenerado para el nuevo usuario
+        // Recuperamos el ID autogenerado
         $id_usuario_nuevo = $pdo->lastInsertId();
 
         // 4. Inserción de los múltiples roles asignados en la tabla intermedia
@@ -91,11 +86,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mail = new PHPMailer(true);
         $mail->isSMTP();
         $mail->Host       = SMTP_HOST;                     
-        $mail->SMTPAuth   = true;                                                 
+        $mail->SMTPAuth   = true;                                                                                  
         $mail->Username   = SMTP_USER;     
-        $mail->Password   = SMTP_PASS;                                                   
+        $mail->Password   = SMTP_PASS;                                                                                   
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;       
-        $mail->Port       = SMTP_PORT;                                                   
+        $mail->Port       = SMTP_PORT;                                                                                   
         $mail->CharSet    = 'UTF-8';
 
         $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
@@ -129,25 +124,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mail->send();
         $pdo->commit();
 
-        echo "<script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
-        <body style='font-family: sans-serif;'>
-        <script>
-            Swal.fire({
-                icon: 'success',
-                title: '¡Invitación Enviada!',
-                text: 'El usuario fue registrado con éxito. Se envió el correo corporativo para la asignación de su contraseña.',
-                confirmButtonColor: '#d15b00'
-            }).then(() => { window.location.href = '../usuarios.php'; });
-        </script>
-        </body>";
+        echo json_encode([
+            'status' => 'success',
+            'title' => '¡Invitación Enviada!',
+            'text' => 'El usuario fue registrado con éxito. Se envió el correo corporativo para la asignación de su contraseña.'
+        ]);
+        exit();
 
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $errorMessage = isset($mail) ? $mail->ErrorInfo : $e->getMessage();
-        die("Error en el despacho del correo: {$errorMessage}");
+        echo json_encode(['status' => 'error', 'title' => 'Fallo de Correo', 'text' => "Error en el despacho del correo: {$errorMessage}"]);
+        exit();
     } catch (\PDOException $e) {
-        $pdo->rollBack();
-        die("Error crítico de base de datos: " . $e->getMessage());
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        echo json_encode(['status' => 'error', 'title' => 'Error de Servidor', 'text' => 'Fallo crítico de base de datos: ' . $e->getMessage()]);
+        exit();
     }
 }
-?>
