@@ -2,8 +2,8 @@
 /**
  * @file procesar_cotizacion.php
  * @package Portal_Demex
- * @version 4.5 - Gestión Comercial Estricta con Llaves Foráneas
- * @brief Controlador encargado de registrar las cotizaciones mapeando exactamente el diagrama de la BD.
+ * @version 4.6 - Gestión Comercial Inteligente con Flujo de Automatización
+ * @brief Controlador encargado de registrar las cotizaciones y avanzar el estatus comercial del prospecto.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -12,7 +12,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once '../config/db.php';
 
-// Validamos el método de acceso de forma estricta al estilo de Isra
+// Validamos el método de acceso de forma estricta
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header("Location: ../Ventas/cotizaciones.php");
     exit();
@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // Control e identificación del asesor logueado desde la sesión corporativa
 $id_usuario = $_SESSION['id_usuario'] ?? 1;
 
-// 1. CAPTURA Y SANITIZACIÓN DE DATOS (Columnas exactas de tu diagrama de BD)
+// CAPTURA Y SANITIZACIÓN DE DATOS
 $id_prospecto        = isset($_POST['id_prospecto']) ? intval($_POST['id_prospecto']) : 0;
 $rfc_receptor        = !empty($_POST['rfc_receptor']) ? strtoupper(trim($_POST['rfc_receptor'])) : 'XAXX010101000';
 $direccion_entrega   = trim($_POST['direccion_entrega'] ?? '');
@@ -30,28 +30,25 @@ $cantidad            = isset($_POST['cantidad']) ? intval($_POST['cantidad']) : 
 $unidad              = trim($_POST['unidad'] ?? 'Pieza');
 $tipo_cliente        = trim($_POST['tipo_cliente'] ?? 'Publico General');
 
-// Procesamiento numérico de costos mandados desde el formulario
 $precio_base_origen  = floatval($_POST['precio_base_origen'] ?? 0);
 $descuento_porcentaje= isset($_POST['descuento_porcentaje']) ? intval($_POST['descuento_porcentaje']) : 0;
 $costo_envio         = floatval($_POST['costo_envio'] ?? 0);
 
 $especificacion_cotizada = trim($_POST['especificion_cotizada'] ?? '');
 $notes                   = trim($_POST['notas'] ?? '');
+$maquina_seleccionada    = trim($_POST['maquina'] ?? '');
 
-// Captura del modelo seleccionado para buscar su FK relacional
-$maquina_seleccionada = trim($_POST['maquina'] ?? '');
-
-// 2. RECÁLCULO MATEMÁTICO COMERCIAL DEL LADO DEL SERVIDOR
+// RECÁLCULO MATEMÁTICO COMERCIAL DEL LADO DEL SERVIDOR
 $monto_descuento_unitario = $precio_base_origen * ($descuento_porcentaje / 100);
 $precio_pactado_unitario  = $precio_base_origen - $monto_descuento_unitario;
 
-// Parámetros de control de vigencias comerciales (Formatos de fecha MySQL)
+// Parámetros de control de vigencias comerciales del documento PDF (Vigente / Vencida)
 $fecha_emision     = date('Y-m-d');
 $fecha_vencimiento = date('Y-m-d', strtotime('+15 days'));
-$status_cotizacion = 'Enviada';
+$status_cotizacion = 'Vigente'; // Cambiado al nuevo ENUM técnico de vigencia
 
 try {
-    // 3. BUSCAMOS EL ID_MAQUINA REAL EN LA TABLA MAQUINARIA
+    // 1. Buscamos el ID de la maquinaria
     $sql_maquina = "SELECT id_maquina FROM maquinaria WHERE modelo = ? LIMIT 1";
     $stmt_maq = $pdo->prepare($sql_maquina);
     $stmt_maq->execute([$maquina_seleccionada]);
@@ -64,51 +61,22 @@ try {
 
     $id_maquina_real = $maquinaria_row['id_maquina'];
 
-    // 4. PREPARAMOS EL INSERT CON MARCADORES ANÓNIMOS (?)
-    // Mapea exactamente las columnas de tu tabla física `cotizacion`
+    // 2. Insertamos la cotización con marcadores con nombre para evitar desfases accidentales
     $sql_cotizacion = "INSERT INTO cotizacion (
-        id_prospecto, 
-        id_maquina, 
-        id_usuario, 
-        rfc_receptor, 
-        direccion_entrega, 
-        sucursal, 
-        cantidad, 
-        unidad, 
-        tipo_cliente, 
-        precio_base_origen, 
-        precio_pactado, 
-        especificacion_cotizada, 
-        costo_envio, 
-        notes, 
-        fecha_emision, 
-        fecha_vencimiento, 
-        status_cotizacion
+        id_prospecto, id_maquina, id_usuario, rfc_receptor, direccion_entrega, 
+        sucursal, cantidad, unidad, tipo_cliente, precio_base_origen, 
+        precio_pactado, especificacion_cotizada, costo_envio, notes, 
+        fecha_emision, fecha_vencimiento, status_cotizacion
     ) VALUES (
-        :id_prospecto, 
-        :id_maquina, 
-        :id_usuario, 
-        :rfc_receptor, 
-        :direccion_entrega, 
-        :sucursal, 
-        :cantidad, 
-        :unidad, 
-        :tipo_cliente, 
-        :precio_base_origen, 
-        :precio_pactado, 
-        :especificacion_cotizada, 
-        :costo_envio, 
-        :notes, 
-        :fecha_emision, 
-        :fecha_vencimiento, 
-        :status_cotizacion
+        :id_prospecto, :id_maquina, :id_usuario, :rfc_receptor, :direccion_entrega, 
+        :sucursal, :cantidad, :unidad, :tipo_cliente, :precio_base_origen, 
+        :precio_pactado, :especificacion_cotizada, :costo_envio, :notes, 
+        :fecha_emision, :fecha_vencimiento, :status_cotizacion
     )";
 
     $stmt = $pdo->prepare($sql_cotizacion);
-    
-    // Ejecutamos pasando un arreglo asociativo explícito
     $stmt->execute([
-        ':id_prospecto'            => ($id_prospecto > 0) ? $id_prospecto : null,
+        ':id_prospecto'            => $id_prospecto > 0 ? $id_prospecto : null,
         ':id_maquina'              => $id_maquina_real,
         ':id_usuario'              => $id_usuario,
         ':rfc_receptor'            => $rfc_receptor,
@@ -127,13 +95,15 @@ try {
         ':status_cotizacion'       => $status_cotizacion
     ]);
 
-    // Recuperamos el ID autoincremental real que generó la tabla por sí sola
     $id_cotizacion_nueva = $pdo->lastInsertId();
 
-    // 5. ACTUALIZACIÓN AUTOMÁTICA DE LA FASE DEL LEAD SI APLICA
+    // 3. AUTOMATIZACIÓN INTELIGENTE CRM (Propuesto por Mau):
+    // Si viene enlazado a un prospecto válido, actualizamos su estado comercial a 'Cotizado' de manera automática
     if ($id_prospecto > 0) {
-        $sql_update_lead = "UPDATE prospectos SET status_operativo = 'Cotizado', fecha_ultimo_contacto = NOW() WHERE id_prospecto = ?";
-        $stmt_update = $pdo->prepare($sql_update_lead);
+        $sql_update_crm = "UPDATE prospectos 
+                           SET status_comercial = 'Cotizado' 
+                           WHERE id_prospecto = ?";
+        $stmt_update = $pdo->prepare($sql_update_crm);
         $stmt_update->execute([$id_prospecto]);
     }
 
