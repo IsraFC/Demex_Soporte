@@ -2,8 +2,8 @@
 /**
  * @file header.php
  * @package Portal_Demex
- * @version 5.3 - Arquitectura Adaptativa con Control Cinemático de Contexto (Soporte)
- * @brief Layout maestro centralizado con ruteo inteligente y validación de visibilidad de tickets.
+ * @version 5.6 - Arquitectura Adaptativa con Captura de Feedback Unificada
+ * @brief Layout maestro centralizado con ruteo inteligente, menú persistente y modal asíncrono de feedback.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -206,7 +206,7 @@ if (!isset($modulo_actual)) {
             <div></div>
             <div class="d-flex align-items-center gap-3">
                 
-                <?php if (tieneAcceso(['Administrador', 'Soporte']) && isset($en_soporte) && $en_soporte): ?>
+                <?php if (tieneAcceso(['Administrador', 'Soporte']) && $en_soporte): ?>
                     <button class="btn btn-ticket-premium shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuevoTicket">
                         <i class="bi bi-plus-circle-fill"></i> NUEVO TICKET
                     </button>
@@ -232,7 +232,7 @@ if (!isset($modulo_actual)) {
                             <?= htmlspecialchars($_SESSION['nombre'] ?? 'Usuario') ?>
                         </span>
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom p-2 mt-2 shadow border-0" aria-labelledby="profileDropdown" style="min-width: 220px;">
+                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom p-2 mt-2 shadow border-0" id="dropdownMenuPerfil" aria-labelledby="profileDropdown" style="min-width: 220px;">
                         <li>
                             <div class="dropdown-header text-start py-1">
                                 <span class="d-block text-dark fw-bold small lh-sm"><?= htmlspecialchars(($_SESSION['nombre'] ?? 'Usuario') . ' ' . ($_SESSION['apellidos'] ?? '')) ?></span>
@@ -251,14 +251,14 @@ if (!isset($modulo_actual)) {
                         </li>
 
                         <li>
-                            <a class="dropdown-item dropdown-item-custom d-flex align-items-center small py-2" href="<?= $base_path ?>tickets_usuario.php">
-                                <i class="bi bi-ticket-detailed me-2 fs-6 text-secondary"></i> Mis Tickets
+                            <a class="dropdown-item dropdown-item-custom d-flex align-items-center small py-2" href="<?= $base_path ?>preferencias.php">
+                                <i class="bi bi-gear me-2 fs-6 text-secondary"></i> Preferencias del Portal
                             </a>
                         </li>
 
                         <li>
-                            <a class="dropdown-item dropdown-item-custom d-flex align-items-center small py-2" href="#" data-bs-toggle="modal" data-bs-target="#modalCambiarPasswordGlobal">
-                                <i class="bi bi-key me-2 fs-6 text-secondary"></i> Cambiar Contraseña
+                            <a class="dropdown-item dropdown-item-custom d-flex align-items-center small py-2" href="#" data-bs-toggle="modal" data-bs-target="#modalReportarFeedback">
+                                <i class="bi bi-chat-square-heart me-2 fs-6 text-secondary"></i> Reportar Error / Feedback
                             </a>
                         </li>
 
@@ -273,6 +273,70 @@ if (!isset($modulo_actual)) {
             </div>
         </nav>
 
+        <div class="modal fade animate__animated animate__fadeIn" id="modalReportarFeedback" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg" style="border-radius: 24px; background: #ffffff;">
+                    
+                    <div class="modal-header border-0 pt-4 px-4 pb-2 d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="shadow-sm d-flex align-items-center justify-content-center" 
+                                style="width: 45px; height: 45px; background-color: #fff5f5; border-radius: 16px;">
+                                <i class="bi bi-chat-square-heart-fill text-danger fs-4"></i>
+                            </div>
+                            <div>
+                                <h5 class="modal-title fw-bold text-dark mb-0" style="font-family: 'Poppins', sans-serif;">Centro de Soporte Técnico</h5>
+                                <small class="text-muted" style="font-size: 0.75rem;">Control de calidad e incidencias internas</small>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close bg-light rounded-circle p-2" data-bs-dismiss="modal" aria-label="Close" id="btnCerrarFeedbackTop" style="font-size: 0.75rem;"></button>
+                    </div>
+                    
+                    <form id="formFeedbackPortal" novalidate>
+                        <div class="modal-body px-4 py-3">
+                            <div class="alert alert-light border-0 small text-secondary mb-4 p-3 d-flex align-items-start gap-2" style="border-radius: 16px; background-color: #f8f9fa;">
+                                <i class="bi bi-info-circle-fill text-danger mt-0.5 fs-6"></i>
+                                <span>Este canal recopila de forma automática los datos del usuario y la pantalla actual. Las solicitudes son enviadas al departamento de desarrollo técnico para su análisis e integración.</span>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-secondary text-uppercase tracking-wider" style="font-size: 11px;">Tipo de Incidencia o Solicitud</label>
+                                <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
+                                    <span class="input-group-text border-0 bg-transparent text-danger"><i class="bi bi-layers-half"></i></span>
+                                    <select class="form-select border-0 bg-transparent fw-semibold text-dark p-1" name="tipo_feedback" id="tipo_feedback" style="font-size: 14px;" required>
+                                        <option value="Bug">Falla en el Sistema / Error de Ejecución</option>
+                                        <option value="Visual">Interfaz / Problema de Diseño u Optimización Visual</option>
+                                        <option value="Lento">Rendimiento / Carga Lenta de Tablas o Procesos</option>
+                                        <option value="Seguridad">Permisos / Problema de Acceso o Autenticación</option>
+                                        <option value="BaseDatos">Datos Incorrectos / Error en Consultas de Base de Datos</option>
+                                        <option value="Mejora">Sugerencia / Propuesta de Nueva Característica o Módulo</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-secondary text-uppercase tracking-wider" style="font-size: 11px;">Descripción Detallada</label>
+                                <textarea class="form-control border-0 bg-light shadow-sm p-3 small text-dark" 
+                                        name="desc_feedback" 
+                                        id="desc_feedback" 
+                                        rows="4" 
+                                        style="border-radius: 18px; font-size: 13px; resize: none;" 
+                                        placeholder="Indique detalladamente la acción que estaba realizando o especifique su sugerencia de cambio..." required></textarea>
+                            </div>
+                            
+                            <input type="hidden" name="url_incidencia" value="<?= htmlspecialchars($_SERVER['REQUEST_URI']) ?>">
+                        </div>
+                        
+                        <div class="modal-footer border-0 px-4 pb-4 pt-2 gap-2 justify-content-end">
+                            <button type="button" class="btn btn-light btn-sm rounded-pill px-4 py-2 fw-bold text-secondary border shadow-sm" data-bs-dismiss="modal" id="btnCancelarFeedback" style="font-size: 13px;">Cancelar</button>
+                            <button type="submit" class="btn btn-danger btn-sm rounded-pill px-4 py-2 fw-bold shadow-sm" style="font-size: 13px; background-color: #dc3545;">
+                                <i class="bi bi-send-fill me-1.5"></i> Enviar Reporte
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <script>
             document.addEventListener("DOMContentLoaded", function() {
                 const sidebarScroll = document.querySelector('.sidebar-menu-scroll');
@@ -285,6 +349,81 @@ if (!isset($modulo_actual)) {
 
                     sidebarScroll.addEventListener('scroll', function() {
                         localStorage.setItem('sidebar_scroll_position', sidebarScroll.scrollTop);
+                    });
+                }
+
+                // 🎯 INTERCEPTOR DE CLICS: Detiene el cierre imprevisto dentro del recuadro del perfil
+                const recuadroPerfil = document.getElementById('dropdownMenuPerfil');
+                if (recuadroPerfil) {
+                    recuadroPerfil.addEventListener('click', function(e) {
+                        e.stopPropagation(); // Evita que Bootstrap capte el evento y cierre el menú
+                    });
+                }
+
+                // 🎯 CONTROLADOR ASÍNCRONO: Envío transaccional del Reporte de Errores con Fetch API
+                const formFeedback = document.getElementById('formFeedbackPortal');
+                if (formFeedback) {
+                    formFeedback.addEventListener('submit', function(e) {
+                        e.preventDefault();
+
+                        const tipo = document.getElementById('tipo_feedback').value;
+                        const desc = document.getElementById('desc_feedback').value.trim();
+
+                        if (desc === "") {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Campos Vacíos',
+                                text: 'Por favor, describe los detalles de la incidencia antes de enviarla.',
+                                confirmButtonColor: '#dc3545'
+                            });
+                            return;
+                        }
+
+                        // Creamos la petición asíncrona hacia el controlador central de acciones
+                        const formData = new FormData(formFeedback);
+                        
+                        Swal.fire({
+                            title: 'Procesando reporte...',
+                            text: 'Guardando traza de auditoría en la base de datos.',
+                            allowOutsideClick: false,
+                            didOpen: () => { Swal.showLoading(); }
+                        });
+
+                        fetch('<?= $base_path ?>actions/procesar_feedback.php', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            Swal.close();
+                            if (data.success) {
+                                const modalInstance = bootstrap.Modal.getInstance(document.getElementById('modalReportarFeedback'));
+                                if (modalInstance) modalInstance.hide();
+                                formFeedback.reset();
+
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Reporte Recibido',
+                                    text: data.message || 'La incidencia ha sido registrada en el sistema de control técnico para su revisión.',
+                                    timer: 3000,
+                                    showConfirmButton: false
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Falla del Motor',
+                                    text: data.message || 'No se pudo registrar la traza técnica.'
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            Swal.close();
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error del Servidor',
+                                text: 'Ocurrió un colapso en la petición asíncrona de red.'
+                            });
+                        });
                     });
                 }
             });
