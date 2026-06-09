@@ -9,6 +9,7 @@
  * @version 1.4
  */
 require_once '../config/db.php';
+$page_title = "Registrar Cliente - Soporte";
 $modulo_actual = 'soporte';
 include '../includes/header.php';
 ?>

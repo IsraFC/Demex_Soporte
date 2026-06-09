@@ -15,6 +15,7 @@
  * @project Soporte Técnico DEMEX
  */
 require_once '../config/db.php';
+$page_title = "Registrar Ticket - Soporte";
 
 // 1. VALIDACIÓN DE SEGURIDAD
 $id_cliente = $_GET['id_cliente'] ?? null;

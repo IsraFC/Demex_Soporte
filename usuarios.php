@@ -8,6 +8,7 @@
  */
 
 $modulo_actual = 'global';
+$page_title = "Gestión de Personal";
 require_once 'includes/header.php';
 
 // Control de acceso estricto: Solo administradores manejan personal

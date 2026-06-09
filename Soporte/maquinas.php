@@ -7,6 +7,7 @@
  * @project Soporte Desarrollo Mexicano (DEMEX)
  */
 require_once '../config/db.php';
+$page_title = "Máquinas - Soporte";
 
 /** * KPIs - INDICADORES CLAVE DE DESEMPEÑO */
 $totalMaquinas = $pdo->query("SELECT COUNT(*) FROM Equipos_Garantia")->fetchColumn();

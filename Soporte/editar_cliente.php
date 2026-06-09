@@ -9,6 +9,7 @@
  * @version 1.4
  */
 require_once '../config/db.php';
+$page_title = "Editar Cliente - Soporte";
 
 /**
  * 1. FASE DE RECUPERACIÓN Y SEGURIDAD

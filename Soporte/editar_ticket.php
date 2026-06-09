@@ -11,6 +11,7 @@
  * @version 1.6
  */
 require_once '../config/db.php';
+$page_title = "Editar Ticket - Soporte";
 
 // Validación de existencia del folio para la carga de datos
 $id_ticket = $_GET['id_ticket'] ?? null;

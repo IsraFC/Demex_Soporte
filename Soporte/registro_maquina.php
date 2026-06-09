@@ -11,6 +11,7 @@
  */
 
 require_once '../config/db.php';
+$page_title = "Registrar Máquina - Soporte";
 $modulo_actual = 'soporte';
 include '../includes/header.php';
 ?>

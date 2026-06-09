@@ -5,6 +5,7 @@
  * @author Israel Fernández Carrera
  */
 require_once '../config/db.php';
+$page_title = "Importar Clientes - Soporte";
 $modulo_actual = 'soporte';
 include '../includes/header.php';
 ?>
