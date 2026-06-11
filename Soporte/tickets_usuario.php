@@ -1,0 +1,380 @@
+<?php
+/**
+ * ARCHIVO: Soporte/tickets_usuario.php
+ * DESCRIPCIÓN: Panel de Control Personalizado (Mis Tickets) con Server-side Processing exclusivo de Soporte.
+ * @author Israel Fernández Carrera
+ * @project Soporte Técnico DEMEX
+ * @version 2.2 (Módulo Localizado e Integrado al Sidebar)
+ */
+
+require_once '../config/db.php';
+$page_title = "Mis Tickets - Soporte";
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// GUARDIÁN DE ENTORNO: Si no es admin o soporte, rebota al login de forma instantánea
+if (!isset($_SESSION['roles']) || (!in_array('Administrador', $_SESSION['roles']) && !in_array('Soporte', $_SESSION['roles']))) {
+    header("Location: ../login.php?error=no_autorizado");
+    exit();
+}
+
+$id_user_sesion = $_SESSION['id_usuario'] ?? 0;
+
+/**
+ * Tarjetas de Indicadores (KPI) exclusivas del usuario logueado en Soporte
+ */
+$total = $pdo->query("SELECT COUNT(*) FROM tickets_soporte WHERE id_usuario_creador = $id_user_sesion")->fetchColumn();
+$pendientes = $pdo->query("SELECT COUNT(*) FROM tickets_soporte WHERE estatus = 'Abierto' AND id_usuario_creador = $id_user_sesion")->fetchColumn();
+
+$sql_cobro = "SELECT SUM(d.costo_total) FROM detalles_costos_tiempos d
+              JOIN tickets_soporte t ON d.id_ticket = t.id_ticket
+              WHERE d.estatus_pago = 'Pendiente' AND t.estatus = 'Abierto' AND t.id_usuario_creador = $id_user_sesion";
+$por_cobrar = $pdo->query($sql_cobro)->fetchColumn() ?: 0;
+
+$criticos = $pdo->query("SELECT COUNT(*) FROM tickets_soporte 
+                         WHERE estatus = 'Abierto' AND id_usuario_creador = $id_user_sesion 
+                         AND DATEDIFF(NOW(), fecha_inicial) >= 14")->fetchColumn();
+
+$modulo_actual = 'soporte'; // Mantiene la paleta visual roja de Soporte activa
+include '../includes/header.php';
+?>
+
+<div class="row mb-4 align-items-center animate__animated animate__fadeIn">
+    <div class="col-md-5">
+        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-person-workspace"></i> Mis Tickets</h1>
+        <p class="text-muted small">Seguimiento exclusivo de tus folios personales registrados en Soporte.</p>
+    </div>
+    <div class="col-md-7 text-md-end">
+        <div class="d-inline-flex gap-2">
+            <div class="p-2 bg-white shadow-sm rounded border-start border-danger border-4 text-center" style="min-width: 90px;">
+                <span class="d-block fw-bold fs-5"><?= $total ?></span>
+                <small class="text-muted" style="font-size: 0.6rem;">MIS FOLIOS</small>
+            </div>
+            <div class="p-2 bg-white shadow-sm rounded border-start border-warning border-4 text-center" style="min-width: 90px;">
+                <span id="kpi_pendientes" class="d-block fw-bold fs-5 text-warning"><?= $pendientes ?></span>
+                <small class="text-muted" style="font-size: 0.6rem;">ABIERTOS</small>
+            </div>
+            <div class="p-2 bg-white shadow-sm rounded border-start border-success border-4 text-center" style="min-width: 120px;">
+                <span id="kpi_cobrar" class="d-block fw-bold fs-5 text-success">$<?= number_format($por_cobrar, 2) ?></span>
+                <small class="text-muted" style="font-size: 0.6rem;">POR COBRAR</small>
+            </div>
+            <div class="p-2 bg-white shadow-sm rounded border-start border-danger border-4 text-center" style="min-width: 90px;">
+                <span id="kpi_criticos" class="d-block fw-bold fs-5 <?= ($criticos > 0) ? 'text-danger ms-1-animate' : 'text-muted' ?>">
+                    <?= $criticos ?>
+                </span>
+                <small class="text-muted" style="font-size: 0.6rem;">CRÍTICOS</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php if ($criticos > 0): ?>
+    <div class="alert alert-danger shadow-sm border-0 border-start border-4 border-danger bg-white d-flex align-items-center justify-content-between animate__animated animate__headShake" role="alert" id="alertaCriticos">
+        <div>
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-3 text-danger"></i>
+            <span class="fw-bold">Atención:</span> Tienes <strong><?= $criticos ?></strong> tickets personales con más de 2 semanas abiertos.
+        </div>
+        <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold" id="btnFiltrarCriticos">
+            <i class="bi bi-funnel-fill me-1"></i> Ver Urgentes
+        </button>
+    </div>
+<?php endif; ?>
+
+<div class="card-main mb-4 py-3 shadow-sm border-top border-4 border-danger bg-white rounded">
+    <div class="row g-3 align-items-center px-3 mb-3">
+        <div class="col-md-3">
+            <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
+                <span class="input-group-text border-0 bg-transparent"><i class="bi bi-search text-danger"></i></span>
+                <input type="text" id="customSearch" class="form-control bg-transparent border-0" placeholder="Cliente o Serie...">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <select id="filterTipo" class="form-select border-0 bg-light fw-bold text-muted shadow-sm">
+                <option value="">Todas las Llamadas</option>
+                <option value="Soporte">Soporte</option>
+                <option value="Venta Refacciones">Venta Refacciones</option>
+                <option value="Información">Información</option>
+                <option value="Capacitaciones">Capacitaciones</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select id="filterFalla" class="form-select border-0 bg-light fw-bold text-muted shadow-sm">
+                <option value="">Todas las Fallas</option>
+                <option value="Mecánica">Mecánica</option>
+                <option value="Refrigeración">Refrigeración</option>
+                <option value="Electrónica">Electrónica</option>
+                <option value="Regulador">Regulador</option>
+                <option value="Materia prima">Materia prima</option>
+                <option value="Otra">Otra</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select id="filterAccion" class="form-select border-0 bg-light fw-bold text-muted shadow-sm">
+                <option value="">Todas las Acciones</option>
+                <option value="Ninguna">Ninguna</option>
+                <option value="Envio técnico">Envío técnico</option>
+                <option value="Envio refacciones">Envío refacciones</option>
+                <option value="Envio técnico y refacciones">Técnico + Refacc.</option>
+                <option value="Envio base">Envío base</option>
+                <option value="Reparación en taller">Reparación en taller</option>
+                <option value="Cambio de maquina">Cambio de máquina</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row g-3 align-items-center px-3 pt-3">
+        <div class="col-md-4 d-flex align-items-center gap-2">
+            <span class="small fw-bold text-muted text-uppercase me-1">Rango:</span>
+            <input type="date" id="fechaDesde" class="form-control form-control-sm border-0 bg-light shadow-sm text-muted">
+            <input type="date" id="fechaHasta" class="form-control form-control-sm border-0 bg-light shadow-sm text-muted">
+        </div>
+        <div class="col-md-8 d-flex justify-content-end gap-4">
+            <div class="form-check form-switch d-flex align-items-center gap-2 m-0">
+                <input class="form-check-input" type="checkbox" id="checkSoloPendientes">
+                <label class="form-check-label small fw-bold text-muted" for="checkSoloPendientes">Solo Abiertos</label>
+            </div>
+            <div class="form-check form-switch d-flex align-items-center gap-2 m-0">
+                <input class="form-check-input" type="checkbox" id="checkGarantia">
+                <label class="form-check-label small fw-bold text-muted" for="checkGarantia">Garantía Válida</label>
+            </div>
+            <div class="form-check form-switch d-flex align-items-center gap-2 m-0">
+                <input class="form-check-input" type="checkbox" id="checkSoloDeuda">
+                <label class="form-check-label small fw-bold text-danger" for="checkSoloDeuda">Con Deuda</label>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card-main shadow-lg p-4 bg-white rounded animate__animated animate__fadeInUp">
+    <div class="table-responsive">
+        <table id="tablaTickets" class="table table-hover align-middle w-100">
+            <thead class="table-light text-uppercase small fw-bold">
+                <tr>
+                    <th data-type="num">#</th> 
+                    <th>Cliente</th>
+                    <th>Equipo / Serie</th>
+                    <th class="d-none">Tipo Llamada</th> 
+                    <th>Falla</th>
+                    <th class="d-none">Accion Realizada</th>
+                    <th>Garantía</th> 
+                    <th>Pago</th> 
+                    <th>Estatus</th> 
+                    <th>Inicio</th> 
+                    <th>Registrado Por</th>
+                    <th class="text-center">Acción</th>
+                    <th>Envios</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="modalVisualizar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold text-uppercase"><i class="bi bi-file-earmark-text me-2"></i>Resumen de tu Ticket</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="contenidoTicket">
+                <div class="text-center p-5"><div class="spinner-border text-danger" role="status"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include '../includes/footer.php'; ?>
+
+<script>
+    function abrirModalVisualizar(id) {
+        $('#modalVisualizar').appendTo("body").modal('show');
+        $('#contenidoTicket').html('<div class="text-center p-5"><div class="spinner-border text-danger"></div></div>');
+        $.ajax({
+            url: 'actions/obtener_detalles_ticket.php', // Consumo local directo en Soporte
+            method: 'GET',
+            data: { id_ticket: id },
+            success: function(html) {
+                $('#contenidoTicket').html(html);
+            }
+        });
+    }
+
+    function cambiarEstatus(id, nuevoEstatus) {
+        const colorEstatus = { 'Abierto': '#ffc107', 'Cerrado': '#198754', 'Cancelado': '#6c757d' };
+
+        Swal.fire({
+            title: `¿${nuevoEstatus === 'Cerrado' ? 'Cerrar' : 'Cancelar'} ticket #${id}?`,
+            text: `El estatus cambiará a ${nuevoEstatus.toLowerCase()} de forma permanente.`,
+            icon: nuevoEstatus === 'Cerrado' ? 'success' : 'warning',
+            showCancelButton: true,
+            confirmButtonColor: colorEstatus[nuevoEstatus],
+            cancelButtonColor: '#adb5bd',
+            confirmButtonText: 'Sí, confirmar',
+            cancelButtonText: 'Regresar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: 'actions/actualizar_estatus.php',
+                    method: 'POST',
+                    data: { id_ticket: id, estatus: nuevoEstatus },
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire({ title: '¡Hecho!', icon: 'success', timer: 1000, showConfirmButton: false });
+                            table.ajax.reload(null, false); 
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    var table;
+    $(document).ready(function() {
+        if ($('#tablaTickets').length) {
+            table = $('#tablaTickets').DataTable({
+                "processing": true,
+                "serverSide": true,
+                "ajax": {
+                    "url": "actions/obtener_tickets_usuario_datatable.php", // Controlador local
+                    "type": "POST",
+                    "data": function(d) {
+                        d.filterTipo     = $('#filterTipo').val();
+                        d.filterFalla    = $('#filterFalla').val();
+                        d.filterAccion   = $('#filterAccion').val();
+                        d.fechaDesde     = $('#fechaDesde').val();
+                        d.fechaHasta     = $('#fechaHasta').val();
+                        d.soloPendientes = $('#checkSoloPendientes').is(':checked') ? 1 : 0;
+                        d.soloGarantia   = $('#checkGarantia').is(':checked') ? 1 : 0;
+                        d.soloDeuda      = $('#checkSoloDeuda').is(':checked') ? 1 : 0;
+                        d.soloUrgentes   = $('#btnFiltrarCriticos').hasClass('btn-dark') ? 1 : 0;
+                    }
+                },
+                "columns": [
+                    { 
+                        "data": "id_ticket",
+                        "render": function(data, type, row) {
+                            let alerta = row.es_urgente ? 
+                                `<i class="bi bi-exclamation-triangle-fill text-danger ms-1-animate me-1" title="Urgente: ${row.diff_dias} días abierto" data-bs-toggle="tooltip"></i>` : '';
+                            return `<span class="fw-bold text-danger text-nowrap">${alerta}${data}</span>`;
+                        }
+                    },
+                    { "data": "nombre_cliente" },
+                    { "data": "modelo_serie" },
+                    { "data": "tipo_llamada", "visible": false },
+                    { "data": "tipo_falla" },
+                    { "data": "accion_realizada", "visible": false },
+                    { 
+                        "data": "garantia_valida",
+                        "render": function(data) {
+                            let color = data === 'Válida' ? 'text-success' : 'text-danger';
+                            return `<span class="small fw-bold ${color}">${data}</span>`;
+                        }
+                    },
+                    { 
+                        "data": "estatus_pago",
+                        "render": function(data) {
+                            let color = data === 'Pendiente' ? 'text-danger fw-bold' : 'text-success fw-bold';
+                            return `<span class="small ${color}">${data}</span>`;
+                        }
+                    },
+                    { 
+                        "data": "estatus",
+                        "render": function(data) {
+                            let badge = data === 'Abierto' ? 'bg-warning text-dark' : (data === 'Cerrado' ? 'bg-success' : 'bg-secondary text-white');
+                            return `<span class="badge ${badge}" style="font-size: 0.65rem;">${data}</span>`;
+                        }
+                    },
+                    { "data": "fecha_inicial" },
+                    { 
+                        "data": null,
+                        "render": function(data, type, row) {
+                            let html = `<span class="badge bg-dark bg-opacity-10 text-dark border border-secondary border-opacity-25" style="font-size: 0.7rem; font-weight: 500; padding: 0.35rem 0.6rem; border-radius: 6px;">
+                                            <i class="bi bi-person-fill text-muted me-1"></i>${row.creador}
+                                        </span>`;
+                            if (row.editor && row.editor !== row.creador) {
+                                html += `<br><small class="text-muted d-block" style="font-size: 0.6rem; margin-top: 4px;">
+                                            <i class="bi bi-pencil-square text-secondary me-1"></i>Edición: ${row.editor}
+                                        </small>`;
+                            }
+                            return html;
+                        }
+                    },
+                    { 
+                        "data": null,
+                        "orderable": false,
+                        "className": "text-center",
+                        "render": function(data, type, row) {
+                            let btns = `<button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(${row.id_ticket})" title="Ver detalles"><i class="bi bi-eye-fill"></i></button>`;
+                            if (row.estatus === 'Abierto') {
+                                btns += `<a href="editar_ticket.php?id_ticket=${row.id_ticket}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square"></i></a>
+                                         <button type="button" class="btn btn-outline-success border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cerrado')" title="Cerrar"><i class="bi bi-lock-fill"></i></button>
+                                         <button type="button" class="btn btn-outline-secondary border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cancelado')" title="Cancelar"><i class="bi bi-x-circle-fill"></i></button>`;
+                            }
+                            return `<div class="btn-group btn-group-sm">${btns}</div>`;
+                        }
+                    },
+                    { 
+                        "data": null,
+                        "className": "text-center",
+                        "render": function(data, type, row) {
+                            const iconMap = {
+                                'Envio base': 'bi bi-truck',
+                                'Envio técnico': 'bi bi-tools',
+                                'Envio refacciones': 'bi bi-box-seam',
+                                'Envio técnico y refacciones': 'bi bi-tools'
+                            };
+                            
+                            let iconClass = iconMap[row.accion_realizada] || 'bi bi-question-circle';
+                            let bgClass = 'bg-secondary text-white';
+                            let suffix = '';
+
+                            if (iconMap[row.accion_realizada]) {
+                                if (!row.f_ini_acc) { 
+                                    bgClass = 'bg-warning text-dark'; suffix = ' (Pendiente)'; 
+                                } else if (row.f_ini_acc && !row.f_fin_acc) { 
+                                    bgClass = 'bg-primary text-white'; suffix = ' (Iniciado)'; 
+                                } else { 
+                                    bgClass = 'bg-success text-white'; suffix = ' (Finalizado)'; 
+                                }
+                            }
+
+                            let extraIcon = (row.accion_realizada === 'Envio técnico y refacciones') ? '<i class="bi bi-box-seam ms-1"></i>' : '';
+
+                            return `<span class="badge ${bgClass} rounded-pill px-3 py-2 badge-envio" style="font-size: 0.65rem;" title="${row.accion_realizada}${suffix}">
+                                    <i class="${iconClass}"></i>${extraIcon}
+                                    </span>`;
+                        }
+                    }
+                ],
+                "language": {
+                    "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json"
+                },
+                "dom": 'rtip',
+                "pageLength": 13,
+                "order": [[0, "desc"]]
+            });
+
+            $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
+            $('#filterTipo, #filterFalla, #filterAccion, #fechaDesde, #fechaHasta').on('change', function() { table.draw(); });
+            $('#checkSoloPendientes, #checkGarantia, #checkSoloDeuda').on('change', function() { table.draw(); });
+
+            $('#btnFiltrarCriticos').on('click', function() {
+                const btn = $(this);
+                btn.toggleClass('btn-danger btn-dark');
+                const activo = btn.hasClass('btn-dark');
+                btn.html(activo ? '<i class="bi bi-arrow-counterclockwise me-1"></i> Quitar Filtro' : '<i class="bi bi-funnel-fill me-1"></i> Ver Urgentes');
+                table.draw();
+            });
+
+            $('#fechaDesde').on('change', function() { $('#fechaHasta').attr('min', $(this).val()); });
+            $('#fechaHasta').on('change', function() { $('#fechaDesde').attr('max', $(this).val()); });
+
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
+        }
+    });
+</script>

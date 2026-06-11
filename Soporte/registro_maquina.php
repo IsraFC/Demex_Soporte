@@ -11,6 +11,7 @@
  */
 
 require_once '../config/db.php';
+$page_title = "Registrar Máquina - Soporte";
 $modulo_actual = 'soporte';
 include '../includes/header.php';
 ?>
@@ -162,7 +163,7 @@ $(document).ready(function() {
         $(this).appendTo("body");
     });
 
-    // 1. VALIDACIÓN DE SERIE
+    // 1. VALIDACIÓN DE SERIE (Mantiene tu lógica POST y respuestas en texto plano)
     var typingTimer;
     $('#no_serie').on('input', function() {
         clearTimeout(typingTimer);
@@ -177,8 +178,7 @@ $(document).ready(function() {
                     method: 'POST',
                     data: { no_serie: serie },
                     success: function(response) {
-                        // 🎯 CORRECCIÓN VISUAL DE ICONOS DE VALIDACIÓN
-                        if (response === 'existe') {
+                        if (response.trim() === 'existe') {
                             input.removeClass('is-valid').addClass('is-invalid').css('border', '2px solid #dc3545');
                             msg.text('⚠️ Existe').css('color', '#dc3545').show();
                             $('#btnGuardar').attr('disabled', true);
@@ -194,6 +194,7 @@ $(document).ready(function() {
             // Si el usuario borra texto y cae abajo de 3 caracteres, reiniciamos el estado limpio
             input.removeClass('is-invalid is-valid').css('border', 'none');
             msg.hide();
+            $('#btnGuardar').attr('disabled', false);
         }
     });
 
@@ -209,7 +210,7 @@ $(document).ready(function() {
         $(this).val(res);
     });
 
-    // 3. GUARDAR CLIENTE (AJAX)
+    // 3. GUARDAR CLIENTE DESDE MODAL (AJAX)
     $('#btnGuardarClienteModal').on('click', function() {
         const nombre = $('#m_nombre_cliente').val();
         if (nombre.length < 4) { Swal.fire('Atención', 'Nombre muy corto', 'warning'); return; }
@@ -239,6 +240,54 @@ $(document).ready(function() {
             },
             error: function() { Swal.fire('Error', 'Fallo de conexión', 'error'); },
             complete: function() { btn.prop('disabled', false).html('<i class="bi bi-person-check me-1"></i> Guardar Cliente'); }
+        });
+    });
+
+    // 4. INTERCEPTOR ASÍNCRONO PARA EL FORMULARIO PRINCIPAL DE LA MÁQUINA (NUEVO)
+    $('#formRegistroMaquina').on('submit', function(e) {
+        e.preventDefault(); // Evita la recarga física de la página vieja
+
+        const btnGuardar = $('#btnGuardar');
+        const textoOriginal = btnGuardar.html();
+        
+        // Estado visual de carga para evitar clicks dobles
+        btnGuardar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Guardando...');
+
+        const formulario = this;
+        const datosFormulario = new FormData(formulario);
+
+        fetch(formulario.action, {
+            method: formulario.method,
+            body: datosFormulario
+        })
+        .then(respuesta => {
+            if (!respuesta.ok) {
+                throw new Error('Error en la comunicación de red con el servidor.');
+            }
+            return respuesta.json(); // Parsea la respuesta JSON pura de procesar_maquina.php
+        })
+        .then(data => {
+            Swal.fire({
+                icon: data.status,
+                title: data.title,
+                text: data.text,
+                confirmButtonColor: data.status === 'success' ? '#d15b00' : '#C62828'
+            }).then(() => {
+                if (data.status === 'success') {
+                    window.location.href = 'maquinas.php'; // Redirección limpia hacia el inventario
+                } else {
+                    btnGuardar.prop('disabled', false).html(textoOriginal); // Reactiva el botón si fue advertencia
+                }
+            });
+        })
+        .catch(error => {
+            btnGuardar.prop('disabled', false).html(textoOriginal);
+            Swal.fire({
+                icon: 'error',
+                title: 'Falla Operativa',
+                text: error.message,
+                confirmButtonColor: '#C62828'
+            });
         });
     });
 
