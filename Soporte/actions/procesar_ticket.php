@@ -1,22 +1,17 @@
 <?php
 /**
  * ARCHIVO: actions/procesar_ticket.php
- * DESCRIPCIÓN: Motor unificado de persistencia para Tickets y Detalles de Costos.
- * * LÓGICA DE INTEGRIDAD V2.7 (Doble Auditoría de Usuarios):
- * 1. Captura de Operador: Recupera el id_usuario desde la sesión activa para auditoría.
- * 2. Creador vs Editor: Separa la persistencia para id_usuario_creador e id_usuario_editor.
- * 3. Auto-registro de Equipos: Crea la máquina si no existe usando la fecha del modal.
- * 4. Validación de Garantía: Calcula si es "Válida" o "No válida" según la fecha de compra elegida.
- * * @author Israel Fernández Carrera
+ * DESCRIPCIÓN: Motor unificado asíncrono de persistencia para Tickets y Detalles de Costos.
+ * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 2.7
+ * @version 3.0 - Respuesta JSON Asíncrona
+ * @date 2026-06-08
  */
-require_once '../../config/db.php';
 
-// Aseguramos que la sesión esté iniciada para recuperar al operador activo
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+session_start();
+header('Content-Type: application/json; charset=utf-8');
+
+require_once '../../config/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -26,17 +21,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id_usuario = $_SESSION['id_usuario'] ?? null;
 
         // --- 1. RECEPCIÓN DE DATOS TÉCNICOS ---
-        $id_ticket      = $_POST['id_ticket'] ?? null;
-        $id_cliente     = $_POST['id_cliente'];
-        $no_serie       = !empty($_POST['no_serie']) ? trim($_POST['no_serie']) : null;
-        $modelo         = $_POST['modelo'] ?? null;
-        $tipo_llamada   = $_POST['tipo_llamada'];
-        $tipo_falla     = $_POST['tipo_falla'];
-        $maquina_func   = $_POST['maquina_func'] ?? 1;
-        $garantia_valida= $_POST['garantia_valida']; 
-        $no_llamadas    = $_POST['no_llamadas'] ?: 1;
-        $observaciones  = trim($_POST['observaciones']);
-        $accion         = $_POST['accion'];
+        $id_ticket       = !empty($_POST['id_ticket']) ? intval($_POST['id_ticket']) : null;
+        $id_cliente      = isset($_POST['id_cliente']) ? intval($_POST['id_cliente']) : null;
+        $no_serie        = !empty($_POST['no_serie']) ? trim($_POST['no_serie']) : null;
+        $modelo          = $_POST['modelo'] ?? null;
+        $tipo_llamada    = $_POST['tipo_llamada'] ?? '';
+        $tipo_falla      = $_POST['tipo_falla'] ?? '';
+        $maquina_func    = isset($_POST['maquina_func']) ? intval($_POST['maquina_func']) : 1;
+        $garantia_valida = $_POST['garantia_valida'] ?? 'Pendiente'; 
+        $no_llamadas     = !empty($_POST['no_llamadas']) ? intval($_POST['no_llamadas']) : 1;
+        $observaciones   = trim($_POST['observaciones'] ?? '');
+        $accion          = $_POST['accion'] ?? 'Ninguna';
+
+        if (!$id_cliente) {
+            echo json_encode(['status' => 'error', 'title' => 'Error de Origen', 'text' => 'No se identificó el cliente propietario del ticket.']);
+            exit();
+        }
 
         // Fecha capturada en el modal para equipos nuevos
         $fecha_compra   = !empty($_POST['fecha_compra_nueva']) ? $_POST['fecha_compra_nueva'] : date('Y-m-d');
@@ -47,18 +47,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $checkEq->execute([$no_serie]);
             
             if (!$checkEq->fetch()) {
-                // CAPTURA LA VIGENCIA (Si no viene, por defecto es 1)
                 $vigencia_anios = !empty($_POST['vigencia_nueva']) ? (int)$_POST['vigencia_nueva'] : 1;
-                
-                // Calcula la fecha de término sumando los años elegidos (1 o 2)
                 $fecha_termino = date('Y-m-d', strtotime($fecha_compra . " + $vigencia_anios year"));
                 $hoy = date('Y-m-d');
 
                 $sqlEq = "INSERT INTO equipos_garantia (no_serie, id_cliente, modelo, fecha_inicio, fecha_termino) 
-                        VALUES (?, ?, ?, ?, ?)";
+                          VALUES (?, ?, ?, ?, ?)";
                 $pdo->prepare($sqlEq)->execute([$no_serie, $id_cliente, $modelo, $fecha_compra, $fecha_termino]);
                 
-                // Recalcula el estatus de la garantía para el ticket actual
                 $garantia_valida = (strtotime($fecha_termino) >= strtotime($hoy)) ? "Válida" : "No válida";
             }
         }
@@ -67,7 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $f_inicio  = !empty($_POST['fecha_inicio_acc']) ? $_POST['fecha_inicio_acc'] : null;
         $f_fin     = !empty($_POST['fecha_fin_acc']) ? $_POST['fecha_fin_acc'] : null;
 
-        // LÓGICA DE AUDITORÍA: Recalcular días directamente en el servidor
         $t_acc_recalculado = 0;
         if ($f_inicio && $f_fin) {
             $d_ini = new DateTime($f_inicio);
@@ -91,7 +86,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $no_cotiz  = $_POST['no_cotizacion'] ?? null;
         $factura   = isset($_POST['requiere_factura']) ? 1 : 0;
 
-        // Lógica de Pago Inteligente (0.00 = NO APLICA)
         if ($c_total <= 0) {
             $pago = 'NO APLICA';
         } else {
@@ -100,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // --- 4. PERSISTENCIA EN TABLAS (AUDITORÍA DOBLE) ---
         if ($id_ticket) {
-            // MODO EDICIÓN: Dejamos intacto al creador original y sobreescribimos únicamente id_usuario_editor
+            // MODO EDICIÓN
             $sqlT = "UPDATE tickets_soporte SET no_serie = ?, tipo_llamada = ?, tipo_falla = ?, maquina_func = ?, garantia_valida = ?, no_llamadas = ?, observaciones = ?, id_usuario_editor = ? WHERE id_ticket = ?";
             $pdo->prepare($sqlT)->execute([$no_serie, $tipo_llamada, $tipo_falla, $maquina_func, $garantia_valida, $no_llamadas, $observaciones, $id_usuario, $id_ticket]);
 
@@ -115,8 +109,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $c_refac_g, $c_refac_v, $c_base, $c_tecnico, $c_envio, $c_total, 
                 $no_cotiz, $factura, $pago, $id_ticket
             ]);
+
+            $titleMsg = "¡Ticket Actualizado!";
+            $textMsg = "Las modificaciones técnicas y financieras han sido registradas en el folio #{$id_ticket}.";
         } else {
-            // MODO NUEVO REGISTRO: Al crear el ticket, guardamos tu ID tanto en el creador como en el editor inicial
+            // MODO NUEVO REGISTRO
             $sqlT = "INSERT INTO tickets_soporte (no_serie, id_cliente, tipo_llamada, tipo_falla, maquina_func, garantia_valida, estatus, fecha_inicial, no_llamadas, observaciones, id_usuario_creador, id_usuario_editor) 
                      VALUES (?, ?, ?, ?, ?, ?, 'Abierto', NOW(), ?, ?, ?, ?)";
             $stmtT = $pdo->prepare($sqlT);
@@ -131,13 +128,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $c_refac_g, $c_refac_v, $c_base, $c_tecnico, $c_envio, $c_total, 
                 $no_cotiz, $factura, $pago
             ]);
+
+            $titleMsg = "¡Ticket Generado!";
+            $textMsg = "El folio de soporte técnico ha sido abierto de forma exitosa.";
         }
 
         $pdo->commit();
-        header("Location: ../index.php?res=ok");
+        echo json_encode(['status' => 'success', 'title' => $titleMsg, 'text' => $textMsg]);
+        exit();
 
     } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        die("ERROR CRÍTICO: " . $e->getMessage());
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        echo json_encode(['status' => 'error', 'title' => 'Falla de Transacción', 'text' => 'Fallo al procesar el ticket: ' . $e->getMessage()]);
+        exit();
     }
 }

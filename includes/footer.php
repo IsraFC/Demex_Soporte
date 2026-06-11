@@ -21,7 +21,7 @@
     </div> 
 </div> 
 
-<?php if (isset($_SESSION['rol']) && ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte')): ?>
+<?php if (tieneAcceso(['Administrador', 'Soporte'])): ?>
 <div class="modal fade" id="modalNuevoTicket" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
@@ -152,7 +152,6 @@ $(document).ready(function() {
     });
 
     // MOTOR DE ENRUTAMIENTO DINÁMICO ADAPTATIVO PROTEGIDO
-    // Evaluamos de manera segura la existencia de la variable de ubicacion para evitar advertencias de ejecucion
     var enSubcarpetaSoporte = <?= (isset($en_subcarpeta) && $en_subcarpeta) ? 'true' : 'false' ?>;
     var pathModuloSoporte = enSubcarpetaSoporte ? './' : './Soporte/';
 

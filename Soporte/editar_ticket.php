@@ -1,25 +1,18 @@
 <?php
 /**
  * ARCHIVO: editar_ticket.php
- * DESCRIPCIÓN: Interfaz de edición unificada. Permite modificar datos técnicos y financieros.
- * Utiliza bordes primarios (azules) para diferenciar visualmente el modo edición del registro.
- * * * MEJORAS V1.6:
- * - Inteligencia de Series: Genera S/N-XXX automáticamente si se elige modelo en tickets sin serie.
- * - Sincronización AJAX: Valida garantías y modelos al vuelo durante la edición.
- * * @author Israel Fernández Carrera
+ * DESCRIPCIÓN: Interfaz de edición unificada asíncrona técnica y financiera.
+ * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 1.6
+ * @version 2.0 - Modificación en Segundo Plano (Fetch API)
+ * @date 2026-06-08
  */
 require_once '../config/db.php';
+$page_title = "Editar Ticket - Soporte";
 
-// Validación de existencia del folio para la carga de datos
 $id_ticket = $_GET['id_ticket'] ?? null;
 if (!$id_ticket) { header("Location: index.php"); exit(); }
 
-/**
- * 1. CONSULTA DE RECUPERACIÓN:
- * Extrae la información actual del ticket cruzando datos de soporte, costos y cliente.
- */
 $sql = "SELECT t.*, d.*, c.nombre_cliente, e.modelo 
         FROM Tickets_Soporte t 
         LEFT JOIN Detalles_Costos_Tiempos d ON t.id_ticket = d.id_ticket 
@@ -32,19 +25,12 @@ $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$ticket) { header("Location: index.php"); exit(); }
 
-/**
- * LÓGICA DE BLOQUEO:
- * Si el ticket ya tiene un número de serie real asignado, se bloquean los campos de equipo
- * para mantener la integridad del historial. Si está vacío o es genérico, permite la captura.
- */
 $tieneSerie = !empty($ticket['no_serie']) && strpos($ticket['no_serie'], 'S/N-') === false;
 
-// 2. Consulta de equipos del cliente para el buscador dinámico (Datalist)
 $stmt_eq = $pdo->prepare("SELECT no_serie, modelo FROM Equipos_Garantia WHERE id_cliente = ?");
 $stmt_eq->execute([$ticket['id_cliente']]);
 $equipos_cliente = $stmt_eq->fetchAll(PDO::FETCH_ASSOC);
 
-// 3. Catálogo de modelos disponibles para selección manual
 $stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM Equipos_Garantia ORDER BY modelo ASC");
 $todos_modelos = $stmt_mod->fetchAll(PDO::FETCH_COLUMN);
 
@@ -63,7 +49,6 @@ include '../includes/header.php';
     <input type="hidden" name="id_ticket" value="<?= $id_ticket ?>">
     <input type="hidden" name="id_cliente" value="<?= $ticket['id_cliente'] ?>">
     <input type="hidden" name="garantia_valida" id="garantia_valida_input" value="<?= $ticket['garantia_valida'] ?>">
-    
     <input type="hidden" name="fecha_compra_nueva" id="fecha_compra_nueva" value="">
 
     <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-primary mb-4">
@@ -226,8 +211,8 @@ include '../includes/header.php';
 
     <div class="text-center mt-4 d-flex justify-content-center gap-3">
         <a href="index.php" class="btn btn-light border px-5 rounded-pill fw-bold text-dark">Cancelar <i class="bi bi-x-lg ms-1"></i></a>
-        <button type="submit" class="btn btn-primary text-white px-5 rounded-pill fw-bold shadow">
-            Guardar Cambios <i class="bi bi-cloud-arrow-up ms-1"></i>
+        <button type="submit" id="btnActualizarTicket" class="btn btn-primary text-white px-5 rounded-pill fw-bold shadow">
+            <span id="btnText">Guardar Cambios</span> <i class="bi bi-cloud-arrow-up ms-1"></i>
         </button>
     </div>
 </form>
@@ -256,17 +241,9 @@ include '../includes/header.php';
 </div>
 
 <script>
-/**
- * LÓGICA FRONTEND (jQuery):
- * Controla validaciones AJAX, cálculos automáticos de costos y visualización dinámica.
- */
 $(document).ready(function() {
-    
-    let serieExiste = true; // Por defecto asumimos que existe al cargar edición
+    let serieExiste = true; 
 
-    /**
-     * NUEVA LÓGICA: GENERACIÓN DE SERIE GENÉRICA AL EDITAR
-     */
     $('#modelo_select').on('change', function() {
         const modelo = $(this).val();
         const serieInput = $('#no_serie_input');
@@ -321,21 +298,69 @@ $(document).ready(function() {
         } else { msgDiv.hide(); serieExiste = false; }
     });
 
-    // SEGURIDAD: INTERCEPTAR SUBMIT
+    // 🎯 INTERCEPTAR SUBMIT EN EDICIÓN (FETCH API)
     $('#formEditar').on('submit', function(e) {
+        e.preventDefault(); // Detiene el salto de página
+
         const serie = $('#no_serie_input').val().trim();
         if (!$('#no_serie_input').attr('readonly') && !serieExiste && serie !== "" && !serie.startsWith("S/N-")) {
-            e.preventDefault();
             $('#txtSerieNueva').text(serie);
             $('#modalSerieNueva').modal('show');
+            return false;
         }
+
+        ejecutarEnvioEdicion(this);
     });
 
     $('#btnConfirmarRegistro').on('click', function() {
         $('#fecha_compra_nueva').val($('#modal_fecha_compra').val());
+        $('#modalSerieNueva').modal('hide');
         serieExiste = true; 
-        $('#formEditar').submit();
+        ejecutarEnvioEdicion(document.getElementById('formEditar'));
     });
+
+    function ejecutarEnvioEdicion(formElement) {
+        const btn = $('#btnActualizarTicket');
+        const txtBtn = $('#btnText');
+        const originalHtml = btn.html();
+
+        btn.prop('disabled', true);
+        txtBtn.text('Guardando...');
+
+        const datosFormulario = new FormData(formElement);
+
+        fetch(formElement.action, {
+            method: formElement.method,
+            body: datosFormulario
+        })
+        .then(respuesta => {
+            if (!respuesta.ok) throw new Error('Error en la comunicación con el servidor.');
+            return respuesta.json();
+        })
+        .then(data => {
+            Swal.fire({
+                icon: data.status,
+                title: data.title,
+                text: data.text,
+                confirmButtonColor: data.status === 'success' ? '#0066cc' : '#C62828'
+            }).then(() => {
+                if (data.status === 'success') {
+                    window.location.href = 'index.php'; // Regresa al tablero principal
+                } else {
+                    btn.prop('disabled', false).html(originalHtml);
+                }
+            });
+        })
+        .catch(error => {
+            btn.prop('disabled', false).html(originalHtml);
+            Swal.fire({
+                icon: 'error',
+                title: 'Falla Operativa',
+                text: error.message,
+                confirmButtonColor: '#C62828'
+            });
+        });
+    }
 
     function toggleCostos() {
         if (['Ninguna', 'Información'].includes($('#accion_select').val())) $('#seccion_costos').slideUp();
@@ -343,7 +368,6 @@ $(document).ready(function() {
     }
     $('#accion_select').on('change', toggleCostos);
 
-    // SUMATORIA + LÓGICA PAGO N/A
     $('.costo-input').on('input', function() {
         let total = 0;
         $('.costo-input').each(function() { total += parseFloat($(this).val()) || 0; });
@@ -360,7 +384,6 @@ $(document).ready(function() {
         }
     });
 
-    // LÓGICA DE FECHAS Y TIEMPOS (CON RESET INCLUIDO)
     $('#fecha_inicio, #fecha_fin').on('change', function() {
         const inicio = $('#fecha_inicio').val();
         const fin = $('#fecha_fin').val();
@@ -372,10 +395,9 @@ $(document).ready(function() {
                 const dias = Math.floor(diff / (1000 * 60 * 60 * 24));
                 $('#tiempo_accion').val(dias >= 0 ? dias : 0);
             } else {
-                $('#tiempo_accion').val(''); // Reset días si se borra la fecha fin
+                $('#tiempo_accion').val('');
             }
         } else {
-            // Reset total si se borra la fecha de inicio
             $('#fecha_fin').val('').prop('disabled', true);
             $('#tiempo_accion').val('');
         }
@@ -386,16 +408,8 @@ $(document).ready(function() {
         $('#label_pago').html('Estatus: ' + txt);
     });
 
-    // --- INICIALIZACIÓN ---
     toggleCostos();
-    
-    /**
-     * IMPORTANTE: Disparamos el input manualmente pero con un pequeño delay
-     * para asegurar que los valores cargados por PHP ya estén disponibles.
-     */
-    setTimeout(function() {
-        $('.costo-input').first().trigger('input'); 
-    }, 100);
+    setTimeout(function() { $('.costo-input').first().trigger('input'); }, 100);
 
     const initG = $('#garantia_valida_input').val();
     let c = (initG === 'Válida') ? '#198754' : (initG === 'Pendiente' ? '#6c757d' : '#dc3545');

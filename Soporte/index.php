@@ -10,6 +10,7 @@
  */
 
 require_once '../config/db.php';
+$page_title = "Panel de Control - Soporte";
 
 /**
  * CONSULTAS DE INDICADORES (KPIs):

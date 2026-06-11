@@ -2,8 +2,8 @@
 /**
  * @file procesar_login.php
  * @package Portal_Demex
- * @version 1.7 - Protección de Fuerza Bruta por Cuenta (Base de Datos)
- * @brief Controlador encargado de validar y proteger la autenticación de forma estricta por usuario.
+ * @version 2.1 - Adaptado a Múltiples Roles (Redirección a Raíz Homologada)
+ * @brief Controlador encargado de validar, proteger la autenticación e inicializar los múltiples roles en la sesión.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -30,8 +30,8 @@ if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
 }
 
 try {
-    // 1. Buscamos al usuario (Traemos también las nuevas columnas de control)
-    $sql = "SELECT id_usuario, nombre, apellidos, correo, password, rol, estatus, intentos_fallidos, bloqueado_hasta 
+    // 1. Buscamos al usuario (Removida la columna obsoleta 'rol')
+    $sql = "SELECT id_usuario, nombre, apellidos, correo, password, estatus, intentos_fallidos, bloqueado_hasta 
             FROM usuarios 
             WHERE correo = ? AND estatus = 1 
             LIMIT 1";
@@ -69,24 +69,35 @@ try {
         unset($_SESSION['old_correo']);
         unset($_SESSION['bloqueo_hasta']);
 
+        // 4. Consultar todos los roles que tiene asignados el usuario (con primera mayúscula)
+        $sqlRoles = "SELECT r.nombre_rol 
+                     FROM roles r
+                     INNER JOIN usuario_roles ur ON r.id_rol = ur.id_rol
+                     WHERE ur.id_usuario = ?";
+        $stmtRoles = $pdo->prepare($sqlRoles);
+        $stmtRoles->execute([$user['id_usuario']]);
+        
+        // fetchAll(PDO::FETCH_COLUMN) genera un array plano, ej: ['Soporte', 'Administrador']
+        $mis_roles = $stmtRoles->fetchAll(PDO::FETCH_COLUMN);
+
+        // Guardamos los datos de identidad en la sesión global
         $_SESSION['id_usuario'] = $user['id_usuario'];
         $_SESSION['nombre']     = $user['nombre'];
         $_SESSION['apellidos']  = $user['apellidos'];
         $_SESSION['correo']     = $user['correo'];
-        $_SESSION['rol']        = $user['rol'];
+        $_SESSION['roles']      = $mis_roles; // Guardamos el array completo de roles asignados
 
-        // Redirección por roles
-        switch ($user['rol']) {
-            case 'administrador':
-            case 'soporte':
-                header("Location: ../Soporte/index.php");
-                exit();
-            case 'ventas':
-                header("Location: ../Ventas/index.php");
-                exit();
-            default:
-                header("Location: ../vista_cliente.php");
-                exit();
+        // 5. Redirección por prioridades de roles asignados (Case-Sensitive)
+        if (in_array('Administrador', $mis_roles) || in_array('Soporte', $mis_roles)) {
+            header("Location: ../Soporte/index.php");
+            exit();
+        } elseif (in_array('Ventas', $mis_roles)) {
+            header("Location: ../Ventas/leads_crm.php");
+            exit();
+        } else {
+            // Corrección: Redirige al enrutador index.php de la raíz al no existir vista_cliente.php
+            header("Location: ../index.php");
+            exit();
         }
 
     } else {
