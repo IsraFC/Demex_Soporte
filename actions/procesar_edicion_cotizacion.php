@@ -2,11 +2,11 @@
 /**
  * ARCHIVO: actions/procesar_edicion_cotizacion.php
  * DESCRIPCIÓN: Procesador de Base de Datos para el UPDATE unificado.
- * Actualiza la cotización y sincroniza los cambios de datos (nombre/razon social)
- * con la tabla 'formulario' y 'prospectos' para que se reflejen al instante en el CRM.
+ * Actualiza la cotización y sincroniza los cambios de datos (nombre/apellidos)
+ * en la tabla 'formulario' siguiendo la cadena de llaves foráneas.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.0 (Sincronización Total con el Tablero de Leads)
+ * @version 6.2 (Sincronización Estricta por Llaves Foráneas)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // 1. Captura de variables desde editar_cotizacion.php
 $id_cotizacion        = isset($_POST['id_cotizacion']) ? intval($_POST['id_cotizacion']) : 0;
 $id_maquina           = isset($_POST['id_maquina']) ? intval($_POST['id_maquina']) : 0;
-$cliente_razon        = trim($_POST['cliente'] ?? '');
+$cliente_razon        = trim($_POST['cliente'] ?? ''); // Viene todo junto del formulario
 $rfc_receptor         = !empty($_POST['rfc_receptor']) ? strtoupper(trim($_POST['rfc_receptor'])) : 'XAXX010101000';
 $sucursal             = !empty($_POST['sucursal']) ? trim($_POST['sucursal']) : 'Matriz';
 $direccion_entrega    = trim($_POST['direccion_entrega'] ?? '');
@@ -42,14 +42,14 @@ if ($id_cotizacion <= 0 || $id_maquina <= 0 || empty($cliente_razon)) {
 }
 
 try {
-    // Iniciamos una transacción para asegurar que se actualicen todas las tablas o ninguna
+    // Iniciamos la transacción para asegurar la consistencia transaccional
     $pdo->beginTransaction();
 
     // 2. Recálculo financiero en Backend
     $monto_descuento_unitario = $precio_base_origen * ($descuento_porcentaje / 100);
     $precio_pactado_unitario  = $precio_base_origen - $monto_descuento_unitario;
 
-    // 3. OBTENER LOS IDs RELACIONADOS (id_prospecto e id_formulario)
+    // 3. OBTENER LOS IDs RELACIONADOS (id_prospecto -> id_formulario)
     $stmt_ids = $pdo->prepare("SELECT id_prospecto FROM cotizacion WHERE id_cotizacion = ? LIMIT 1");
     $stmt_ids->execute([$id_cotizacion]);
     $cot_actual = $stmt_ids->fetch(PDO::FETCH_ASSOC);
@@ -66,11 +66,16 @@ try {
     $prospecto_actual = $stmt_form->fetch(PDO::FETCH_ASSOC);
     $id_formulario = $prospecto_actual['id_formulario'];
 
+    // Obtener el nombre de la máquina basado en el id_maquina seleccionado
+    $stmt_maq_name = $pdo->prepare("SELECT modelo FROM maquinaria WHERE id_maquina = ? LIMIT 1");
+    $stmt_maq_name->execute([$id_maquina]);
+    $maquina_info = $stmt_maq_name->fetch(PDO::FETCH_ASSOC);
+    $modelo_texto = $maquina_info ? $maquina_info['modelo'] : '';
 
-    // 4. PASO A: Actualizar la tabla madre 'cotizacion'
+
+    // 4. PASO A: Actualizar la tabla madre 'cotizacion' (Campos reales de la tabla)
     $sql_update_cot = "UPDATE cotizacion 
                        SET id_maquina = :id_maquina,
-                           razon_social = :razon_social,
                            rfc_receptor = :rfc_receptor,
                            direccion_entrega = :direccion_entrega,
                            sucursal = :sucursal,
@@ -87,7 +92,6 @@ try {
     $stmt1 = $pdo->prepare($sql_update_cot);
     $stmt1->execute([
         ':id_maquina'              => $id_maquina,
-        ':razon_social'            => $cliente_razon,
         ':rfc_receptor'            => $rfc_receptor,
         ':direccion_entrega'       => $direccion_entrega,
         ':sucursal'                => $sucursal,
@@ -103,24 +107,46 @@ try {
     ]);
 
 
-    // 5. PASO B: ¡Sincronización Clave con 'formulario'! Re-escribimos el nombre del Lead
-    // para que la tarjeta del CRM muestre el cambio de manera reactiva e inmediata.
-    $sql_update_form = "UPDATE formulario f
-                        INNER JOIN maquinaria m ON m.id_maquina = :id_maquina
-                        SET f.nombre = :nuevo_nombre, 
-                            f.apellidos = '', 
-                            f.modelo_interes = m.modelo
-                        WHERE f.id_formulario = :id_formulario";
+    // 5. PASO B: Separación inteligente de Nombres y Apellidos para la tabla 'formulario'
+    $partes_nombre = explode(' ', $cliente_razon);
+    $total_palabras = count($partes_nombre);
+
+    $nuevo_nombre = '';
+    $nuevos_apellidos = '';
+
+    if ($total_palabras == 1) {
+        $nuevo_nombre = $partes_nombre[0];
+        $nuevos_apellidos = '';
+    } elseif ($total_palabras == 2) {
+        $nuevo_nombre = $partes_nombre[0];
+        $nuevos_apellidos = $partes_nombre[1];
+    } elseif ($total_palabras == 3) {
+        // Ejemplo: Juan Pérez Gómez -> Nombre: Juan, Apellidos: Pérez Gómez
+        $nuevo_nombre = $partes_nombre[0];
+        $nuevos_apellidos = $partes_nombre[1] . ' ' . $partes_nombre[2];
+    } else {
+        // Ejemplo: Sergio Mauricio Campos Carranza -> Nombre: Sergio Mauricio, Apellidos: Campos Carranza
+        $nuevo_nombre = $partes_nombre[0] . ' ' . $partes_nombre[1];
+        $nuevos_apellidos = implode(' ', array_slice($partes_nombre, 2));
+    }
+
+    // Actualizamos la tabla formulario de manera limpia usando su ID directo
+    $sql_update_form = "UPDATE formulario 
+                        SET nombre = :nuevo_nombre, 
+                            apellidos = :nuevos_apellidos, 
+                            maquina_interes = :maquina_interes
+                        WHERE id_formulario = :id_formulario";
     
     $stmt2 = $pdo->prepare($sql_update_form);
     $stmt2->execute([
-        ':id_maquina'    => $id_maquina,
-        ':nuevo_nombre'  => $cliente_razon,
-        ':id_formulario' => $id_formulario
+        ':nuevo_nombre'   => $nuevo_nombre,
+        ':nuevos_apellidos'=> $nuevos_apellidos,
+        ':maquina_interes'=> $modelo_texto,
+        ':id_formulario'  => $id_formulario
     ]);
 
 
-    // 6. PASO C: Sincronización estricta del Semáforo y Tiempos de Prospección
+    // 6. PASO C: Sincronizar el Semáforo y Tiempos de Prospección
     $sql_update_pros = "UPDATE prospectos 
                         SET status_comercial = 'Cotizado', 
                             status_operativo = 'Cotizado',
@@ -128,15 +154,15 @@ try {
                         WHERE id_prospecto = ?";
     $pdo->prepare($sql_update_pros)->execute([$id_prospecto]);
 
-    // Si todo salió bien, guardamos los cambios de forma definitiva en la BD
+    // Cerramos la transacción con éxito
     $pdo->commit();
 
-    // Redireccionamos con éxito total
+    // Redirección exitosa
     header("Location: ../Ventas/leads_crm.php?msg=success");
     exit();
 
 } catch (\Exception $e) {
-    // Si algo falla, deshacemos los cambios para cuidar la integridad del sistema
+    // Cancelamos cualquier cambio incompleto en caso de error
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }

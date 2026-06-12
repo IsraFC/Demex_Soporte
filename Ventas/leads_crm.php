@@ -5,7 +5,7 @@
  * Integra columna visual de Estatus Venta y Barra de Acciones Automatizada con SweetAlert2.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 5.1 (Fully Automated Actions Grid)
+ * @version 5.2 (SweetAlert2 Success Animation Integrated)
  */
 
 $page_title = "Panel de Seguimiento | CRM Ventas";
@@ -28,26 +28,6 @@ $maquinas_reales = ['DEMEX 313', 'DEMEX 313T', 'DEMEX 513', 'DEMEX 613', 'DEMEX 
 $modulo_actual = 'ventas';
 include '../includes/header.php';
 ?>
-
-<?php if (isset($_GET['msg'])): ?>
-    <div class="container-fluid mb-4 px-0">
-        <div class="alert alert-<?= ($_GET['msg'] == 'success') ? 'success' : 'danger' ?> alert-dismissible fade show shadow-sm border-0 border-start border-4 border-<?= ($_GET['msg'] == 'success') ? 'success' : 'danger' ?> bg-white" role="alert">
-            <div class="d-flex align-items-center">
-                <i class="bi <?= ($_GET['msg'] == 'success') ? 'bi-check-circle-fill text-success' : 'bi-exclamation-triangle-fill text-danger' ?> fs-4 me-3"></i>
-                <div>
-                    <?php 
-                        if ($_GET['msg'] == 'success') {
-                            echo "<strong>¡Operación Exitosa!</strong> El estatus comercial se actualizó correctamente.";
-                        } else {
-                            echo "<strong>Hubo un problema.</strong> No se pudo procesar el cambio de estatus.";
-                        }
-                    ?>
-                </div>
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    </div>
-<?php endif; ?>
 
 <div class="row mb-4 align-items-center">
     <div class="col-md-6">
@@ -186,6 +166,38 @@ include '../includes/header.php';
 <script>
 $(document).ready(function() {
     
+    // --- NUEVO: Interceptor de Mensajes en URL para Alertas Animadas ---
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('msg') === 'success') {
+        Swal.fire({
+            title: '¡Cambios Guardados!',
+            text: 'La cotización y el expediente del prospecto se actualizaron exitosamente.',
+            icon: 'success',
+            confirmButtonColor: '#198754', // Tonalidad verde de éxito comercial
+            confirmButtonText: 'Entendido',
+            showClass: {
+                popup: 'animate__animated animate__fadeInDown'
+            },
+            hideClass: {
+                popup: 'animate__animated animate__fadeOutUp'
+            }
+        }).then(() => {
+            // Elimina los parámetros de la URL para evitar re-disparos molestos al refrescar la página
+            window.history.replaceState({}, document.title, window.location.pathname);
+        });
+    } else if (urlParams.get('msg') === 'error') {
+        const descError = urlParams.get('desc') || 'No se pudo procesar la actualización.';
+        Swal.fire({
+            title: 'Error de Actualización',
+            text: decodeURIComponent(descError),
+            icon: 'error',
+            confirmButtonColor: '#dc3545',
+            confirmButtonText: 'Revisar'
+        }).then(() => {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        });
+    }
+
     // --- 1. MOTOR DE REACTIVIDAD EN TIEMPO REAL (Estilo de Isra en maquinas.php) ---
     function calcularSemaforosComerciales() {
         const ahora = Date.now();
