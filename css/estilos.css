@@ -1,21 +1,309 @@
 /* ==========================================================================
-   ESTILOS PERSONALIZADOS PARA DEMEX - NEUMORFISMO SUAVE
+   CONFIGURACIÓN UNIFICADA DE IDENTIDAD CORPORATIVA (ROJO SEMÁNTICO PREMIUM)
    ========================================================================== */
+
 :root {
-    --primary-red: #C62828;
-    --dark-red: #8E1C1C;
-    --bg-light: #F8F9FA;
-    --shadow-soft: 0 8px 30px rgba(0,0,0,0.08);
+    --primary-color: #DC3545;      /* Rojo exacto de text-danger (#DC3545) */
+    --dark-color: #BD2130;         /* Rojo profundo para hovers y bordes activos */
+    --focus-glow: rgba(220, 53, 69, 0.15);
+    --bg-light: #F8F9FA;           /* Fondo gris claro unificado */
+    --shadow-soft: 0 8px 30px rgba(220, 53, 69, 0.05);
 }
 
-/* Estilo base para toda la aplicación */
+/* ==========================================================================
+   ESTRUCTURA DEL MAQUETADO BASE (REVISADO Y BLINDADO)
+   ========================================================================== */
 body {
-    background-color: var(--bg-light);
     font-family: 'Poppins', sans-serif;
+    background-color: var(--bg-light);
     color: #2D3436;
+    overflow-x: hidden;
 }
 
-/* Elevación de contenedores (Neumorfismo suave) */
+#wrapper {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#sidebar-wrapper {
+    height: 100vh !important;
+    width: 280px;
+    background-color: #1E1E1E;
+    transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+}
+
+#wrapper.toggled #sidebar-wrapper {
+    width: 75px;
+}
+
+/* --- AISLAMIENTO Y MOTOR DE DESPLAZAMIENTO VERTICAL INDEPENDIENTE --- */
+.sidebar-menu-scroll {
+    display: block !important;          
+    flex: 1 !important;                 
+    overflow-y: auto !important;        
+    overflow-x: hidden !important;      
+    max-height: calc(100vh - 77px) !important; 
+}
+
+#sidebar-menu-list {
+    display: block !important;
+    height: auto !important;
+}
+
+#page-content-wrapper {
+    flex: 1;
+    height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.sidebar-heading {
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    height: 77px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: padding 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+#wrapper.toggled .sidebar-heading {
+    padding: 1.2rem 0;
+    justify-content: center;
+}
+
+.brand-container {
+    display: flex;
+    align-items: center;
+    transition: opacity 0.15s ease, max-width 0.25s ease;
+    max-width: 180px;
+    opacity: 1;
+}
+
+#wrapper.toggled .brand-container {
+    max-width: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* --- DISEÑO DE LA BARRITA DE SCROLL ULTRA DELGADA --- */
+.sidebar-menu-scroll::-webkit-scrollbar {
+    width: 5px !important;              
+}
+
+.sidebar-menu-scroll::-webkit-scrollbar-track {
+    background: transparent !important; 
+}
+
+.sidebar-menu-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.12) !important; 
+    border-radius: 10px !important;
+}
+
+.sidebar-menu-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.28) !important; 
+}
+
+/* ==========================================================================
+   BOTONES DEL SIDEBAR Y CONTROL SIMÉTRICO DE CORTINA
+   ========================================================================== */
+.sidebar-link {
+    padding: 0.8rem 1.5rem;
+    color: #B3B3B3 !important;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start !important;
+    text-decoration: none;
+    margin: 0.2rem 0.8rem;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    transition: color 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.sidebar-link::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--primary-color);
+    z-index: -1;
+    transform: scaleX(0);
+    transform-origin: left !important;
+    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+    border-radius: 10px;
+}
+
+.sidebar-icon {
+    min-width: 28px;
+    max-width: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.sidebar-link span,
+.seccion-herramientas {
+    display: inline-block;
+    max-width: 180px;
+    opacity: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: max-width 0.3s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.2s ease, margin-left 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    margin-left: 10px;
+}
+
+.sidebar-link:hover:not(.active-page) {
+    color: #FFFFFF !important;
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-link:hover:not(.active-page)::before {
+    transform: scaleX(0) !important;
+    transform-origin: left !important;
+}
+
+.sidebar-link.active-page {
+    color: #FFFFFF !important;
+    font-weight: 500;
+    box-shadow: var(--shadow-soft);
+}
+
+.sidebar-link.vaciando-page::before {
+    transform: scaleX(0) !important;
+    transform-origin: left !important;
+    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+    border-radius: 10px;
+}
+
+.sidebar-link.vaciando-page {
+    background-color: transparent !important;
+    color: #B3B3B3 !important;
+}
+
+.sidebar-link.active-page::before {
+    transform: scaleX(1) !important;
+    transform-origin: left !important;
+}
+
+.sidebar-link.active-page .sidebar-icon {
+    transform: scale(1.15) !important;
+}
+
+.no-anim::before {
+    transition: none !important;
+    transform: scaleX(1) !important;
+    transform-origin: left !important;
+}
+
+.btn-sidebar-trigger {
+    background: none;
+    border: none;
+    color: #FFFFFF;
+    font-size: 1.3rem;
+    padding: 4px 10px;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn-sidebar-trigger:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* --- NAVBAR SUPERIOR CON DEGRADADO SUAVE --- */
+.top-navbar {
+    background-color: var(--primary-color) !important;
+    border-bottom: 4px solid var(--dark-color);
+    padding: 0.75rem 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    transition: transform 0.3s ease-in-out !important;
+    height: 77px;
+}
+
+.top-navbar.navbar-hidden {
+    transform: translateY(-100%);
+}
+
+/* --- BOTÓN DE TICKET PREMIUM ADAPTATIVO --- */
+.btn-ticket-premium {
+    position: relative;
+    background: linear-gradient(180deg, var(--primary-color) 0%, var(--dark-color) 100%) !important;
+    color: #FFFFFF !important;
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 0.6rem 1.6rem;
+    border-radius: 50px;
+    border: 1px solid var(--dark-color) !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15), 
+                inset 0 1px 0 rgba(255, 255, 255, 0.3), 
+                inset 0 -2px 0 rgba(0, 0, 0, 0.2) !important;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.btn-ticket-premium::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -60%;
+    width: 30%;
+    height: 200%;
+    background: linear-gradient(
+        to right, 
+        rgba(255, 255, 255, 0) 0%, 
+        rgba(255, 255, 255, 0.4) 50%, 
+        rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(25deg);
+    animation: shimmer 4s infinite linear;
+}
+
+.btn-ticket-premium:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2), 
+                inset 0 1px 0 rgba(255, 255, 255, 0.4), 
+                inset 0 -2px 0 rgba(0, 0, 0, 0.2) !important;
+    filter: brightness(1.08);
+}
+
+.btn-ticket-premium:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 
+                inset 0 1px 0 rgba(255, 255, 255, 0.1), 
+                inset 0 2px 3px rgba(0, 0, 0, 0.2) !important;
+}
+
+@keyframes shimmer {
+    0% { left: -60%; }
+    15% { left: 130%; }
+    100% { left: 130%; }
+}
+
+/* ==========================================================================
+   ESTILOS COMPONENTES GENERALES (NEUMORFISMO)
+   ========================================================================== */
 .card-main {
     background: #ffffff;
     border: none;
@@ -24,12 +312,10 @@ body {
     padding: 2.5rem;
 }
 
-/* Efecto de profundidad para el logo en Navbar */
 .filter-drop-shadow {
-    filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.3));
+    filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.25));
 }
 
-/* Inputs con enfoque suave */
 .form-control, .form-select {
     border: 1px solid #E0E0E0;
     border-radius: 12px;
@@ -37,58 +323,48 @@ body {
     transition: all 0.2s ease-in-out;
 }
 
-/* Efecto de enfoque para inputs */
 .form-control:focus {
-    border-color: var(--primary-red);
-    box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
-    transform: translateY(-1px); /* Efecto de levante al interactuar */
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px var(--focus-glow);
+    transform: translateY(-1px);
 }
 
-/* Botonera moderna */
 .btn-demex {
-    background-color: var(--primary-red);
+    background-color: var(--primary-color);
     color: white;
     border: none;
     border-radius: 12px;
     padding: 0.8rem 2rem;
     font-weight: 600;
-    transition: 0.3s;
+    transition: all 0.3s ease;
 }
 
-/* Efecto hover para botones */
 .btn-demex:hover {
-    background-color: var(--dark-red);
+    background-color: var(--dark-color);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(198, 40, 40, 0.3);
+    box-shadow: 0 5px 15px var(--focus-glow);
 }
 
 /* ==========================================================================
-   SISTEMA DE ALERTAS DINÁMICAS (TICKETS CRÍTICOS)
+   MÓDULO EXCLUSIVO: SOPORTE TÉCNICO & ALERTAS CRÍTICAS
    ========================================================================== */
-
-/* 1. Animación de parpadeo para el icono de peligro */
 .ms-1-animate {
     animation: blinker-urgente 1.5s linear infinite;
     filter: drop-shadow(0 0 2px rgba(220, 53, 69, 0.5));
 }
 
 @keyframes blinker-urgente {
-    50% {
-        opacity: 0.2; /* El icono se desvanece a un 20% y vuelve */
-    }
+    50% { opacity: 0.2; }
 }
 
-/* 2. Estilo para el banner de alerta superior */
 #alertaCriticos {
-    margin-top: -10px; /* Ajuste para pegarse un poco más a los KPIs */
+    margin-top: -10px; 
     margin-bottom: 20px;
     border-radius: 12px;
     padding: 15px 20px;
     transition: all 0.3s ease;
 }
 
-/* 3. Animación de entrada para el banner (opcional) */
-/* Si no usas Animate.css, esto le dará un efecto de entrada suave */
 .animate__headShake {
     animation: headShake 1s ease-in-out;
 }
@@ -102,13 +378,136 @@ body {
     50% { transform: translateX(0); }
 }
 
-/* 4. Estilo de los Tooltips (Opcional: para que se vean más acorde a DEMEX) */
 .tooltip-inner {
-    background-color: #dc3545 !important; /* Rojo DEMEX */
+    background-color: var(--primary-color) !important; 
     font-weight: bold;
     font-size: 0.75rem;
 }
+
 .bs-tooltip-auto[data-pooper-placement^=top] .tooltip-arrow::before, 
 .bs-tooltip-top .tooltip-arrow::before {
-    border-top-color: #dc3545 !important;
+    border-top-color: var(--primary-color) !important;
+}
+
+/* ==========================================================================
+   COMPONENTES DE TERCEROS (DATATABLES FIX OVERFLOW)
+   ========================================================================== */
+.dataTables_filter input {
+    border: 1px solid #E0E0E0 !important;
+    border-radius: 12px !important;
+    padding: 0.4rem 0.8rem !important;
+    background-color: #FFFFFF !important;
+    box-shadow: none !important;
+    transition: all 0.2s ease-in-out !important;
+    margin-left: 0.5rem !important;
+    display: inline-block !important;
+    width: auto !important;
+    vertical-align: middle !important;
+}
+
+.dataTables_filter input:focus {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 4px var(--focus-glow) !important;
+    outline: none !important;
+}
+
+.dataTables_wrapper .dataTables_filter {
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.dropdown-menu-custom {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+/* ==========================================================================
+   CAPAS CINEMÁTICAS (FADE-IN EFECTO PREMIUM)
+   ========================================================================== */
+.page-fade-wrapper {
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.5s cubic-bezier(0.25, 1, 0.5, 1), transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+    will-change: opacity, transform;
+}
+
+.page-fade-wrapper.fade-in-active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.page-fade-wrapper.fade-out-active {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+/* ==========================================================================
+   BLINDAJE ESTRUCTURAL SÍNCRONO (CONTROL DE COLAPSO)
+   ========================================================================== */
+#wrapper.toggled #sidebar-wrapper { 
+    width: 75px !important; 
+}
+
+#wrapper.toggled .sidebar-heading { 
+    padding: 1.2rem 0 !important; 
+    justify-content: center !important; 
+}
+
+#wrapper.toggled .brand-container { 
+    max-width: 0 !important; 
+    opacity: 0 !important; 
+    pointer-events: none; 
+}
+
+#wrapper.toggled .sidebar-link { 
+    padding: 0.8rem 0 !important; 
+    margin: 0.2rem 0.6rem !important; 
+    justify-content: center !important; 
+}
+
+#wrapper.toggled .sidebar-link span, 
+#wrapper.toggled .seccion-herramientas { 
+    max-width: 0 !important; 
+    opacity: 0 !important; 
+    margin-left: 0 !important; 
+}
+
+/* ==========================================================================
+   MÓDULO EXCLUSIVO: CONTROL DE ACCESO (LOGIN)
+   ========================================================================== */
+.login-body { 
+    background-color: #F8F9FA !important; 
+    display: flex !important; 
+    align-items: center !important; 
+    justify-content: center !important; 
+    height: 100vh !important; 
+    width: 100vw !important;
+    margin: 0 !important; 
+    font-family: 'Poppins', sans-serif;
+}
+
+.login-card { 
+    max-width: 450px; 
+    width: 90%; 
+    border-top: 5px solid #C62828; 
+}
+
+.logo-login-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+    width: 100%;
+}
+
+.logo-highlight {
+    filter: drop-shadow(0px 6px 18px rgba(0, 0, 0, 0.45)) 
+            drop-shadow(0px 3px 8px rgba(0, 0, 0, 0.35))
+            drop-shadow(0px 1px 3px rgba(0, 0, 0, 0.25))
+            drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.50)) !important;
+    transition: filter 0.3s ease;
 }

@@ -1,0 +1,27 @@
+name: Despliegue Automático en Hetzner
+
+on:
+  push:
+    branches:
+      - main  # Se activa automáticamente al mandar cambios a la rama main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Descargar el código desde GitHub
+      uses: actions/checkout@v3
+
+    - name: Sincronizar archivos hacia Hetzner vía SFTP
+      uses: garygrossman/ssh-deploy@v2.4.4
+      with:
+        SSH_PRIVATE_KEY: "" # Queda vacío porque nos autenticamos con contraseña
+        REMOTE_HOST: ${{ secrets.SSH_HOST }}
+        REMOTE_USER: ${{ secrets.SSH_USER }}
+        REMOTE_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        ARGS: "-rlgoDzvc --delete" # Sincroniza y limpia código viejo del repositorio
+        SOURCE: "/" # Copia todo desde la raíz de GitHub
+        TARGET: "/var/www/html/" # Carpeta destino en tu servidor Ubuntu
+        # Aquí abajo están protegidos todos tus archivos locales, del sistema y respaldos:
+        EXCLUDE: "/.git/, /.github/, /.gitignore, /.vscode/, /Thumbs.db, /desktop.ini, /.DS_Store, /*.log, /Soporte/backups/, /backups/, /config/ultimo_respaldo.txt, /crear_admin.php, /config/mail_config.php, /config/db.php"
