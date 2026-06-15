@@ -4,7 +4,6 @@
  * @package Portal_Demex
  * @brief Interfaz gráfica con validación específica de errores y mitigación precisa de fuerza bruta.
  */
-
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -57,7 +56,7 @@ if (!empty($old_correo)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal DEMEX | Iniciar Sesión</title>
+    <title>Portal DEMEX | Control de Acceso</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -107,6 +106,13 @@ if (!empty($old_correo)) {
         </div>
     <?php endif; ?>
 
+    <!-- ALERTA DE ÉXITO EXCLUSIVA PARA RECUPERACIÓN DE CLAVE -->
+    <?php if (isset($_GET['status']) && $_GET['status'] === 'password_actualizada'): ?>
+        <div class="alert alert-success border-0 small py-2 text-start" role="alert">
+            <strong>¡Contraseña actualizada!</strong> Tu nueva contraseña ha sido registrada con éxito. Ya puedes ingresar al portal corporativo.
+        </div>
+    <?php endif; ?>
+
     <form action="actions/procesar_login.php" method="POST" class="text-start">
         <div class="mb-3">
             <label for="correo" class="form-label small fw-bold text-muted text-uppercase">Correo Electrónico</label>
@@ -118,12 +124,15 @@ if (!empty($old_correo)) {
         </div>
 
         <div class="mb-4">
-            <label for="password" class="form-label small fw-bold text-muted text-uppercase">Contraseña</label>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <label for="password" class="form-label small fw-bold text-muted text-uppercase mb-0">Contraseña</label>
+                <a href="recuperar.php" class="text-decoration-none small text-muted fw-semibold" style="font-size: 0.75rem; color: #d15b00 !important;">¿Olvidaste tu contraseña?</a>
+            </div>
             <div class="input-group">
                 <input type="password" name="password" id="password" 
                     class="form-control <?php echo ($error === 'password_incorrecto') ? 'is-invalid' : ''; ?>" 
                     placeholder="Contraseña..." <?php echo $bloqueado ? 'disabled' : ''; ?> required>
-                <button class="input-group-text bg-white border-start-0 toggle-password" type="button" data-target="#password" style="border-color: #dee2e6;">
+                <button class="input-group-text bg-white border-start-0 toggle-password" tabindex="-1" type="button" data-target="#password" style="border-color: #dee2e6;">
                     <i class="bi bi-eye text-muted"></i>
                 </button>
             </div>

@@ -1,77 +1,84 @@
 <?php
 /**
  * ARCHIVO: actions/procesar_maquina.php
- * DESCRIPCIÓN: Controlador lógico para el alta de equipos.
+ * DESCRIPCIÓN: Controlador lógico asíncrono para el alta de equipos.
  * Realiza la traducción de nombre de cliente a ID, calcula fechas de expiración
  * y gestiona la integridad de la base de datos mediante bloques try-catch.
  * * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.1
+ * @version 2.0 - Integración Fetch API y Respuestas JSON
  */
 
-// Importación de la conexión (Subiendo un nivel desde la carpeta /actions/)
+session_start();
+header('Content-Type: application/json; charset=utf-8');
+
 require_once '../../config/db.php';
-// Bloque de seguridad: Solo procesa si la petición es vía POST
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
-    /**
-     * 1. CAPTURA Y SANITIZACIÓN DE DATOS
-     * Se reciben las variables del formulario de registro.
-     */
-    $no_serie       = $_POST['no_serie'];
-    $nombre_cliente = $_POST['nombre_cliente'];
-    $modelo         = $_POST['modelo'];
-    $fecha_inicio   = $_POST['fecha_inicio'];
-    $vigencia_anios = (int)$_POST['vigencia']; // Casteo a entero para operaciones matemáticas
+    $no_serie       = trim($_POST['no_serie'] ?? '');
+    $nombre_cliente = trim($_POST['nombre_cliente'] ?? '');
+    $modelo         = trim($_POST['modelo'] ?? '');
+    $fecha_inicio   = trim($_POST['fecha_inicio'] ?? '');
+    $vigencia_anios = isset($_POST['vigencia']) ? intval($_POST['vigencia']) : 0;
 
-    /**
-     * 2. TRADUCCIÓN NOMINAL (Nombre -> ID)
-     * Como el formulario usa un datalist, recibimos el nombre, pero la BD 
-     * requiere el id_cliente para mantener la integridad referencial.
-     */
-    $stmt_cli = $pdo->prepare("SELECT id_cliente FROM Clientes WHERE nombre_cliente = ?");
+    if (empty($no_serie) || empty($nombre_cliente) || empty($modelo) || empty($fecha_inicio) || $vigencia_anios === 0) {
+        echo json_encode([
+            'status' => 'error',
+            'title' => 'Datos Incompletos',
+            'text' => 'Todos los campos del formulario son obligatorios para registrar la máquina.'
+        ]);
+        exit();
+    }
+
+    // 1. TRADUCCIÓN NOMINAL (Nombre -> ID)
+    $stmt_cli = $pdo->prepare("SELECT id_cliente FROM Clientes WHERE nombre_cliente = ? LIMIT 1");
     $stmt_cli->execute([$nombre_cliente]);
     $cliente = $stmt_cli->fetch();
 
-    if ($cliente) {
-        $id_cliente = $cliente['id_cliente'];
+    if (!$cliente) {
+        echo json_encode([
+            'status' => 'warning',
+            'title' => 'Cliente no Registrado',
+            'text' => 'El cliente ingresado no existe en el catálogo. Por favor, regístralo primero.'
+        ]);
+        exit();
+    }
 
-        /**
-         * 3. CÁLCULO DE VIGENCIA TEMPORAL
-         * Se utiliza la función strtotime para sumar años a la fecha de inicio
-         * de forma dinámica según la selección del usuario (1 o 2 años).
-         */
-        $fecha_termino = date('Y-m-d', strtotime($fecha_inicio . " + $vigencia_anios year"));
+    $id_cliente = $cliente['id_cliente'];
 
-        /**
-         * 4. PERSISTENCIA DE DATOS (INSERT)
-         * Uso de Prepared Statements para prevenir ataques de Inyección SQL.
-         */
-        try {
-            $sql = "INSERT INTO Equipos_Garantia (no_serie, id_cliente, modelo, fecha_inicio, fecha_termino) 
-                    VALUES (?, ?, ?, ?, ?)";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$no_serie, $id_cliente, $modelo, $fecha_inicio, $fecha_termino]);
+    // 2. CÁLCULO DE VIGENCIA TEMPORAL
+    $fecha_termino = date('Y-m-d', strtotime($fecha_inicio . " + $vigencia_anios year"));
 
-            // Redirección exitosa: El flujo concluye volviendo a la tabla principal
-            header("Location: ../maquinas.php?msg=success");
-            
-        } catch (PDOException $e) {
-            /**
-             * MANEJO DE EXCEPCIONES:
-             * Si la PK (no_serie) ya existe, el catch atrapa el error de BD
-             * y evita el colapso del script, informando al frontend.
-             */
-            header("Location: ../maquinas.php?msg=error&detail=duplicado");
+    try {
+        $pdo->beginTransaction();
+
+        $sql = "INSERT INTO Equipos_Garantia (no_serie, id_cliente, modelo, fecha_inicio, fecha_termino) 
+                VALUES (?, ?, ?, ?, ?)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$no_serie, $id_cliente, $modelo, $fecha_inicio, $fecha_termino]);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'status' => 'success',
+            'title' => '¡Máquina Registrada!',
+            'text' => 'El equipo y su cobertura de garantía técnica se guardaron correctamente.'
+        ]);
+        exit();
+        
+    } catch (\PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
         }
-    } else {
-        // Validación de error: El cliente ingresado no existe en el catálogo
-        header("Location: ../registro_maquina.php?msg=error_cliente");
+        echo json_encode([
+            'status' => 'error',
+            'title' => 'Error de Base de Datos',
+            'text' => 'No se pudo guardar el registro: ' . $e->getMessage()
+        ]);
+        exit();
     }
 } else {
-    // Protección de acceso directo: Si se accede por URL, redirige al inicio
-    header("Location: ../maquinas.php");
+    echo json_encode(['status' => 'error', 'title' => 'Petición Inválida', 'text' => 'Acceso denegado.']);
+    exit();
 }
-
-// Finalización forzada del script tras redirección
-exit();

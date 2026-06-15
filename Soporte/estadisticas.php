@@ -7,6 +7,7 @@
  * @version 1.41
  */
 require_once '../config/db.php';
+$page_title = "Estadísticas de Soporte";
 $modulo_actual = 'soporte';
 include '../includes/header.php';
 

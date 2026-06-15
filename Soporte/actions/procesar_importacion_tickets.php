@@ -1,19 +1,16 @@
 <?php
 /**
  * ARCHIVO: actions/procesar_importacion_tickets.php
- * DESCRIPCIÓN: Motor de importación masiva para el historial de soporte técnico (CSV).
- * * LOGICA DE INTEGRIDAD (V2.1):
- * 1. Prioridad de Serie: Si el CSV tiene serie, se usa esa.
- * 2. Validación de Modelos: Si no hay serie, el script busca coincidencias exactas con 
- * los modelos oficiales (313, 513, etc.).
- * 3. Asignación Genérica: Solo si se detecta un modelo válido, se asigna la serie S/N-XXX.
- * 4. Prevención de Datos Falsos: Si no hay serie ni modelo válido, el ticket se guarda 
- * sin vincular a ninguna máquina (evita el error de "S/N-" vacío).
- * * @author Israel Fernández Carrera
- * @project Soporte Técnico DEMEX
+ * DESCRIPCIÓN: Motor asíncrono de importación masiva para el historial de soporte técnico (CSV) con salida JSON.
+ * @author Israel Fernández Carrera
+ * @version 3.0 - Arquitectura Asíncrona Sanitizada
+ * @date 2026-06-08
  */
 
 ini_set('max_execution_time', 600);
+session_start();
+header('Content-Type: application/json; charset=utf-8');
+
 require_once '../../config/db.php';
 
 // ==========================================
@@ -50,7 +47,15 @@ function normalizarEnum($valor, $opciones, $default) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
     $file = $_FILES['archivo_csv']['tmp_name'];
     
-    // Lista maestra de modelos para validación estricta
+    if (empty($file) || !is_uploaded_file($file)) {
+        echo json_encode([
+            'status' => 'error',
+            'title' => 'Archivo no Válido',
+            'text' => 'No se pudo leer el archivo cargado en el servidor.'
+        ]);
+        exit();
+    }
+
     $modelos_validos = ['DEMEX 313', 'DEMEX 313T', 'DEMEX 513', 'DEMEX 613', 'DEMEX 1020', 'DEMEX 125', 'SPICE MT15', 'SPICE MV89'];
 
     if (($handle = fopen($file, "r")) !== FALSE) {
@@ -58,11 +63,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
         $separador = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
         rewind($handle);
 
-        $pdo->beginTransaction();
-        $insertados = 0; 
-        $fila = 0;
-
         try {
+            $pdo->beginTransaction();
+            $insertados = 0; 
+            $fila = 0;
+
             while (($data = fgetcsv($handle, 2000, $separador)) !== FALSE) {
                 $fila++;
                 if ($fila <= 2) continue; // Saltamos encabezados
@@ -70,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                 $cliente_nom = trim($data[1] ?? '');
                 if (empty($cliente_nom)) continue;
 
-                // --- 1. LÓGICA DE IDENTIFICACIÓN DE EQUIPO (REVISADA) ---
+                // --- 1. LÓGICA DE IDENTIFICACIÓN DE EQUIPO ---
                 $serie_csv  = trim($data[5] ?? '');
                 $modelo_csv = trim($data[4] ?? '');
                 
@@ -78,11 +83,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                 $modelo_final = null;
 
                 if (!empty($serie_csv)) {
-                    // Si trae serie, la respetamos tal cual
                     $serie_final = $serie_csv;
                     $modelo_final = $modelo_csv;
                 } else {
-                    // Si no trae serie, validamos si el modelo es real
                     $modelo_detectado = null;
                     foreach ($modelos_validos as $mv) {
                         if (mb_strtolower($modelo_csv, 'UTF-8') == mb_strtolower($mv, 'UTF-8')) {
@@ -92,13 +95,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                     }
 
                     if ($modelo_detectado) {
-                        // Es un modelo oficial, asignamos el genérico correspondiente
                         $sufijo = str_replace(['DEMEX ', 'SPICE ', ' '], '', $modelo_detectado);
                         $serie_final = "S/N-" . $sufijo;
                         $modelo_final = $modelo_detectado;
                     } else {
-                        // No hay serie ni modelo válido (Caso Ángel Alemán)
-                        // Dejamos serie como NULL para no ensuciar con S/N- vacíos
                         $serie_final = null;
                         $modelo_final = !empty($modelo_csv) ? $modelo_csv : 'Sin especificar';
                     }
@@ -110,24 +110,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                 $func    = (strtoupper(trim($data[8] ?? '')) == 'SI' || trim($data[8] ?? '') == '1') ? 1 : 0;
                 $estatus = normalizarEnum($data[10] ?? '', ['Abierto','Cerrado','Cancelado'], 'Cerrado');
 
-                $gar_val = 'Pendiente'; // Estado por defecto si el equipo no existe
+                $gar_val = 'Pendiente';
 
                 if (!empty($serie_final)) {
-                    // Busca la fecha de término directamente en la tabla de Equipos_Garantia
                     $stG = $pdo->prepare("SELECT fecha_termino FROM Equipos_Garantia WHERE no_serie = ?");
                     $stG->execute([$serie_final]);
                     $f_vencimiento = $stG->fetchColumn();
 
                     if ($f_vencimiento) {
-                        // Si el registro existe, define el estado comparando la vigencia contra la fecha actual
                         $hoy = date('Y-m-d');
                         $gar_val = (strtotime($hoy) <= strtotime($f_vencimiento)) ? 'Válida' : 'No válida';
                     } else {
-                        // Si el número de serie no existe en la base de datos, asigna estado pendiente
                         $gar_val = 'Pendiente';
                     }
                 } else {
-                    // Para registros sin número de serie, utiliza el valor del archivo de origen
                     $gar_val = normalizarEnum($data[7] ?? '', ['Válida','No válida','Pendiente'], 'Pendiente');
                 }
                 
@@ -136,18 +132,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                 $n_llam  = (int)($data[13] ?? 1);
                 $obs     = trim($data[45] ?? '');
 
-                // Lógica de logística y costos
                 $accion_raw = trim($data[17] ?? '');
                 $accion = normalizarEnum($accion_raw, ['Ninguna','Envio técnico','Envio refacciones','Envio técnico y refacciones','Envio base','Reparación en taller','Información','Cambio de maquina'], 'Información');
 
                 $f_ini_acc = null; $f_fin_acc = null; $t_acc = null;
                 switch ($accion) {
-                    case 'Envio técnico':               $f_ini_acc = $data[21]; $f_fin_acc = $data[22]; $t_acc = $data[23]; break;
-                    case 'Envio refacciones':           $f_ini_acc = $data[24]; $f_fin_acc = $data[25]; $t_acc = $data[26]; break;
-                    case 'Envio técnico y refacciones': $f_ini_acc = $data[27]; $f_fin_acc = $data[28]; $t_acc = $data[29]; break;
-                    case 'Envio base':                  $f_ini_acc = $data[30]; $f_fin_acc = $data[31]; $t_acc = $data[32]; break;
-                    case 'Reparación en taller':        $f_ini_acc = $data[33]; $f_fin_acc = $data[34]; $t_acc = $data[35]; break;
-                    case 'Cambio de maquina':           $f_ini_acc = $data[36]; $f_fin_acc = $data[37]; $t_acc = $data[38]; break;
+                    case 'Envio técnico':               $f_ini_acc = $data[21] ?? null; $f_fin_acc = $data[22] ?? null; $t_acc = $data[23] ?? null; break;
+                    case 'Envio refacciones':           $f_ini_acc = $data[24] ?? null; $f_fin_acc = $data[25] ?? null; $t_acc = $data[26] ?? null; break;
+                    case 'Envio técnico y refacciones': $f_ini_acc = $data[27] ?? null; $f_fin_acc = $data[28] ?? null; $t_acc = $data[29] ?? null; break;
+                    case 'Envio base':                  $f_ini_acc = $data[30] ?? null; $f_fin_acc = $data[31] ?? null; $t_acc = $data[32] ?? null; break;
+                    case 'Reparación en taller':        $f_ini_acc = $data[33] ?? null; $f_fin_acc = $data[34] ?? null; $t_acc = $data[35] ?? null; break;
+                    case 'Cambio de maquina':           $f_ini_acc = $data[36] ?? null; $f_fin_acc = $data[37] ?? null; $t_acc = $data[38] ?? null; break;
                 }
 
                 // --- 3. INSERCIÓN DE CLIENTE ---
@@ -160,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                     $id_c = $pdo->lastInsertId();
                 }
 
-                // --- 4. INSERCIÓN DE EQUIPO (SOLO SI HAY SERIE VÁLIDA) ---
+                // --- 4. INSERCIÓN DE EQUIPO ---
                 if (!empty($serie_final)) {
                     $stE = $pdo->prepare("SELECT no_serie FROM Equipos_Garantia WHERE no_serie = ?");
                     $stE->execute([$serie_final]);
@@ -195,12 +190,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
 
                 $insertados++;
             }
+            
             $pdo->commit();
-            header("Location: ../index.php?msg=import_success&count=$insertados");
+            fclose($handle);
+
+            echo json_encode([
+                'status' => 'success',
+                'title' => '¡Historial Importado!',
+                'text' => "Se crearon exitosamente {$insertados} folios históricos con desgloses de costos."
+            ]);
+            exit();
+
         } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            die("Error crítico en la fila $fila: " . $e->getMessage());
+            fclose($handle);
+            echo json_encode([
+                'status' => 'error',
+                'title' => 'Falla en Fila ' . $fila,
+                'text' => 'Error de consistencia transaccional: ' . $e->getMessage()
+            ]);
+            exit();
         }
-        fclose($handle);
     }
+} else {
+    echo json_encode(['status' => 'error', 'title' => 'Acceso Denegado', 'text' => 'Petición incorrecta.']);
+    exit();
 }

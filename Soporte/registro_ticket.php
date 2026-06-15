@@ -1,36 +1,31 @@
 <?php
 /**
  * ARCHIVO: registro_ticket.php
- * DESCRIPCIÓN: Panel de control unificado para la creación de folios de soporte técnico.
- * * CARACTERÍSTICAS TÉCNICAS:
- * 1. Integración Fase 1 (Técnica) y Fase 2 (Financiera) en tiempo real.
- * 2. Inteligencia de Modelos: Genera automáticamente series genéricas (S/N-XXX) si se elige un modelo manual.
- * 3. Validación de Garantía: Consulta vía AJAX si el equipo tiene cobertura vigente.
- * 4. Cálculos Automáticos: Sumatoria de costos y cálculo de días de servicio al vuelo.
- * * ACTUALIZACIÓN V1.8.1:
- * - Modal de Confirmación para series no registradas con captura de fecha real.
- * - Lógica de Pago Inteligente: Si el costo es 0.00, el estatus se fuerza a N/A.
- * * @author Israel Fernández Carrera
+ * DESCRIPCIÓN: Panel de control unificado asíncrono para la creación de folios de soporte técnico.
+ * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
+ * @version 2.0 - Despacho Asíncrono Integrado (Fetch API)
+ * @date 2026-06-08
  */
 require_once '../config/db.php';
+$page_title = "Registrar Ticket - Soporte";
 
 // 1. VALIDACIÓN DE SEGURIDAD
 $id_cliente = $_GET['id_cliente'] ?? null;
 if (!$id_cliente) { header("Location: clientes.php"); exit(); }
 
 // 2. RECUPERACIÓN DE DATOS DEL CLIENTE
-$stmt = $pdo->prepare("SELECT nombre_cliente FROM Clientes WHERE id_cliente = ?");
+$stmt = $pdo->prepare("SELECT nombre_cliente FROM clientes WHERE id_cliente = ?");
 $stmt->execute([$id_cliente]);
 $cliente = $stmt->fetch();
 
 // 3. CARGA DE EQUIPOS DEL CLIENTE
-$stmt_eq = $pdo->prepare("SELECT no_serie, modelo FROM Equipos_Garantia WHERE id_cliente = ?");
+$stmt_eq = $pdo->prepare("SELECT no_serie, modelo FROM equipos_garantia WHERE id_cliente = ?");
 $stmt_eq->execute([$id_cliente]);
 $equipos_cliente = $stmt_eq->fetchAll(PDO::FETCH_ASSOC);
 
 // 4. CATÁLOGO DE MODELOS
-$stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM Equipos_Garantia ORDER BY modelo ASC");
+$stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM equipos_garantia ORDER BY modelo ASC");
 $todos_modelos = $stmt_mod->fetchAll(PDO::FETCH_COLUMN);
 
 $modulo_actual = 'soporte';
@@ -209,7 +204,7 @@ include '../includes/header.php';
 
     <div class="text-center mt-4 d-flex justify-content-center gap-3">
         <a href="clientes.php" class="btn btn-light border px-5 rounded-pill fw-bold text-dark">Cancelar <i class="bi bi-x-lg ms-1"></i></a>
-        <button type="submit" class="btn btn-success px-5 rounded-pill fw-bold shadow btn-guardar">
+        <button type="submit" id="btnGuardarTicket" class="btn btn-success px-5 rounded-pill fw-bold shadow btn-guardar">
             <span id="btnText">Finalizar Registro</span> <i class="bi bi-check-circle ms-1"></i>
         </button>
     </div>
@@ -218,12 +213,12 @@ include '../includes/header.php';
 <div class="modal fade" id="modalSerieNueva" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
-            <div class="modal-header bg-warning text-dark border-0 py-3">
-                <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle-fill me-2"></i>¿Equipo Nuevo Detectado?</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header bg-warning text-dark border-0 py-3 shadow-sm">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>¿Equipo Nuevo Detectado?</h5>
+                <button type="button" class="btn-close text-dark" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
-                <p class="text-center mb-3">La serie <strong id="txtSerieNueva" class="text-danger"></strong> no existe en el catálogo.</p>
+                <p class="text-center mb-3 text-muted">La serie <strong id="txtSerieNueva" class="text-danger"></strong> no existe en el catálogo.</p>
 
                 <div id="error_modelo_modal" class="alert alert-danger shadow-sm py-2 mb-3" style="display:none; border-radius: 12px;">
                     <div class="d-flex align-items-center">
@@ -232,29 +227,31 @@ include '../includes/header.php';
                     </div>
                 </div>
 
-                <div class="bg-light p-3 rounded-3 mb-2">
-                    <div class="col-md-7">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Fecha de Compra / Instalación</label>
-                        <input type="date" id="modal_fecha_compra" class="form-control border-0 shadow-sm" value="<?= date('Y-m-d') ?>">
+                <div class="bg-light p-3 rounded-3 mb-2 border">
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Fecha de Compra / Instalación</label>
+                            <input type="date" id="modal_fecha_compra" class="form-control border-0 shadow-sm" value="<?= date('Y-m-d') ?>">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Vigencia</label>
+                            <div class="d-flex gap-2 pt-1">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="radio" name="modal_vigencia" id="mv1" value="1" checked>
+                                    <label class="form-check-label small fw-bold text-dark" for="mv1">1 Año</label>
+                                </div>
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="radio" name="modal_vigencia" id="mv2" value="2">
+                                    <label class="form-check-label small" for="mv2">2 Años</label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-5">
-            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Vigencia</label>
-            <div class="d-flex gap-2">
-                <div class="form-check m-0">
-                    <input class="form-check-input" type="radio" name="modal_vigencia" id="mv1" value="1" checked>
-                    <label class="form-check-label small" for="mv1">1A</label>
-                </div>
-                <div class="form-check m-0">
-                    <input class="form-check-input" type="radio" name="modal_vigencia" id="mv2" value="2">
-                    <label class="form-check-label small" for="mv2">2A</label>
                 </div>
             </div>
-        </div>
-                </div>
-            </div>
-            <div class="modal-footer border-0 pb-4 justify-content-center">
-                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Corregir Serie</button>
-                <button type="button" id="btnConfirmarRegistro" class="btn btn-warning rounded-pill px-4 fw-bold">Sí, Registrar Equipo</button>
+            <div class="modal-footer border-0 pb-4 justify-content-center bg-white" style="border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;">
+                <button type="button" class="btn btn-light rounded-pill px-4 fw-bold text-muted" data-bs-dismiss="modal">Corregir Serie</button>
+                <button type="button" id="btnConfirmarRegistro" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm">Sí, Registrar Equipo</button>
             </div>
         </div>
     </div>
@@ -264,7 +261,7 @@ include '../includes/header.php';
 $(document).ready(function() {
     let serieExiste = false;
 
-    // 1. CARGA INICIAL
+    // 1. CARGA INICIAL DESDE URL
     const urlParams = new URLSearchParams(window.location.search);
     const serieURL = urlParams.get('no_serie');
     const modeloURL = urlParams.get('modelo');
@@ -274,7 +271,7 @@ $(document).ready(function() {
         setTimeout(function() { $('#no_serie_input').trigger('input'); }, 100);
     }
 
-    // 2. SERIES GENÉRICAS
+    // 2. GENERADOR DE SERIES GENÉRICAS
     $('#modelo_select').on('change', function() {
         const modelo = $(this).val();
         const serieInput = $('#no_serie_input');
@@ -285,13 +282,13 @@ $(document).ready(function() {
         }
     });
 
-    // 3. UX
+    // 3. COMPORTAMIENTO UX EN FORMULARIOS
     $(document).on('keydown', 'input[type="number"]', function(e) {
         if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
     });
     $(document).on('focus', 'input, textarea', function() { $(this).select(); });
 
-    // 4. COSTOS VISIBILIDAD
+    // 4. CONTROL DE VISIBILIDAD DE SECCIÓN COSTOS
     function toggleSeccionCostos() {
         const accion = $('#accion_select').val();
         if (['Ninguna', 'Información'].includes(accion)) $('#seccion_costos').slideUp();
@@ -299,13 +296,25 @@ $(document).ready(function() {
     }
     $('#accion_select').on('change', toggleSeccionCostos);
 
-    // 5. AJAX GARANTÍA
+    // 5. EVALUADOR ASÍNCRONO DE GARANTÍA (AJAX)
     var typingTimer;
     $('#no_serie_input').on('input', function() {
         clearTimeout(typingTimer);
         var val = $(this).val().trim();
         var msgDiv = $('#status_garantia');
         var txtStatus = $('#txt_status_garantia');
+
+        var opcionSeleccionada = $('#series_cliente option').filter(function() {
+            return $(this).val() === val;
+        });
+
+        if (opcionSeleccionada.length > 0) {
+            var modeloAsociado = opcionSeleccionada.data('model');
+            if (modeloAsociado) {
+                $('#modelo_select').val(modeloAsociado).trigger('change');
+            }
+        }
+
         if (val.length > 2) {
             msgDiv.show();
             txtStatus.text('🔍 Validando...').css('color', '#6c757d');
@@ -328,85 +337,110 @@ $(document).ready(function() {
         } else { msgDiv.hide(); serieExiste = false; }
     });
 
-    // 6. INTERCEPTAR SUBMIT
+    // 🎯 6. INTERCEPTOR ASÍNCRONO DEFINITIVO (FETCH API)
     $('#formTicket').on('submit', function(e) {
-        const serie = $('#no_serie_input').val().trim();
-        const modelo = $('#modelo_select').val(); // Obtenemos el modelo del selector
+        e.preventDefault(); // Detiene el envío físico tradicional
 
-        // Si es una serie nueva (no existe y no es genérica)
+        const serie = $('#no_serie_input').val().trim();
+        const modelo = $('#modelo_select').val();
+
+        // Si el equipo no existe en catálogo, detonamos tu modal relocalizado en el body
         if (!serieExiste && serie !== "" && !serie.startsWith("S/N-")) {
-            e.preventDefault(); // Detenemos el envío
             $('#txtSerieNueva').text(serie);
             
-            // --- LÓGICA DE VALIDACIÓN DE MODELO ---
             if (modelo === "") {
-                // Si no hay modelo, mostramos el error y bloqueamos el botón del modal
                 $('#error_modelo_modal').show();
                 $('#btnConfirmarRegistro').prop('disabled', true).addClass('opacity-50');
             } else {
-                // Si sí hay modelo, ocultamos el error y habilitamos el botón
                 $('#error_modelo_modal').hide();
                 $('#btnConfirmarRegistro').prop('disabled', false).removeClass('opacity-50');
             }
             
-            $('#modalSerieNueva').modal('show');
+            $('#modalSerieNueva').appendTo("body").modal('show');
+            return false;
         }
+
+        // Si la serie ya es válida o genérica, despachamos de forma asíncrona mediante Fetch
+        ejecutarEnvioAsincrono(this);
     });
 
-    // Escuchar si el usuario corrige el modelo en el formulario de atrás
-    // Esto sirve por si el usuario deja el modal abierto y cambia el modelo
-    $('#modelo_select').on('change', function() {
-        if ($(this).val() !== "") {
-            $('#error_modelo_modal').fadeOut();
-            $('#btnConfirmarRegistro').prop('disabled', false).removeClass('opacity-50');
-        } else {
-            $('#error_modelo_modal').fadeIn();
-            $('#btnConfirmarRegistro').prop('disabled', true).addClass('opacity-50');
-        }
-    });
-
+    // Procesamiento definitivo desde el modal blanco relocalizado
     $('#btnConfirmarRegistro').on('click', function() {
-        if ($('#modelo_select').val() === "") {
-            return false; 
-        }
+        if ($('#modelo_select').val() === "") return false; 
         
-        // 1. Copiamos la fecha
         $('#fecha_compra_nueva').val($('#modal_fecha_compra').val());
-        
-        // 2. Copiamos la vigencia seleccionada al input oculto físico
         const valorVigencia = $('input[name="modal_vigencia"]:checked').val();
         $('#vigencia_nueva_input').val(valorVigencia);
 
-        // 3. Enviamos
+        $('#modalSerieNueva').modal('hide');
         serieExiste = true; 
-        $('#formTicket').submit();
+        
+        // Disparamos el despacho Fetch pasando el elemento nativo del formulario
+        ejecutarEnvioAsincrono(document.getElementById('formTicket'));
     });
 
-    // 7. CÁLCULO TOTALES + LÓGICA DE PAGO N/A (REINTEGRADA)
+    // Función unificada de despacho Fetch API + SweetAlert2
+    function ejecutarEnvioAsincrono(formElement) {
+        const btn = $('#btnGuardarTicket');
+        const txtBtn = $('#btnText');
+        const originalHtml = btn.html();
+
+        btn.prop('disabled', true);
+        txtBtn.text('Procesando...');
+
+        const datosFormulario = new FormData(formElement);
+
+        fetch(formElement.action, {
+            method: formElement.method,
+            body: datosFormulario
+        })
+        .then(respuesta => {
+            if (!respuesta.ok) throw new Error('Fallo de red en el servidor de soporte.');
+            return respuesta.json();
+        })
+        .then(data => {
+            Swal.fire({
+                icon: data.status,
+                title: data.title,
+                text: data.text,
+                confirmButtonColor: data.status === 'success' ? '#198754' : '#C62828'
+            }).then(() => {
+                if (data.status === 'success') {
+                    window.location.href = 'index.php'; // Redirección al panel técnico
+                } else {
+                    btn.prop('disabled', false).html(originalHtml);
+                }
+            });
+        })
+        .catch(error => {
+            btn.prop('disabled', false).html(originalHtml);
+            Swal.fire({
+                icon: 'error',
+                title: 'Falla Operativa',
+                text: error.message,
+                confirmButtonColor: '#C62828'
+            });
+        });
+    }
+
+    // 7. SUMATORIA DE COSTOS
     $('.costo-input').on('input', function() {
         let total = 0;
-        $('.costo-input').each(function() {
-            total += parseFloat($(this).val()) || 0;
-        });
+        $('.costo-input').each(function() { total += parseFloat($(this).val()) || 0; });
         $('#label_total').text(total.toFixed(2));
         $('#input_total').val(total.toFixed(2));
 
-        /**
-         * LÓGICA DE NEGOCIO: Si el total es 0, el pago es N/A.
-         * Desactivamos el switch y cambiamos el texto visualmente.
-         */
         if (total === 0) {
             $('#pago_switch').prop('checked', false).prop('disabled', true);
             $('#label_pago').html('Estatus: <span class="text-muted">N/A</span>');
         } else {
             $('#pago_switch').prop('disabled', false);
-            // Restauramos el texto según el estado del switch
             const statusTxt = $('#pago_switch').is(':checked') ? '<span class="text-success">Pagado</span>' : '<span class="text-danger">Pendiente</span>';
             $('#label_pago').html('Estatus: ' + statusTxt);
         }
     });
 
-    // 8. TIEMPOS
+    // 8. CÓMPUTO DINÁMICO DE DÍAS LOGÍSTICOS
     $('#fecha_inicio, #fecha_fin').on('change', function() {
         const inicio = $('#fecha_inicio').val();
         const fin = $('#fecha_fin').val();
@@ -419,7 +453,6 @@ $(document).ready(function() {
         }
     });
 
-    // 9. SWITCH DE PAGO (Manual)
     $('#pago_switch').on('change', function() {
         const txt = $(this).is(':checked') ? '<span class="text-success">Pagado</span>' : '<span class="text-danger">Pendiente</span>';
         $('#label_pago').html('Estatus: ' + txt);

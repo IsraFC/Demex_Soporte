@@ -2,84 +2,146 @@
 /**
  * @file header.php
  * @package Portal_Demex
- * @version 4.5 - Absolute Route Fix con Control de Inactividad
- * @date 2026-06-01
- * @brief Layout maestro unificado centralizado en la raíz con ruteo adaptativo y guardián de inactividad.
+ * @version 5.6 - Arquitectura Adaptativa con Captura de Feedback Unificada
+ * @brief Layout maestro centralizado con ruteo inteligente, menú persistente y modal asíncrono de feedback.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/* 1. SEGURIDAD CENTRALIZADA AUTOMÁTICA Y CONTROL DE ACCESO */
-$url_actual = $_SERVER['PHP_SELF'];
-$en_subcarpeta = (strpos($url_actual, '/Soporte/') !== false);
-
-if (!isset($_SESSION['rol']) || ($_SESSION['rol'] !== 'administrador' && $_SESSION['rol'] !== 'soporte')) {
-    $regreso_login = $en_subcarpeta ? '../' : './';
-    header("Location: " . $regreso_login . "login.php?error=no_autorizado");
-    exit();
+/**
+ * FUNCIÓN GLOBAL DE CONTROL DE ACCESOS
+ * Evalúa si el usuario logueado cuenta con al menos uno de los roles autorizados.
+ * Respeta de forma estricta las mayúsculas iniciales fijadas en el catálogo de la BD.
+ */
+function tieneAcceso($roles_permitidos) {
+    if (!isset($_SESSION['roles']) || !is_array($_SESSION['roles'])) {
+        return false;
+    }
+    foreach ($roles_permitidos as $rol) {
+        if (in_array($rol, $_SESSION['roles'])) {
+            return true; // Acceso concedido con una coincidencia
+        }
+    }
+    return false;
 }
 
-/* NUEVO: CONTROL DE INACTIVIDAD (Límite: 15 minutos = 900 segundos) */
-$tiempo_maximo_inactividad = 900; // 15 minutos en segundos
+/* 1. SEGURIDAD CENTRALIZADA Y CONTROL DE ACCESO MULTI-ROL */
+$url_actual = $_SERVER['PHP_SELF'];
+// Usamos SCRIPT_NAME para obtener el nombre físico del archivo real en ejecución
+$pagina_actual_php = basename($_SERVER['SCRIPT_NAME']);
 
-if (isset($_SESSION['ultima_actividad'])) {
+$en_soporte = (strpos($url_actual, '/Soporte/') !== false);
+$en_ventas = (strpos($url_actual, '/Ventas/') !== false);
+$en_subcarpeta = ($en_soporte || $en_ventas);
+
+// Lista de páginas públicas que bajo ninguna circunstancia deben validar sesión o redirigir
+$paginas_publicas = ['login.php', 'recuperar.php', 'restablecer.php', 'verificar.php'];
+
+// Si la página actual no es pública, aplicamos el guardián de seguridad
+if (!in_array($pagina_actual_php, $paginas_publicas)) {
+    if (!isset($_SESSION['roles']) || !is_array($_SESSION['roles']) || !tieneAcceso(['Administrador', 'Soporte', 'Ventas', 'Cliente'])) {
+        
+        // Calculamos la ruta de escape al login de forma exacta basándonos en la profundidad del archivo
+        $regreso_login = $en_subcarpeta ? '../' : './';
+        
+        // Destruimos cualquier posible residuo de sesión inválida para limpiar el estado del navegador
+        session_unset();
+        
+        header("Location: " . $regreso_login . "login.php?error=no_autorizado");
+        exit();
+    }
+}
+
+/* 2. GUARDIÁN DE INACTIVIDAD AUTOMÁTICO (15 Minutos) */
+$tiempo_maximo_inactividad = 900;
+if (isset($_SESSION['ultima_actividad']) && !in_array($pagina_actual_php, $paginas_publicas)) {
     $tiempo_inactivo = time() - $_SESSION['ultima_actividad'];
-    
     if ($tiempo_inactivo > $tiempo_maximo_inactividad) {
-        // La sesión expiró por abandono: limpiamos y destruimos la sesión
         session_unset();
         session_destroy();
-        
-        // Redirigimos al usuario usando el ruteo adaptativo que ya tienes
         $regreso_login = $en_subcarpeta ? '../' : './';
         header("Location: " . $regreso_login . "login.php?error=sesion_expirada");
         exit();
     }
 }
-// Actualizamos la estampa de tiempo con la actividad más reciente del usuario
-$_SESSION['ultima_actividad'] = time();
+// Solo actualizamos la actividad si el usuario ya está autenticado en el sistema protegido
+if (isset($_SESSION['roles'])) {
+    $_SESSION['ultima_actividad'] = time();
+}
 
-
-/* 2. MOTOR DE RESPALDO SILENCIOSO */
+/* 3. RESPALDO SILENCIOSO DE SEGURIDAD Y CARGA CACHÉ DE AVATAR */
 require_once __DIR__ . '/../config/backup.php';
+
+// Si el usuario está logueado pero su sesión de foto no se ha definido, la consultamos una sola vez como caché
+if (isset($_SESSION['id_usuario']) && !isset($_SESSION['foto_perfil_base64']) && isset($pdo)) {
+    try {
+        $stmtFoto = $pdo->prepare("SELECT foto_perfil FROM usuarios WHERE id_usuario = ? LIMIT 1");
+        $stmtFoto->execute([$_SESSION['id_usuario']]);
+        $resFoto = $stmtFoto->fetch(PDO::FETCH_ASSOC);
+        
+        if (!empty($resFoto['foto_perfil'])) {
+            $_SESSION['foto_perfil_base64'] = base64_encode($resFoto['foto_perfil']);
+        } else {
+            $_SESSION['foto_perfil_base64'] = '';
+        }
+    } catch (Exception $e) {
+        $_SESSION['foto_perfil_base64'] = '';
+    }
+}
+
 if (isset($pdo)) {
     ejecutarRespaldoSilencioso($pdo);
 }
 
-/**
- * 3. BLINDAJE DE ENRUTAMIENTO ESTRICTO
- * Asignamos las rutas relativas correspondientes analizando la ubicación del script
- */
+/* 4. MOTOR DE ENRUTAMIENTO GEOMÉTRICO (PREFIJOS INDEPENDIENTES) */
 if ($en_subcarpeta) {
     $base_path = "../";
-    $link_prefix = "";          /* Si ya estoy dentro, mis enlaces son limpios (ej: index.php) */
     $staff_link = "../usuarios.php";
     $logout_link = "../logout.php";
+    
+    if ($en_ventas) {
+        $link_prefix_soporte = "../Soporte/";
+        $link_prefix_ventas  = "./";
+    } else {
+        $link_prefix_soporte = "./";
+        $link_prefix_ventas  = "../Ventas/";
+    }
 } else {
     $base_path = "./";
-    $link_prefix = "Soporte/";  /* Si estoy en la raíz, obligo a entrar a la subcarpeta */
+    $link_prefix_soporte = "Soporte/";
+    $link_prefix_ventas  = "Ventas/";
     $staff_link = "usuarios.php";
     $logout_link = "logout.php";
 }
 
-$tema_sistema = $modulo_actual ?? 'global';
-$pagina_actual_php = basename($_SERVER['PHP_SELF']);
+if (!isset($modulo_actual)) {
+    if (strpos($url_actual, '/Soporte/') !== false) {
+        $tema_sistema = 'soporte';
+    } elseif (strpos($url_actual, '/Ventas/') !== false) {
+        $tema_sistema = 'ventas';
+    } else {
+        $tema_sistema = 'global';
+    }
+} else {
+    $tema_sistema = $modulo_actual;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DEMEX | Panel de Control</title>
+    <title>DEMEX | <?= htmlspecialchars($page_title ?? 'Panel de Control') ?></title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
     
-    <link rel="stylesheet" href="<?= $base_path ?>css/estilos.css">
+    <link rel="stylesheet" href="/desarrollo_mexicano/css/estilos.css">
 
     <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -89,6 +151,21 @@ $pagina_actual_php = basename($_SERVER['PHP_SELF']);
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body data-theme="<?= $tema_sistema ?>">
+
+<script>
+    (function() {
+        const temaAnterior = localStorage.getItem('demex_last_module_theme');
+        const temaNuevo = '<?= $tema_sistema ?>';
+        
+        if (temaAnterior && temaAnterior !== temaNuevo && temaAnterior !== 'global') {
+            document.body.setAttribute('data-theme', temaAnterior);
+            window.requestAnimationFrame(() => {
+                document.body.setAttribute('data-theme', temaNuevo);
+            });
+        }
+        localStorage.setItem('demex_last_module_theme', temaNuevo);
+    })();
+</script>
 
 <div id="wrapper" class="shadow-sm">
     <script>
@@ -106,77 +183,85 @@ $pagina_actual_php = basename($_SERVER['PHP_SELF']);
             </button>
         </div>
         
-        <div class="list-group list-group-flush flex-grow-1 mt-3" id="sidebar-menu-list">
+        <div class="sidebar-menu-scroll">
+            <div class="list-group list-group-flush mt-2" id="sidebar-menu-list">
 
-            <?php if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte'): ?>
-                <div class="seccion-herramientas mx-3">
-                    <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Soporte</span>
-                </div>
+                <?php if (tieneAcceso(['Administrador', 'Soporte'])): ?>
+                    <?php include __DIR__ . '/sidebar/menu_soporte.php'; ?>
+                <?php endif; ?>
 
-                <a href="<?= $link_prefix ?>index.php" class="sidebar-link <?= ($pagina_actual_php === 'index.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-house-door"></i></div> <span>Inicio</span>
-                </a>
-                <a href="<?= $link_prefix ?>maquinas.php" class="sidebar-link <?= ($pagina_actual_php === 'maquinas.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-cpu"></i></div> <span>Máquinas</span>
-                </a>
-                <a href="<?= $link_prefix ?>clientes.php" class="sidebar-link <?= ($pagina_actual_php === 'clientes.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-people"></i></div> <span>Clientes</span>
-                </a>
-                <a href="<?= $link_prefix ?>estadisticas.php" class="sidebar-link <?= ($pagina_actual_php === 'estadisticas.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-bar-chart-line"></i></div> <span>Estadísticas</span>
-                </a>
-
-                <div class="seccion-herramientas border-top border-secondary border-opacity-25 pt-3 mt-2 mx-3">
-                    <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Herramientas</span>
-                </div>
+                <?php if (tieneAcceso(['Administrador', 'Ventas'])): ?>
+                    <?php include __DIR__ . '/sidebar/menu_ventas.php'; ?>
+                <?php endif; ?>
                 
-                <a href="<?= $link_prefix ?>importar_clientes.php" class="sidebar-link py-2 <?= ($pagina_actual_php === 'importar_clientes.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-person-plus"></i></div> <span>Imp. Clientes</span>
-                </a>
-                <a href="<?= $link_prefix ?>importar_tickets.php" class="sidebar-link py-2 <?= ($pagina_actual_php === 'importar_tickets.php' && $en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-ticket-detailed"></i></div> <span>Imp. Tickets</span>
-                </a>
-            <?php endif; ?>
-
-            <?php if ($_SESSION['rol'] === 'administrador'): ?>
-                <div class="seccion-herramientas border-top border-secondary border-opacity-25 pt-3 mt-2 mx-3">
-                    <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Global</span>
-                </div>
-                <a href="<?= $staff_link ?>" class="sidebar-link <?= (($pagina_actual_php === 'usuarios.php' || $pagina_actual_php === 'personal_staff.php') && !$en_subcarpeta) ? 'active-page no-anim' : '' ?>">
-                    <div class="sidebar-icon"><i class="bi bi-shield-lock-fill"></i></div> <span>Personal Staff</span>
-                </a>
-            <?php endif; ?>
-            
-        </div>
+                <?php if (tieneAcceso(['Administrador'])): ?>
+                    <?php include __DIR__ . '/sidebar/menu_global.php'; ?>
+                <?php endif; ?>
+                
+            </div>
+        </div> 
     </div>
-
     <div id="page-content-wrapper">
         <nav class="navbar top-navbar d-flex align-items-center justify-content-between shadow-sm" id="main-top-navbar">
             <div></div>
             <div class="d-flex align-items-center gap-3">
-                <button class="btn btn-ticket-premium shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuevoTicket">
-                    <i class="bi bi-plus-circle-fill"></i> NUEVO TICKET
-                </button>
+                
+                <?php if (tieneAcceso(['Administrador', 'Soporte']) && $en_soporte): ?>
+                    <button class="btn btn-ticket-premium shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNuevoTicket">
+                        <i class="bi bi-plus-circle-fill"></i> NUEVO TICKET
+                    </button>
+                <?php endif; ?>
 
                 <div class="vr bg-white opacity-25" style="height: 24px;"></div>
 
                 <div class="dropdown">
                     <a class="d-flex align-items-center text-decoration-none dropdown-toggle text-white" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <div class="bg-white text-dark rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 36px; height: 36px; font-size: 14px;">
-                            <?= isset($_SESSION['nombre']) ? strtoupper(substr($_SESSION['nombre'], 0, 1)) : 'U' ?>
-                        </div>
+                        
+                        <?php if (!empty($_SESSION['foto_perfil_base64'])): ?>
+                            <img src="data:image/jpeg;base64,<?= $_SESSION['foto_perfil_base64'] ?>" 
+                                 alt="Avatar" 
+                                 class="rounded-circle shadow-sm object-fit-cover" 
+                                 style="width: 36px; height: 36px;">
+                        <?php else: ?>
+                            <div class="bg-white text-dark rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 36px; height: 36px; font-size: 14px;">
+                                <?= isset($_SESSION['nombre']) ? strtoupper(substr($_SESSION['nombre'], 0, 1)) : 'U' ?>
+                            </div>
+                        <?php endif; ?>
+
                         <span class="ms-2 d-none d-sm-inline small fw-semibold text-white">
                             <?= htmlspecialchars($_SESSION['nombre'] ?? 'Usuario') ?>
                         </span>
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom p-2 mt-2 shadow border-0" aria-labelledby="profileDropdown" style="min-width: 220px;">
+                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom p-2 mt-2 shadow border-0" id="dropdownMenuPerfil" aria-labelledby="profileDropdown" style="min-width: 220px;">
                         <li>
                             <div class="dropdown-header text-start py-1">
                                 <span class="d-block text-dark fw-bold small lh-sm"><?= htmlspecialchars(($_SESSION['nombre'] ?? 'Usuario') . ' ' . ($_SESSION['apellidos'] ?? '')) ?></span>
                                 <span class="d-block text-muted text-truncate" style="font-size: 11px;"><?= htmlspecialchars($_SESSION['correo'] ?? '') ?></span>
-                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 text-uppercase mt-1" style="font-size: 9px;"><?= htmlspecialchars($_SESSION['rol'] ?? 'Soporte') ?></span>
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 text-uppercase mt-1" style="font-size: 9px;">
+                                    <?= htmlspecialchars(implode(', ', $_SESSION['roles'] ?? ['Soporte'])) ?>
+                                </span>
                             </div>
                         </li>
+                        <li><hr class="dropdown-divider"></li>
+                        
+                        <li>
+                            <a class="dropdown-item dropdown-item-custom d-flex align-items-center small py-2" href="<?= $base_path ?>perfil.php">
+                                <i class="bi bi-person-gear me-2 fs-6 text-secondary"></i> Mi Perfil
+                            </a>
+                        </li>
+
+                        <li>
+                            <a class="dropdown-item dropdown-item-custom d-flex align-items-center small py-2" href="<?= $base_path ?>preferencias.php">
+                                <i class="bi bi-gear me-2 fs-6 text-secondary"></i> Preferencias del Portal
+                            </a>
+                        </li>
+
+                        <li>
+                            <a class="dropdown-item dropdown-item-custom d-flex align-items-center small py-2" href="#" data-bs-toggle="modal" data-bs-target="#modalReportarFeedback">
+                                <i class="bi bi-chat-square-heart me-2 fs-6 text-secondary"></i> Reportar Error / Feedback
+                            </a>
+                        </li>
+
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <a class="dropdown-item dropdown-item-custom d-flex align-items-center text-danger small py-2" href="<?= $logout_link ?>">
@@ -187,5 +272,161 @@ $pagina_actual_php = basename($_SERVER['PHP_SELF']);
                 </div>
             </div>
         </nav>
+
+        <div class="modal fade animate__animated animate__fadeIn" id="modalReportarFeedback" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg" style="border-radius: 24px; background: #ffffff;">
+                    
+                    <div class="modal-header border-0 pt-4 px-4 pb-2 d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="shadow-sm d-flex align-items-center justify-content-center" 
+                                style="width: 45px; height: 45px; background-color: #fff5f5; border-radius: 16px;">
+                                <i class="bi bi-chat-square-heart-fill text-danger fs-4"></i>
+                            </div>
+                            <div>
+                                <h5 class="modal-title fw-bold text-dark mb-0" style="font-family: 'Poppins', sans-serif;">Centro de Soporte Técnico</h5>
+                                <small class="text-muted" style="font-size: 0.75rem;">Control de calidad e incidencias internas</small>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close bg-light rounded-circle p-2" data-bs-dismiss="modal" aria-label="Close" id="btnCerrarFeedbackTop" style="font-size: 0.75rem;"></button>
+                    </div>
+                    
+                    <form id="formFeedbackPortal" novalidate>
+                        <div class="modal-body px-4 py-3">
+                            <div class="alert alert-light border-0 small text-secondary mb-4 p-3 d-flex align-items-start gap-2" style="border-radius: 16px; background-color: #f8f9fa;">
+                                <i class="bi bi-info-circle-fill text-danger mt-0.5 fs-6"></i>
+                                <span>Este canal recopila de forma automática los datos del usuario y la pantalla actual. Las solicitudes son enviadas al departamento de desarrollo técnico para su análisis e integración.</span>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-secondary text-uppercase tracking-wider" style="font-size: 11px;">Tipo de Incidencia o Solicitud</label>
+                                <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
+                                    <span class="input-group-text border-0 bg-transparent text-danger"><i class="bi bi-layers-half"></i></span>
+                                    <select class="form-select border-0 bg-transparent fw-semibold text-dark p-1" name="tipo_feedback" id="tipo_feedback" style="font-size: 14px;" required>
+                                        <option value="Bug">Falla en el Sistema / Error de Ejecución</option>
+                                        <option value="Visual">Interfaz / Problema de Diseño u Optimización Visual</option>
+                                        <option value="Lento">Rendimiento / Carga Lenta de Tablas o Procesos</option>
+                                        <option value="Seguridad">Permisos / Problema de Acceso o Autenticación</option>
+                                        <option value="BaseDatos">Datos Incorrectos / Error en Consultas de Base de Datos</option>
+                                        <option value="Mejora">Sugerencia / Propuesta de Nueva Característica o Módulo</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-secondary text-uppercase tracking-wider" style="font-size: 11px;">Descripción Detallada</label>
+                                <textarea class="form-control border-0 bg-light shadow-sm p-3 small text-dark" 
+                                        name="desc_feedback" 
+                                        id="desc_feedback" 
+                                        rows="4" 
+                                        style="border-radius: 18px; font-size: 13px; resize: none;" 
+                                        placeholder="Indique detalladamente la acción que estaba realizando o especifique su sugerencia de cambio..." required></textarea>
+                            </div>
+                            
+                            <input type="hidden" name="url_incidencia" value="<?= htmlspecialchars($_SERVER['REQUEST_URI']) ?>">
+                        </div>
+                        
+                        <div class="modal-footer border-0 px-4 pb-4 pt-2 gap-2 justify-content-end">
+                            <button type="button" class="btn btn-light btn-sm rounded-pill px-4 py-2 fw-bold text-secondary border shadow-sm" data-bs-dismiss="modal" id="btnCancelarFeedback" style="font-size: 13px;">Cancelar</button>
+                            <button type="submit" class="btn btn-danger btn-sm rounded-pill px-4 py-2 fw-bold shadow-sm" style="font-size: 13px; background-color: #dc3545;">
+                                <i class="bi bi-send-fill me-1.5"></i> Enviar Reporte
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                const sidebarScroll = document.querySelector('.sidebar-menu-scroll');
+                
+                if (sidebarScroll) {
+                    const posicionGuardada = localStorage.getItem('sidebar_scroll_position');
+                    if (posicionGuardada) {
+                        sidebarScroll.scrollTop = posicionGuardada;
+                    }
+
+                    sidebarScroll.addEventListener('scroll', function() {
+                        localStorage.setItem('sidebar_scroll_position', sidebarScroll.scrollTop);
+                    });
+                }
+
+                // 🎯 INTERCEPTOR DE CLICS: Detiene el cierre imprevisto dentro del recuadro del perfil
+                const recuadroPerfil = document.getElementById('dropdownMenuPerfil');
+                if (recuadroPerfil) {
+                    recuadroPerfil.addEventListener('click', function(e) {
+                        e.stopPropagation(); // Evita que Bootstrap capte el evento y cierre el menú
+                    });
+                }
+
+                // 🎯 CONTROLADOR ASÍNCRONO: Envío transaccional del Reporte de Errores con Fetch API
+                const formFeedback = document.getElementById('formFeedbackPortal');
+                if (formFeedback) {
+                    formFeedback.addEventListener('submit', function(e) {
+                        e.preventDefault();
+
+                        const tipo = document.getElementById('tipo_feedback').value;
+                        const desc = document.getElementById('desc_feedback').value.trim();
+
+                        if (desc === "") {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Campos Vacíos',
+                                text: 'Por favor, describe los detalles de la incidencia antes de enviarla.',
+                                confirmButtonColor: '#dc3545'
+                            });
+                            return;
+                        }
+
+                        // Creamos la petición asíncrona hacia el controlador central de acciones
+                        const formData = new FormData(formFeedback);
+                        
+                        Swal.fire({
+                            title: 'Procesando reporte...',
+                            text: 'Guardando traza de auditoría en la base de datos.',
+                            allowOutsideClick: false,
+                            didOpen: () => { Swal.showLoading(); }
+                        });
+
+                        fetch('<?= $base_path ?>actions/procesar_feedback.php', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            Swal.close();
+                            if (data.success) {
+                                const modalInstance = bootstrap.Modal.getInstance(document.getElementById('modalReportarFeedback'));
+                                if (modalInstance) modalInstance.hide();
+                                formFeedback.reset();
+
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Reporte Recibido',
+                                    text: data.message || 'La incidencia ha sido registrada en el sistema de control técnico para su revisión.',
+                                    timer: 3000,
+                                    showConfirmButton: false
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Falla del Motor',
+                                    text: data.message || 'No se pudo registrar la traza técnica.'
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            Swal.close();
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error del Servidor',
+                                text: 'Ocurrió un colapso en la petición asíncrona de red.'
+                            });
+                        });
+                    });
+                }
+            });
+        </script>
 
         <div class="container-fluid px-4 py-4 flex-grow-1 page-fade-wrapper" id="master-fade-container">

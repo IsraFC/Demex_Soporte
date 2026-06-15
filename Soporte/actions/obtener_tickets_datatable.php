@@ -3,13 +3,12 @@
  * ARCHIVO: actions/obtener_tickets_datatable.php
  * DESCRIPCIÓN: Motor de procesamiento Server-side para DataTables en DEMEX.
  * Administra la paginación, búsqueda global y filtros dinámicos directamente en MySQL.
- * * ACTUALIZACIÓN V1.2:
- * 1. Desglose de Urgencia: Envía banderas separadas para que el JS renderice la alerta en el ID.
+ * * ACTUALIZACIÓN V1.4 (Auditoría Doble de Usuarios):
+ * 1. Doble JOIN Relacional: Conecta la tabla usuarios dos veces para mapear Creador y Último Editor.
  * 2. Integridad de Envíos: Incluye fechas de logística para la lógica visual de iconos (Truck/Tools/Box).
- * 3. Sanitización: Mantiene el estilo de documentación y seguridad de JOINS.
  * * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 1.2
+ * @version 1.4
  */
 
 require_once '../../config/db.php';
@@ -26,12 +25,14 @@ $length = $_POST['length'] ?? 13;
 $searchValue = $_POST['search']['value'] ?? '';
 
 /**
- * 2. CONSTRUCCIÓN DE LA CONSULTA BASE
+ * 2. CONSTRUCCIÓN DE LA CONSULTA BASE (CON DOBLE JOIN A USUARIOS)
  */
-$queryBase = "FROM Tickets_Soporte t 
-              JOIN Clientes c ON t.id_cliente = c.id_cliente
-              LEFT JOIN Equipos_Garantia e ON t.no_serie = e.no_serie
-              LEFT JOIN Detalles_Costos_Tiempos d ON t.id_ticket = d.id_ticket";
+$queryBase = "FROM tickets_soporte t 
+              JOIN clientes c ON t.id_cliente = c.id_cliente
+              LEFT JOIN equipos_garantia e ON t.no_serie = e.no_serie
+              LEFT JOIN detalles_costos_tiempos d ON t.id_ticket = d.id_ticket
+              LEFT JOIN usuarios uc ON t.id_usuario_creador = uc.id_usuario
+              LEFT JOIN usuarios ue ON t.id_usuario_editor = ue.id_usuario";
 
 /**
  * 3. SISTEMA DE FILTRADO DINÁMICO (WHERE)
@@ -65,7 +66,7 @@ if (($_POST['soloUrgentes'] ?? 0) == 1) {
 /**
  * 4. CONTEO DE REGISTROS (Para paginación)
  */
-$totalRecords = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte")->fetchColumn();
+$totalRecords = $pdo->query("SELECT COUNT(*) FROM tickets_soporte")->fetchColumn();
 $totalRecordsWithFilter = $pdo->query("SELECT COUNT(*) $queryBase $where")->fetchColumn();
 
 /**
@@ -73,7 +74,9 @@ $totalRecordsWithFilter = $pdo->query("SELECT COUNT(*) $queryBase $where")->fetc
  */
 $sql = "SELECT t.id_ticket, c.nombre_cliente, e.modelo, t.no_serie, t.tipo_falla, 
                t.garantia_valida, t.estatus, t.fecha_inicial, d.estatus_pago, t.tipo_llamada, 
-               d.accion, d.fecha_inicio_acc, d.fecha_fin_acc, d.costo_total
+               d.accion, d.fecha_inicio_acc, d.fecha_fin_acc, d.costo_total,
+               uc.nombre AS creador_nom, uc.apellidos AS creador_ape,
+               ue.nombre AS editor_nom, ue.apellidos AS editor_ape
         $queryBase 
         $where 
         ORDER BY t.id_ticket DESC 
@@ -86,6 +89,10 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     // Calculamos la urgencia AQUÍ (Si está abierto y pasaron 14 días)
     $diff_dias = floor((time() - strtotime($row['fecha_inicial'])) / 86400);
     $esUrgente = ($row['estatus'] === 'Abierto' && $diff_dias >= 14);
+
+    // Concatenamos el nombre del Creador y del Editor de forma segura
+    $creadorCompleto = $row['creador_nom'] ? $row['creador_nom'] . ' ' . $row['creador_ape'] : 'Sistema';
+    $editorCompleto  = $row['editor_nom'] ? $row['editor_nom'] . ' ' . $row['editor_ape'] : null;
 
     $data[] = [
         "id_ticket"        => $row['id_ticket'],
@@ -100,6 +107,8 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         "estatus_pago"     => $row['estatus_pago'] ?: 'N/A',
         "estatus"          => $row['estatus'],
         "fecha_inicial"    => date('d/m/y', strtotime($row['fecha_inicial'])),
+        "creador"          => $creadorCompleto, // <-- ENVIADO AL FRONTEND
+        "editor"           => $editorCompleto,  // <-- ENVIADO AL FRONTEND (SI EXISTE)
         // Datos para la lógica visual de envíos
         "f_ini_acc"        => $row['fecha_inicio_acc'],
         "f_fin_acc"        => $row['fecha_fin_acc']

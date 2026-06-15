@@ -21,7 +21,7 @@
     </div> 
 </div> 
 
-<?php if (isset($_SESSION['rol']) && ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte')): ?>
+<?php if (tieneAcceso(['Administrador', 'Soporte'])): ?>
 <div class="modal fade" id="modalNuevoTicket" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
@@ -55,9 +55,12 @@
                             <input type="text" id="inputBusquedaCliente" list="listaClientesBusqueda" class="form-control bg-light border-0 fw-bold" placeholder="Buscar cliente...">
                             <datalist id="listaClientesBusqueda">
                                 <?php
-                                $stmt_c = $pdo->query("SELECT id_cliente, nombre_cliente FROM Clientes ORDER BY nombre_cliente ASC");
-                                while($c = $stmt_c->fetch()) {
-                                    echo "<option data-id='".$c['id_cliente']."' value='".htmlspecialchars($c['nombre_cliente'])."'>";
+                                // Blindaje de seguridad: Solo consultamos si la conexión PDO está activa
+                                if (isset($pdo)) {
+                                    $stmt_c = $pdo->query("SELECT id_cliente, nombre_cliente FROM Clientes ORDER BY nombre_cliente ASC");
+                                    while($c = $stmt_c->fetch()) {
+                                        echo "<option data-id='".$c['id_cliente']."' value='".htmlspecialchars($c['nombre_cliente'])."'>";
+                                    }
                                 }
                                 ?>
                             </datalist>
@@ -149,7 +152,6 @@ $(document).ready(function() {
     });
 
     // MOTOR DE ENRUTAMIENTO DINÁMICO ADAPTATIVO PROTEGIDO
-    // Evaluamos de manera segura la existencia de la variable de ubicacion para evitar advertencias de ejecucion
     var enSubcarpetaSoporte = <?= (isset($en_subcarpeta) && $en_subcarpeta) ? 'true' : 'false' ?>;
     var pathModuloSoporte = enSubcarpetaSoporte ? './' : './Soporte/';
 

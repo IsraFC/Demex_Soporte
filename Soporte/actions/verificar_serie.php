@@ -6,7 +6,7 @@
  * un estado simple para ser procesado por una petición AJAX en el frontend.
  * * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.0
+ * @version 1.1 - Adaptado para lecturas universales REQUEST
  */
 
 // Importación de la conexión a la base de datos (Directorio superior)
@@ -14,11 +14,11 @@ require_once '../../config/db.php';
 
 /**
  * LÓGICA DE VALIDACIÓN:
- * Se activa mediante una petición POST enviada dinámicamente desde el formulario.
+ * Se adapta a $_REQUEST para procesar peticiones dinámicas vía GET o POST.
  */
-if (isset($_POST['no_serie'])) {
+if (isset($_REQUEST['no_serie'])) {
     
-    $no_serie = $_POST['no_serie'];
+    $no_serie = trim($_REQUEST['no_serie']);
 
     /**
      * CONSULTA DE EXISTENCIA:
@@ -35,3 +35,4 @@ if (isset($_POST['no_serie'])) {
      */
     echo ($stmt->fetchColumn() > 0) ? 'existe' : 'libre';
 }
+exit();
