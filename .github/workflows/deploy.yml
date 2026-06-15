@@ -14,13 +14,12 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Sincronizar archivos hacia Hetzner vía SFTP
-      uses: easingthemes/ssh-deploy@v2.1.5
+      uses: easingthemes/ssh-deploy@v4.1.10
       with:
-        SSH_PRIVATE_KEY: ""
         REMOTE_HOST: ${{ secrets.SSH_HOST }}
         REMOTE_USER: ${{ secrets.SSH_USER }}
         REMOTE_PASSWORD: ${{ secrets.SSH_PASSWORD }}
         ARGS: "-rlgoDzvc --delete"
         SOURCE: "/"
         TARGET: "/var/www/html/"
-        EXCLUDE: /.git/, /.github/, /.gitignore, /.vscode/, /Thumbs.db, /desktop.ini, /.DS_Store, /*.log, /Soporte/backups/, /backups/, /config/ultimo_respaldo.txt, /crear_admin.php, /config/mail_config.php, /config/db.php
+        EXCLUDE: "/.git/, /.github/, /.gitignore, /.vscode/, /Thumbs.db, /desktop.ini, /.DS_Store, /*.log, /Soporte/backups/, /backups/, /config/ultimo_respaldo.txt, /crear_admin.php, /config/mail_config.php, /config/db.php"
