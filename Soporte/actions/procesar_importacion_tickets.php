@@ -204,6 +204,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
         } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             fclose($handle);
+
+            // CAPTURA EXTRA: Vamos a ver qué traía la variable en esa fila exacta
+            $variable_culpable = isset($serie_final) ? $serie_final : 'No definida';
+            $longitud_culpable = strlen($variable_culpable);
+
             echo json_encode([
                 'status' => 'error',
                 'title' => 'Falla en Fila ' . $fila,
