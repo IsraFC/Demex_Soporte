@@ -6,36 +6,34 @@ on:
       - main
 
 jobs:
-  web-deploy:
-    name: Desplegar código vía SFTP
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
     - name: Descargar el código desde GitHub
       uses: actions/checkout@v3
 
-    - name: Sincronizar archivos con Hetzner
-      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-      with:
-        server: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        password: ${{ secrets.SSH_PASSWORD }}
-        port: 22
-        protocol: sftp
-        local-dir: ./
-        server-dir: /var/www/html/
-        # Tu lista sagrada de archivos que NO se van a tocar ni borrar en el servidor:
-        exclude: |
-          **/.git/**
-          **/.github/**
-          .gitignore
-          .vscode/**
-          Thumbs.db
-          desktop.ini
-          .DS_Store
-          *.log
-          Soporte/backups/**
-          backups/**
-          config/ultimo_respaldo.txt
-          crear_admin.php
-          config/mail_config.php
-          config/db.php
+    - name: Instalar cliente SSH y Sshpass
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y sshpass rsync
+
+    - name: Sincronizar archivos hacia Hetzner vía Rsync
+      run: |
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete \
+          -e "ssh -o StrictHostKeyChecking=no" \
+          --exclude='.git/' \
+          --exclude='.github/' \
+          --exclude='.gitignore' \
+          --exclude='.vscode/' \
+          --exclude='Thumbs.db' \
+          --exclude='desktop.ini' \
+          --exclude='.DS_Store' \
+          --exclude='*.log' \
+          --exclude='Soporte/backups/' \
+          --exclude='backups/' \
+          --exclude='config/ultimo_respaldo.txt' \
+          --exclude='crear_admin.php' \
+          --exclude='config/mail_config.php' \
+          --exclude='config/db.php' \
+          ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/html/
