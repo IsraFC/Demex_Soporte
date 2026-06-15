@@ -113,8 +113,8 @@ include '../includes/header.php';
                 <span class="crm-text-header text-dark">Vista previa del documento</span>
             </div>
             <div class="d-flex gap-2">
-                <a href="cotizaciones.php" class="btn btn-secondary shadow-sm px-3 d-inline-flex align-items-center fw-semibold">
-                    <i class="bi bi-arrow-left me-1"></i> Regresar a Ventas
+                <a href="leads_crm.php" class="btn btn-secondary shadow-sm px-3 d-inline-flex align-items-center fw-semibold">
+                    <i class="bi bi-arrow-left me-1"></i> Regresar a CRM
                 </a>
                 <button onclick="window.print();" class="btn btn-danger shadow-sm px-4 d-inline-flex align-items-center fw-semibold">
                     <i class="bi bi-printer-fill me-2"></i> Imprimir PDF
@@ -231,7 +231,7 @@ include '../includes/header.php';
                     </tr>
                     <tr class="border-bottom">
                         <td class="text-muted">I.V.A. Traslado (16%):</td>
-                        <td class="fw-semibold text-dark">$<?= number_format($iva_traslado, 2, '.', ',') ?></td>
+                        <td class="fw-semibold text-dark">$<?= number_format($iva_lado, 2, '.', ',') ?></td>
                     </tr>
                     <tr class="fs-6">
                         <td class="fw-bold text-dark pt-2">Total Neto:</td>

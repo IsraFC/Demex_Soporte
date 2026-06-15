@@ -2,15 +2,16 @@
 /**
  * ARCHIVO: cotizaciones.php
  * DESCRIPCIÓN: Formulario de Configuración Comercial de Cotizaciones.
+ * Soporta creación fluida por pasos asíncronos cuando se genera desde 0.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 4.2 (Modelos Sincronizados y Cálculos Dinámicos)
+ * @version 4.4 (Sincronización Total de Máquina de Interés e Imagen Previa)
  */
 
 $page_title = "Generador de Cotizaciones | CRM Ventas";
 require_once '../config/db.php';
 
-// Catálogo estricto de los 8 modelos de máquinas reales (Estructura de tu código de leads)
+// Catálogo estricto de los 8 modelos de máquinas reales
 $maquinas_reales = [
     'DEMEX 313',
     'DEMEX 313T',
@@ -37,11 +38,16 @@ $catalogo_precios = [
 // Detección de Prospecto enlazado si viene de la Bandeja de Leads
 $id_prospecto = isset($_GET['id_prospecto']) ? intval($_GET['id_prospecto']) : 0;
 $cliente_nombre = "";
+$cliente_apellidos = "";
+$cliente_correo = "";
+$cliente_telefono = "";
+$cliente_region = "Puebla";
+$cliente_pais = "México";
 $maquina_interes = "";
+$canal_origen = "";
 
 if ($id_prospecto > 0) {
-    $sql_lead = "SELECT f.nombre, f.apellidos, f.maquina_interes 
-                 FROM prospectos p 
+    $sql_lead = "SELECT f.* FROM prospectos p 
                  INNER JOIN formulario f ON p.id_formulario = f.id_formulario 
                  WHERE p.id_prospecto = :id_prospecto LIMIT 1";
     $stmt_lead = $pdo->prepare($sql_lead);
@@ -49,8 +55,14 @@ if ($id_prospecto > 0) {
     $lead_data = $stmt_lead->fetch();
     
     if ($lead_data) {
-        $cliente_nombre = $lead_data['nombre'] . ' ' . $lead_data['apellidos'];
+        $cliente_nombre = $lead_data['nombre'];
+        $cliente_apellidos = $lead_data['apellidos'];
+        $cliente_correo = $lead_data['correo'];
+        $cliente_telefono = $lead_data['telefono'];
+        $cliente_region = $lead_data['estado_region'];
+        $cliente_pais = $lead_data['pais'];
         $maquina_interes = $lead_data['maquina_interes'];
+        $canal_origen = $lead_data['canal_origen'];
     }
 }
 
@@ -64,16 +76,80 @@ include '../includes/header.php';
     </div>
 </div>
 
-<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded">
-    <h5 class="fw-bold text-dark mb-4"><i class="bi bi-calculator text-danger me-2"></i> Configuración</h5>
+<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded" id="cardPasoCliente">
+    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-person-badge-fill text-danger me-2"></i> Paso 1: Datos de Contacto del Cliente</h5>
+    <p class="text-muted small">Registra los datos de contacto para mapearlos correctamente en el panel de control del CRM.</p>
+    
+    <div class="row g-3">
+        <div class="col-12 col-md-4">
+            <label class="form-label fw-semibold small text-dark">Nombre(s) <span class="text-danger">*</span></label>
+            <input type="text" class="form-control ctrl-lead" id="lead_nombre" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Ej. Sergio Mauricio" <?= ($id_prospecto > 0) ? 'readonly' : '' ?> required>
+        </div>
+        <div class="col-12 col-md-4">
+            <label class="form-label fw-semibold small text-dark">Apellidos <span class="text-danger">*</span></label>
+            <input type="text" class="form-control ctrl-lead" id="lead_apellidos" value="<?= htmlspecialchars($cliente_apellidos) ?>" placeholder="Ej. Campos Carranza" <?= ($id_prospecto > 0) ? 'readonly' : '' ?> required>
+        </div>
+        <div class="col-12 col-md-4">
+            <label class="form-label fw-semibold small text-dark">Canal de Origen <span class="text-danger">*</span></label>
+            <?php if ($id_prospecto > 0): ?>
+                <input type="text" class="form-control" value="<?= htmlspecialchars($canal_origen) ?>" readonly>
+            <?php else: ?>
+                <select class="form-select ctrl-lead" id="lead_canal" required>
+                    <option value="WhatsApp" selected>WhatsApp</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="YouTube">YouTube</option>
+                    <option value="Página Web">Página Web</option>
+                    <option value="Llamada Telefónica">Llamada Telefónica</option>
+                    <option value="Recomendación">Recomendación</option>
+                </select>
+            <?php endif; ?>
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label fw-semibold small text-dark">Teléfono Directo <span class="text-danger">*</span></label>
+            <input type="text" class="form-control ctrl-lead" id="lead_telefono" value="<?= htmlspecialchars($cliente_telefono) ?>" placeholder="10 dígitos" maxlength="15" <?= ($id_prospecto > 0) ? 'readonly' : '' ?> required>
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label fw-semibold small text-dark">Correo Electrónico</label>
+            <input type="email" class="form-control ctrl-lead" id="lead_correo" value="<?= htmlspecialchars($cliente_correo) ?>" placeholder="cliente@correo.com" <?= ($id_prospecto > 0) ? 'readonly' : '' ?>>
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label fw-semibold small text-dark">Estado / Región</label>
+            <input type="text" class="form-control ctrl-lead" id="lead_region" value="<?= htmlspecialchars($cliente_region) ?>" placeholder="Ej. Puebla" <?= ($id_prospecto > 0) ? 'readonly' : '' ?>>
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label fw-semibold small text-dark">País</label>
+            <input type="text" class="form-control ctrl-lead" id="lead_pais" value="<?= htmlspecialchars($cliente_pais) ?>" placeholder="Ej. México" <?= ($id_prospecto > 0) ? 'readonly' : '' ?>>
+        </div>
+        
+        <?php if ($id_prospecto <= 0): ?>
+        <div class="col-12 col-md-6 mt-2">
+            <label class="form-label fw-semibold small text-dark">Equipo de Interés Inicial <span class="text-danger">*</span></label>
+            <select class="form-select ctrl-lead" id="lead_maquina" required>
+                <option value="" selected disabled>Selecciona la máquina consultada...</option>
+                <?php foreach ($maquinas_reales as $maquina): ?>
+                    <option value="<?= htmlspecialchars($maquina) ?>"><?= htmlspecialchars($maquina) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-12 text-end border-top pt-3 mt-3">
+            <button type="button" class="btn btn-danger px-4 fw-bold small" id="btnCrearLeadManual" style="border-radius: 6px;">
+                Validar y Continuar a Cotización
+            </button>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded <?= ($id_prospecto <= 0) ? 'opacity-50' : '' ?>" id="cardSeccionCotizacion" style="<?= ($id_prospecto <= 0) ? 'pointer-events: none;' : '' ?>">
+    <h5 class="fw-bold text-dark mb-4"><i class="bi bi-calculator text-danger me-2"></i> Paso 2: Detalles y Precios de la Cotización</h5>
     
     <form action="../actions/procesar_cotizacion.php" method="POST" id="formCotizacion">
-        <input type="hidden" name="id_prospecto" value="<?= $id_prospecto ?>">
+        <input type="hidden" name="id_prospecto" id="sec_id_prospecto" value="<?= $id_prospecto ?>">
 
         <div class="row g-3 mb-3">
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold text-dark small">Cliente / Razón Social <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="cliente" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Nombre o Razón Social" required>
+                <input type="text" class="form-control fw-bold bg-light" id="txt_cliente_fiscal" name="cliente" value="<?= htmlspecialchars($cliente_nombre . ' ' . $cliente_apellidos) ?>" placeholder="Se auto-rellenará..." readonly required>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold text-dark small">RFC Receptor</label>
@@ -152,7 +228,6 @@ include '../includes/header.php';
             </div>
 
             <div class="col-12 col-md-6 d-flex align-items-center justify-content-center">
-                <label class="form-label small d-block">&nbsp;</label>
                 <div class="p-3 text-center rounded shadow-sm bg-light border w-100" style="min-height: 320px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fafafa;">
                     <small class="text-muted d-block mb-3 fw-semibold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.8px;">Vista Previa del Equipo</small>
                     <img id="img_maquina_preview" src="../img/maquinas/default.png" alt="Previsualización" class="img-fluid rounded animate__animated animate__fadeIn" style="max-height: 260px; width: auto; object-fit: contain; display: none;">
@@ -204,25 +279,19 @@ include '../includes/header.php';
     </form>
 </div>
 
+<?php include '../includes/footer.php'; ?>
+
 <script>
 const matrizPrecios = <?= json_encode($catalogo_precios) ?>;
 
-// Fichas técnicas automatizadas para inyección dinámica
 const especificacionesMaquinas = {
     'SPICE MT15': "LÍNEA SPICE - HELADO SUAVE (25 LTS x HR)\n• Dimensiones: 75 x 56 x 78 cm | Peso: 95 kg\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.0 KW | Corriente: 110V/60Hz\n• Componentes: Cilindros de 1.8 LT x 2 | Depósito de Alimentación: 5 LT x 2 | Motor: 1.0 HP\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Display y Control de Sistema Automático Digital, Sistema Contador de Helados, Reductor de Velocidad Hidráulico.\n• Refrigeración: Compresor de 1.0 HP (R410A) | Condensador: Aire/Chico R134A | Compresor de Preenfriado de 1/8 HP R134A | Regulador de temperatura de Modo Nocturno.\n• Requisito: Uso recomendado de regulador de corriente de 4 KVA, dejar libre espacio de ventilación de 40 cm a los lados y 15 cm atrás.",
-    
     'SPICE MV89': "LÍNEA SPICE - HELADO SUAVE (25 LTS x HR)\n• Dimensiones: 75 x 56 x 138 cm | Peso: 120 kg\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.0 KW | Corriente de Entrada: Monofásica 110V/60Hz\n• Componentes: Cilindros de 1.8 L x 2 | Depósito de Alimentación: 5L x 2 | Motor de 1.0 HP\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Display y Control de Sistema Automático Digital, Sistema Contador de Helados.\n• Refrigeración: Compresor de 1.0 HP (R410A) | Condensador de Aire/Mediano R134A | Compresor de Preenfriado de 1/8 HP R134A | Regulador de temperatura de Modo Nocturno.\n• Requisito: Uso recomendado de regulador de corriente de 4 KVA, dejar libre espacio de ventilación de 40 cm a los lados y 15 cm atrás.",
-    
     'DEMEX 313T': "HELADO SUAVE (33 LTS x HR)\n• Dimensiones: 67 x 55 x 83 CM | Peso Neto: 115 KG\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.7 KW/HR | Corriente de Entrada: Monofásica 110V/60 HZ\n• Componentes: Cilindros de 2 Litros x 2 | Depósito de Alimentación: 5 Litros x 2 | Motor de 1.5 HP | Micromotor 1400 RPM 120 Watts\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático, Sistema Contador de Helados.\n• Refrigeración: Compresor Panasonic 1.0 HP (R410) | Condensador: Aire / Mediano | Compresor de Preenfriado de 1/8 HP R134A | Regulador de Temperatura de Modo Nocturno.\n• Requisito: Uso recomendado de regulador de corriente de 4 KVA, dejar libre espacio de ventilación de 40 cm a los lados y 15 cm atrás.",
-    
     'DEMEX 313': "HELADO SUAVE (35 LTS x HR)\n• Dimensiones: 67 x 55 x 138 CM | Peso Neto: 144 KG\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.7 KW/HR | Corriente de Entrada: Monofásica 110V/60 HZ\n• Componentes: Cilindros de 2 Litros x 2 | Depósito de Alimentación: 5 Litros x 2 | Motor de 1.5 HP | Micromotor 1400 RPM 120 Watts\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático, Sistema Contador de Helados.\n• Refrigeración: Compresor Panasonic 1.0 HP (R410A) | Condensador: Aire / Grande | Compresor de Preenfriado de 1/8 HP R134A | Regulador de Temperatura de Modo Nocturno.\n• Requisito: Uso recomendado de regulador de corriente de 4 KVA, dejar libre espacio de ventilación de 40 cm a los lados y 15 cm atrás.",
-    
     'DEMEX 513': "HELADO SUAVE (35 LTS x HR)\n• Dimensiones: 77 x 60 x 146 CM | Peso Neto: 160 KG\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.7 KW/HR | Corriente de Entrada: Monofásica 110V/60 HZ\n• Componentes: Cilindros de 2 Litros x 2 | Depósito de Alimentación: 12 Litros x 2 | Motor de 1.5 HP | Micromotor 1400 RPM 120 Watts\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático, Sistema Contador de Helados.\n• Refrigeración: Compresor Panasonic 1.0 HP (R410A) | Condensador: Aire / Extra Grande | Compresor de Preenfriado de 1/8 HP R134A | Regulador de Temperatura de Modo Nocturno.\n• Requisito: Dejar libre espacio de ventilación de 40 cm por ambos lados y 15 cm en la parte trasera.",
-    
     'DEMEX 613': "HELADO SUAVE (46-52 LTS x HR)\n• Dimensiones: 77 x 60 x 146 CM | Peso Neto: 175 KG\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 3.7 KW/HR | Corriente de Entrada: Bifásica 220V/60HZ\n• Componentes: Cilindros de 2 Litros x 2 | Depósito de Alimentación: 12 Litros x 2 | Motor de 1.5 HP | Micromotor 1400 RPM 120 Watts\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático, Sistema Contador de Helados.\n• Refrigeración: Compresor Panasonic 3.0 HP (R410A) | Condensador: Aire / Extra Grande | Compresor de Enfriado de 1/8 HP R134A | Regulador de Temperatura de Preenfriado de Modo Nocturno.\n• Requisito: Dejar libre espacio de ventilación de 40 cm por ambos lados y 15 cm en la parte trasera.",
-    
     'DEMEX 125': "HELADO DURO (PRODUCCIÓN CADA 9-11 MIN. TODO EL DÍA)\n• Dimensiones: 70 x 56 x 132 CM | Peso Neto: 180 KG\n• Fabricada en Acero Inoxidable | Batidor de Acero Inoxidable\n• Potencia Energética: 3.4 KW/HR | Corriente de Entrada: Monofásica 110V/60HZ\n• Componentes: Cilindro de 13.5 Litros | Motor de 1.5 HP | Micromotor 110V/60Hz 1450 RPM 150 Watts\n• Características: Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático.\n• Refrigeración: Compresor Panasonic 1.0 HP x 2 (R410A) | Condensador: Aire.\n• Requisito: Se recomienda conectar ampliamente a una pastilla (Brake) de 40 Amperes.",
-    
     'DEMEX 1020': "HELADO DURO (PRODUCCIÓN CADA 8-10 MIN. TODO EL DÍA)\n• Dimensiones: 70 x 60 x 149 CM | Peso Neto: 200 KG\n• Fabricada en Acero Inoxidable | Batidor de Acero Inoxidable\n• Potencia Energética: 5.1 KW/HR | Corriente de Entrada: Bifásica 220V/60HZ\n• Componentes: Cilindros de 20 Litros | Motor de 2.0 HP | Micromotor 220V/60Hz 1400 RPM 120 Watts\n• Características: Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático.\n• Refrigeración: Compresores Panasonic 2.3 HP x 2 (R410A) | Condensadores: 2 (1 x Compresor) | Condensación: Aire.\n• Requisito: Se recomienda conectar ampliamente a una pastilla (Brake) de 30 Amperes Bifásica."
 };
 
@@ -235,15 +304,11 @@ function calcularFlujoComercial() {
 
     if (!modeloTexto || !matrizPrecios[modeloTexto]) return;
 
-    // 1. Extraemos el precio del catálogo estático
     const precioBaseOriginal = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
-    // Cambia esa línea por esta versión protegida:
     $('#precio_base_origen').off('change input').val(precioBaseOriginal.toFixed(2));
 
-    // 2. Rellenado dinámico de especificaciones técnicas
     $('#especificion_cotizada').val(especificacionesMaquinas[modeloTexto] || "");
 
-    // 3. Cálculos matemáticos comerciales
     const montoDescuentoUnitario = precioBaseOriginal * (pctDesc / 100);
     const precioPactadoUnitario = precioBaseOriginal - montoDescuentoUnitario;
     
@@ -251,10 +316,8 @@ function calcularFlujoComercial() {
     const ivaCalculado = subtotalPactadoAcumulado * 0.16;
     const totalNeto = subtotalPactadoAcumulado + ivaCalculado;
 
-    // 4. Formateador de Divisas en Pesos Mexicanos (MXN)
     const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-    // 5. Inyección a las etiquetas visuales
     $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginal));
     $('#lbl_descuento_monto').text('-' + formatoMXN.format(montoDescuentoUnitario * cantidad));
     $('#lbl_flete_monto').text(formatoMXN.format(flete));
@@ -262,7 +325,6 @@ function calcularFlujoComercial() {
     $('#lbl_iva').text(formatoMXN.format(ivaCalculado));
     $('#lbl_total').text(formatoMXN.format(totalNeto));
 
-    // Mapeo de archivos de previsualización
     const imagenesMaquinas = {
         'SPICE MT15': 'spice_mt15.png',
         'SPICE MV89': 'spice_mv89.png',
@@ -284,21 +346,74 @@ function calcularFlujoComercial() {
 }
 
 $(document).ready(function() {
-    // 1. Para los selects usamos solo 'change'
+    // Escucha inicial del Paso 2
     $('#maquina_select, #tipo_cliente').on('change', function() {
         calcularFlujoComercial();
     });
     
-    // 2. Para los campos numéricos usamos solo 'input' para evitar el bucle infinito del keyup/change
     $('#descuento_porcentaje, #costo_envio, #cantidad').on('input', function() {
         calcularFlujoComercial();
     });
     
-    // 3. Ejecución inicial limpia al cargar la página
     calcularFlujoComercial();
+
+    // --- NUEVO: EVENTO AJAX PASO 1 (ALTA MANUAL CON TRASLADO AUTOMÁTICO DE EQUIPO) ---
+    $('#btnCrearLeadManual').on('click', function() {
+        const nombre = $('#lead_nombre').val().trim();
+        const apellidos = $('#lead_apellidos').val().trim();
+        const canal = $('#lead_canal').val();
+        const telefono = $('#lead_telefono').val().trim();
+        const correo = $('#lead_correo').val().trim();
+        const region = $('#lead_region').val().trim();
+        const pais = $('#lead_pais').val().trim();
+        const maquinaSeleccionada = $('#lead_maquina').val(); // <-- Captura el modelo del paso 1
+
+        if (nombre === '' || apellidos === '' || telefono === '' || !maquinaSeleccionada) {
+            Swal.fire({ title: 'Campos Obligatorios', text: 'Por favor, llena el nombre, apellidos, teléfono y equipo de interés.', icon: 'warning' });
+            return;
+        }
+
+        $.ajax({
+            url: '../actions/crear_lead_manual.php',
+            method: 'POST',
+            data: {
+                nombre: nombre,
+                apellidos: apellidos,
+                canal_origen: canal,
+                telefono: telefono,
+                correo: correo,
+                estado_region: region,
+                pais: pais,
+                maquina_interes: maquinaSeleccionada // <-- Mandamos el equipo real al Backend
+            },
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire({ title: '¡Lead Registrado!', text: 'Expediente comercial creado. Configura los costos de la cotización.', icon: 'success', timer: 1500, showConfirmButton: false });
+                    
+                    // 1. Inyectamos el ID generado en el formulario oculto de la cotización
+                    $('#sec_id_prospecto').val(response.id_prospecto);
+                    
+                    // 2. Concatenamos e inyectamos el nombre completo en la sección fiscal
+                    $('#txt_cliente_fiscal').val(nombre + ' ' + apellidos);
+                    
+                    // 3. CAMBIO CLAVE: Sincroniza la máquina seleccionada con el select del Paso 2
+                    $('#maquina_select').val(maquinaSeleccionada).trigger('change');
+                    
+                    // 4. Desbloqueamos visualmente el paso 2 de la cotización
+                    $('#cardSeccionCotizacion').removeClass('opacity-50').css('pointer-events', 'auto');
+                    
+                    // 5. Bloqueamos los controles del paso 1 para mantener integridad
+                    $('.ctrl-lead').attr('readonly', true).attr('disabled', true);
+                    $('#btnCrearLeadManual').hide();
+                } else {
+                    Swal.fire({ title: 'Error', text: response.message, icon: 'error' });
+                }
+            },
+            error: function() {
+                Swal.fire({ title: 'Error de Servidor', text: 'No se pudo registrar el expediente comercial de forma manual.', icon: 'error' });
+            }
+        });
+    });
 });
 </script>
-
-<?php 
-include '../includes/footer.php'; 
-?>
