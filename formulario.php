@@ -41,7 +41,7 @@
         <div class="col-12 col-md-10 col-lg-9">
             
             <div class="formulario-wrapper">
-                <div class="card-main" style="border-top: 5px solid var(--primary-color) !important; border-top-left-radius: 20px; border-top-right-radius: 20px;">
+                <div class="card-main" style="border-top: 5px solid var(--primary-color) !important; border-top-left-radius: 20px; border-top-right-radius: 20px; background: #ffffff; padding: 2.5rem; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.05);">
                     
                     <div class="text-center mb-4">
                         <div class="logo-login-container mb-2">
@@ -69,9 +69,19 @@
                                 <label for="telefono" class="form-label fw-semibold text-dark mb-2">Teléfono / WhatsApp <span class="text-danger">*</span></label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-whatsapp"></i></span>
-                                    <input type="tel" class="form-control border-start-0" id="telefono" name="telefono" placeholder="10 dígitos" required pattern="[0-9]{10}">
+                                    <input type="text" 
+                                           class="form-control border-start-0" 
+                                           id="telefono" 
+                                           name="telefono" 
+                                           placeholder="10 dígitos (Ej. 2221234567)" 
+                                           required 
+                                           maxlength="10" 
+                                           pattern="\d{10}" 
+                                           oninput="this.value = this.value.replace(/[^0-9]/g, '');"
+                                           title="Por favor, introduce un número de teléfono válido a 10 dígitos sin espacios ni guiones.">
                                 </div>
                             </div>
+                            
                             <div class="col-12 col-md-6">
                                 <label for="correo" class="form-label fw-semibold text-dark mb-2">Correo Electrónico <span class="text-danger">*</span></label>
                                 <div class="input-group">
@@ -84,11 +94,25 @@
                         <div class="row g-3 mb-3">
                             <div class="col-12 col-md-6">
                                 <label for="pais" class="form-label fw-semibold text-dark mb-2">País <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="pais" name="pais" value="México" required>
+                                <input type="text" class="form-control" id="pais" name="pais" placeholder="Ej. México" required>
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="estado_region" class="form-label fw-semibold text-dark mb-2">Estado / Región <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="estado_region" name="estado_region" placeholder="Ej. Puebla" required>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-12">
+                                <label for="canal_origen" class="form-label fw-semibold text-dark mb-2">¿Cómo te enteraste de nosotros? <span class="text-danger">*</span></label>
+                                <select class="form-select" id="canal_origen" name="canal_origen" required>
+                                    <option value="" selected disabled>Selecciona una opción...</option>
+                                    <option value="Página Web">Página Web</option>
+                                    <option value="Facebook">Facebook</option>
+                                    <option value="YouTube">YouTube</option>
+                                    <option value="WhatsApp">WhatsApp</option>
+                                    <option value="Recomendación">Recomendación de un conocido</option>
+                                </select>
                             </div>
                         </div>
 
