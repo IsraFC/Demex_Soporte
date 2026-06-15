@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pais = isset($_POST['pais']) ? trim($_POST['pais']) : 'México';
     $estado_region = trim($_POST['estado_region']);
     $maquina_interes = trim($_POST['maquina_interes']);
-    $canal_origen = 'Formulario Web'; 
+    $canal_origen = trim($_POST['canal_origen']); 
 
     if (empty($nombre) || empty($apellidos) || empty($telefono) || empty($correo) || empty($estado_region) || empty($maquina_interes)) {
         die("Error: Todos los campos obligatorios deben estar llenos.");
@@ -24,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         // SQL para tabla formulario
-        $sqlFormulario = "INSERT INTO formulario (nombre, apellidos, telefono, correo, pais, estado_region, maquina_interes, canal_origen) 
-                          VALUES (:nombre, :apellidos, :telefono, :correo, :pais, :estado_region, :maquina_interes, :canal_origen)";
+        $sqlFormulario = "INSERT INTO formulario (nombre, apellidos, telefono, correo, pais, estado_region, maquina_interes, canal_origen, fecha_registro) 
+                          VALUES (:nombre, :apellidos, :telefono, :correo, :pais, :estado_region, :maquina_interes, :canal_origen, NOW())";
         
         $stmtForm = $pdo->prepare($sqlFormulario);
         $stmtForm->execute([
@@ -160,12 +160,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Inicia el llenado fluido de la barra de progreso
                     setTimeout(() => {
                         bar.style.width = '100%';
-                    }, 200);
+                    }, 600);
 
                     // Redirección automática tras 3.2 segundos
                     setTimeout(() => {
                         window.location.href = '../formulario.php';
-                    }, 4200);
+                    }, 6200);
                 });
             </script>
             </body>
