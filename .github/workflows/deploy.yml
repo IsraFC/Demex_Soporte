@@ -24,4 +24,4 @@ jobs:
         SOURCE: "/" # Copia todo desde la raíz de GitHub
         TARGET: "/var/www/html/" # Carpeta destino en tu servidor Ubuntu
         # Aquí abajo están protegidos todos tus archivos locales, del sistema y respaldos:
-        EXCLUDE: "/.git/, /.github/, /.gitignore, /.vscode/, /Thumbs.db, /desktop.ini, /.DS_Store, /*.log, /Soporte/backups/, /backups/, /config/ultimo_respaldo.txt, /crear_admin.php, /config/mail_config.php, /config/db.php"
+        EXCLUDE: /.git/, /.github/, /.gitignore, /.vscode/, /Thumbs.db, /desktop.ini, /.DS_Store, /*.log, /Soporte/backups/, /backups/, /config/ultimo_respaldo.txt, /crear_admin.php, /config/mail_config.php, /config/db.php
