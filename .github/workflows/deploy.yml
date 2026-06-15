@@ -6,20 +6,36 @@ on:
       - main
 
 jobs:
-  deploy:
+  web-deploy:
+    name: Desplegar código vía SFTP
     runs-on: ubuntu-latest
-
     steps:
     - name: Descargar el código desde GitHub
       uses: actions/checkout@v3
 
-    - name: Sincronizar archivos hacia Hetzner vía SFTP
-      uses: easingthemes/ssh-deploy@v4.1.10
+    - name: Sincronizar archivos con Hetzner
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
       with:
-        REMOTE_HOST: ${{ secrets.SSH_HOST }}
-        REMOTE_USER: ${{ secrets.SSH_USER }}
-        REMOTE_PASSWORD: ${{ secrets.SSH_PASSWORD }}
-        ARGS: "-rlgoDzvc --delete"
-        SOURCE: "/"
-        TARGET: "/var/www/html/"
-        EXCLUDE: "/.git/, /.github/, /.gitignore, /.vscode/, /Thumbs.db, /desktop.ini, /.DS_Store, /*.log, /Soporte/backups/, /backups/, /config/ultimo_respaldo.txt, /crear_admin.php, /config/mail_config.php, /config/db.php"
+        server: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        password: ${{ secrets.SSH_PASSWORD }}
+        port: 22
+        protocol: sftp
+        local-dir: ./
+        server-dir: /var/www/html/
+        # Tu lista sagrada de archivos que NO se van a tocar ni borrar en el servidor:
+        exclude: |
+          **/.git/**
+          **/.github/**
+          .gitignore
+          .vscode/**
+          Thumbs.db
+          desktop.ini
+          .DS_Store
+          *.log
+          Soporte/backups/**
+          backups/**
+          config/ultimo_respaldo.txt
+          crear_admin.php
+          config/mail_config.php
+          config/db.php
