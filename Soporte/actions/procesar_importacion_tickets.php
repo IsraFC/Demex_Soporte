@@ -169,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['archivo_csv'])) {
                         if (!$f_venc) {
                             $f_venc = (strpos($serie_final, 'S/N-') !== false) ? '2000-01-01' : date('Y-m-d', strtotime($f_ini . ' + 1 year'));
                         }
-                        $insE = $pdo->prepare("INSERT IGNORE INTO Equipos_Garantia (no_serie, id_cliente, modelo, fecha_inicio, fecha_termino) VALUES (?,?,?,?,?)");
+                        $insE = $pdo->prepare("INSERT INTO Equipos_Garantia (no_serie, id_cliente, modelo, fecha_inicio, fecha_termino) VALUES (?,?,?,?,?)");
                         $insE->execute([$serie_final, $id_c, $modelo_final, $f_ini, $f_venc]);
                     }
                 }
