@@ -4,8 +4,6 @@
  * @package Portal_Demex
  * @brief Interfaz gráfica con validación específica de errores y mitigación precisa de fuerza bruta.
  */
-$page_title = "Portal DEMEX | Control de Acceso";
-
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -58,7 +56,7 @@ if (!empty($old_correo)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal DEMEX | Iniciar Sesión</title>
+    <title>Portal DEMEX | Control de Acceso</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
