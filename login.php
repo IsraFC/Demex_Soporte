@@ -4,7 +4,7 @@
  * @package Portal_Demex
  * @brief Interfaz gráfica con validación específica de errores y mitigación precisa de fuerza bruta.
  */
-$page_title = "Iniciar Sesión";
+$page_title = "Portal DEMEX | Control de Acceso";
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

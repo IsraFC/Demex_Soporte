@@ -36,4 +36,4 @@ jobs:
           --exclude='crear_admin.php' \
           --exclude='config/mail_config.php' \
           --exclude='config/db.php' \
-          ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/html/
+          ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/html/s
