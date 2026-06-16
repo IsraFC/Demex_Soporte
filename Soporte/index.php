@@ -402,7 +402,14 @@ include '../includes/header.php';
                 },
                 "dom": 'rtip',
                 "pageLength": 13,
-                "order": [[0, "desc"]]
+                "order": [[0, "desc"]],
+                "createdRow": function(row, data, dataIndex) {
+                    // Si el backend envía que el estatus de pago es 'NO APLICA'
+                    if (data.estatus_pago === 'NO APLICA' || data.estatus_pago === 'N/A') {
+                        $(row).addClass('bg-light text-muted opacity-75 text-decoration-none');
+                        $(row).css('background-color', '#f8f9fa'); // Asegura un gris claro limpio
+                    }
+                }
             });
 
             // 1. EVENTOS DE RECARGA (REDAW) AL CAMBIAR FILTROS
