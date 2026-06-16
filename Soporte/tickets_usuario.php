@@ -277,7 +277,14 @@ include '../includes/header.php';
                     { 
                         "data": "estatus_pago",
                         "render": function(data) {
-                            let color = data === 'Pendiente' ? 'text-danger fw-bold' : 'text-success fw-bold';
+                            let color = 'text-success fw-bold'; // Por defecto verde (Pagado)
+                            
+                            if (data === 'Pendiente') {
+                                color = 'text-danger fw-bold';
+                            } else if (data === 'NO APLICA' || data === 'N/A') {
+                                color = 'text-muted fw-normal'; // Si no aplica, gris y letra normal
+                            }
+                            
                             return `<span class="small ${color}">${data}</span>`;
                         }
                     },
