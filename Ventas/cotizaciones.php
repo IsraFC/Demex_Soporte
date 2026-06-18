@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: cotizaciones.php
  * DESCRIPCIÓN: Formulario de Configuración Comercial de Cotizaciones.
- * Soporta creación fluida por pasos asíncronos cuando se genera desde 0.
+ * Soporta creación fluida por pasos asíncronos y edición de campos bancarios corporativos.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 4.4 (Sincronización Total de Máquina de Interés e Imagen Previa)
+ * @version 4.6 (Sección de Campos Bancarios Independientes)
  */
 
 $page_title = "Generador de Cotizaciones | CRM Ventas";
@@ -224,7 +224,7 @@ include '../includes/header.php';
         <div class="row g-3 mb-4 border-top pt-3">
             <div class="col-12 col-md-6">
                 <label class="form-label fw-semibold text-dark small">Especificaciones Técnicas Incluidas</label>
-                <textarea class="form-control small text-muted" id="especificion_cotizada" name="especificion_cotizada" style="background-color: #f8f9fa; height: 320px; resize: none;" placeholder="Se auto-rellenarán según la máquina seleccionada..."></textarea>
+                <textarea class="form-control small text-muted" id="especificion_cotizada" name="especificion_cotizada" style="background-color: #f8f9fa; height: 320px; resize: none;" placeholder="Se auto-rellenarán según la máquina seleccionada..." required></textarea>
             </div>
 
             <div class="col-12 col-md-6 d-flex align-items-center justify-content-center">
@@ -234,7 +234,63 @@ include '../includes/header.php';
                     <div id="img_placeholder" class="text-muted small py-4"><i class="bi bi-image fs-2 d-block mb-2 text-danger"></i>Selecciona un modelo para ver su imagen</div>
                 </div>
             </div>
+        </div>
 
+       <div class="row g-3 mb-4 border-top pt-3">
+            <div class="col-12">
+                <h6 class="fw-bold text-danger mb-2"><i class="bi bi-bank me-2"></i> Datos Bancarios y Fiscales</h6>
+                <p class="text-muted small mb-3">Establece las condiciones de pago y cuentas oficiales corporativas que se imprimirán de forma visual en la cotización.</p>
+            </div>
+            
+            <div class="col-12 col-md-4">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold text-dark small">Condiciones Comerciales Base</label>
+                    <textarea class="form-control small text-muted" name="condicion_comercial_bancos" rows="2" style="background-color: #f8f9fa; height: 74px; resize: none;" required>Precios de promoción para pagos por transferencia o efectivo.&#10;No incluyen el envío.</textarea>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold text-dark small">Razón Social / Beneficiario</label>
+                    <input type="text" class="form-control bg-light fw-semibold text-dark" name="banco_beneficiario" value="DEMEXTOR SA DE CV" readonly style="height: 38px;" required>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold text-dark small">Banco Opción 1</label>
+                    <input type="text" class="form-control text-uppercase" name="banco_1_nombre" value="BANORTE" style="height: 38px;" required>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold text-dark small">Cuenta Banorte</label>
+                    <input type="text" class="form-control fw-bold text-secondary" name="banco_1_cuenta" value="0434571284" style="height: 38px;" required>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold text-dark small">Clabe Interbancaria Banorte</label>
+                    <input type="text" class="form-control fw-bold text-danger" name="banco_1_clabe" value="072 650 00434571284 8" style="height: 38px;" required>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold text-dark small">Banco Opción 2</label>
+                    <input type="text" class="form-control text-uppercase" name="banco_2_nombre" value="BANAMEX" style="height: 38px;" required>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-7">
+                        <label class="form-label fw-semibold text-dark small">Cuenta Banamex</label>
+                        <input type="text" class="form-control fw-bold text-secondary" name="banco_2_cuenta" value="7213722" style="height: 38px;" required>
+                    </div>
+                    <div class="col-5">
+                        <label class="form-label fw-semibold text-dark small">Sucursal</label>
+                        <input type="text" class="form-control fw-bold text-secondary" name="banco_2_sucursal" value="7010" style="height: 38px;" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold text-dark small">Clabe Interbancaria Banamex</label>
+                    <input type="text" class="form-control fw-bold text-danger" name="banco_2_clabe" value="002 650 70107213722 1" style="height: 38px;" required>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4 border-top pt-3">
             <div class="col-12 col-md-6">
                 <label class="form-label fw-semibold text-dark small">Notas / Observaciones</label>
                 <textarea class="form-control" name="notas" rows="4" placeholder="Garantías, plazos de entrega o condiciones de pago..." style="height: 180px; resize: none;"></textarea>
@@ -304,27 +360,40 @@ function calcularFlujoComercial() {
 
     if (!modeloTexto || !matrizPrecios[modeloTexto]) return;
 
-    const precioBaseOriginal = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
-    $('#precio_base_origen').off('change input').val(precioBaseOriginal.toFixed(2));
+    // 1. Extraemos el precio con IVA del catálogo estático
+    const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
+    
+    // CORREGIDO: Dividimos entre 1.16 para pintar en pantalla el precio BASE REAL SIN IVA
+    const precioBaseOriginalSinIva = precioConIvaLista / 1.16;
+    $('#precio_base_origen').off('change input').val(precioBaseOriginalSinIva.toFixed(2));
 
+    // 2. Rellenado dinámico de especificaciones técnicas
     $('#especificion_cotizada').val(especificacionesMaquinas[modeloTexto] || "");
 
-    const montoDescuentoUnitario = precioBaseOriginal * (pctDesc / 100);
-    const precioPactadoUnitario = precioBaseOriginal - montoDescuentoUnitario;
+    // 3. Cálculos matemáticos comerciales corregidos
+    const montoDescuentoUnitario = precioBaseOriginalSinIva * (pctDesc / 100);
+    const precioPactadoUnitario = precioBaseOriginalSinIva - montoDescuentoUnitario;
     
+    // El subtotal acumulado de las máquinas y los gastos de envío (Todo sin IVA)
     const subtotalPactadoAcumulado = (precioPactadoUnitario * cantidad) + flete;
+    
+    // Calculamos el IVA real sobre ese subtotal desglosado
     const ivaCalculado = subtotalPactadoAcumulado * 0.16;
+    
+    // El Gran Total Neto vuelve a dar el valor esperado con IVA incluido
     const totalNeto = subtotalPactadoAcumulado + ivaCalculado;
 
+    // 4. Formateador de Divisas en Pesos Mexicanos (MXN)
     const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-    $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginal));
+    // 5. Inyección a las etiquetas visuales
+    $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginalSinIva));
     $('#lbl_descuento_monto').text('-' + formatoMXN.format(montoDescuentoUnitario * cantidad));
     $('#lbl_flete_monto').text(formatoMXN.format(flete));
     $('#lbl_subtotal').text(formatoMXN.format(subtotalPactadoAcumulado));
     $('#lbl_iva').text(formatoMXN.format(ivaCalculado));
     $('#lbl_total').text(formatoMXN.format(totalNeto));
-
+    
     const imagenesMaquinas = {
         'SPICE MT15': 'spice_mt15.png',
         'SPICE MV89': 'spice_mv89.png',
@@ -346,7 +415,6 @@ function calcularFlujoComercial() {
 }
 
 $(document).ready(function() {
-    // Escucha inicial del Paso 2
     $('#maquina_select, #tipo_cliente').on('change', function() {
         calcularFlujoComercial();
     });
@@ -357,7 +425,6 @@ $(document).ready(function() {
     
     calcularFlujoComercial();
 
-    // --- NUEVO: EVENTO AJAX PASO 1 (ALTA MANUAL CON TRASLADO AUTOMÁTICO DE EQUIPO) ---
     $('#btnCrearLeadManual').on('click', function() {
         const nombre = $('#lead_nombre').val().trim();
         const apellidos = $('#lead_apellidos').val().trim();
@@ -366,7 +433,7 @@ $(document).ready(function() {
         const correo = $('#lead_correo').val().trim();
         const region = $('#lead_region').val().trim();
         const pais = $('#lead_pais').val().trim();
-        const maquinaSeleccionada = $('#lead_maquina').val(); // <-- Captura el modelo del paso 1
+        const maquinaSeleccionada = $('#lead_maquina').val();
 
         if (nombre === '' || apellidos === '' || telefono === '' || !maquinaSeleccionada) {
             Swal.fire({ title: 'Campos Obligatorios', text: 'Por favor, llena el nombre, apellidos, teléfono y equipo de interés.', icon: 'warning' });
@@ -384,26 +451,17 @@ $(document).ready(function() {
                 correo: correo,
                 estado_region: region,
                 pais: pais,
-                maquina_interes: maquinaSeleccionada // <-- Mandamos el equipo real al Backend
+                maquina_interes: maquinaSeleccionada
             },
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
                     Swal.fire({ title: '¡Lead Registrado!', text: 'Expediente comercial creado. Configura los costos de la cotización.', icon: 'success', timer: 1500, showConfirmButton: false });
                     
-                    // 1. Inyectamos el ID generado en el formulario oculto de la cotización
                     $('#sec_id_prospecto').val(response.id_prospecto);
-                    
-                    // 2. Concatenamos e inyectamos el nombre completo en la sección fiscal
                     $('#txt_cliente_fiscal').val(nombre + ' ' + apellidos);
-                    
-                    // 3. CAMBIO CLAVE: Sincroniza la máquina seleccionada con el select del Paso 2
                     $('#maquina_select').val(maquinaSeleccionada).trigger('change');
-                    
-                    // 4. Desbloqueamos visualmente el paso 2 de la cotización
                     $('#cardSeccionCotizacion').removeClass('opacity-50').css('pointer-events', 'auto');
-                    
-                    // 5. Bloqueamos los controles del paso 1 para mantener integridad
                     $('.ctrl-lead').attr('readonly', true).attr('disabled', true);
                     $('#btnCrearLeadManual').hide();
                 } else {

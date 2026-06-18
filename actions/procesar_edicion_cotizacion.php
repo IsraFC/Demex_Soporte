@@ -2,11 +2,11 @@
 /**
  * ARCHIVO: actions/procesar_edicion_cotizacion.php
  * DESCRIPCIÓN: Procesador de Base de Datos para el UPDATE unificado.
- * Actualiza la cotización y sincroniza los cambios de datos (nombre/apellidos)
- * en la tabla 'formulario' siguiendo la cadena de llaves foráneas.
+ * Actualiza la cotización, empaqueta los datos bancarios editados y sincroniza
+ * los cambios de datos en la tabla 'formulario' siguiendo la cadena de llaves foráneas.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.2 (Sincronización Estricta por Llaves Foráneas)
+ * @version 6.3 (Soporte y Almacenamiento de Datos Bancarios Editables)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // 1. Captura de variables desde editar_cotizacion.php
 $id_cotizacion        = isset($_POST['id_cotizacion']) ? intval($_POST['id_cotizacion']) : 0;
 $id_maquina           = isset($_POST['id_maquina']) ? intval($_POST['id_maquina']) : 0;
-$cliente_razon        = trim($_POST['cliente'] ?? ''); // Viene todo junto del formulario
+$cliente_razon        = trim($_POST['cliente'] ?? ''); 
 $rfc_receptor         = !empty($_POST['rfc_receptor']) ? strtoupper(trim($_POST['rfc_receptor'])) : 'XAXX010101000';
 $sucursal             = !empty($_POST['sucursal']) ? trim($_POST['sucursal']) : 'Matriz';
 $direccion_entrega    = trim($_POST['direccion_entrega'] ?? '');
@@ -34,7 +34,32 @@ $precio_base_origen   = floatval($_POST['precio_base_origen'] ?? 0);
 $descuento_porcentaje = isset($_POST['descuento_porcentaje']) ? intval($_POST['descuento_porcentaje']) : 0;
 $costo_envio          = floatval($_POST['costo_envio'] ?? 0);
 $especificacion       = trim($_POST['especificion_cotizada'] ?? '');
-$notas                = trim($_POST['notas'] ?? '');
+$notes_original       = trim($_POST['notas'] ?? '');
+
+// --- NUEVO: CAPTURA DE BLOQUE BANCARIO MODIFICADO DESDE LA EDICIÓN ---
+$condicion_comercial = trim($_POST['condicion_comercial_bancos'] ?? 'Precios de promoción para pagos por transferencia o efectivo.');
+$banco_1_nombre      = trim($_POST['banco_1_nombre'] ?? 'BANORTE');
+$banco_1_cuenta      = trim($_POST['banco_1_cuenta'] ?? '0434571284');
+$banco_1_clabe       = trim($_POST['banco_1_clabe'] ?? '072 650 00434571284 8');
+$banco_2_nombre      = trim($_POST['banco_2_nombre'] ?? 'BANAMEX');
+$banco_2_cuenta      = trim($_POST['banco_2_cuenta'] ?? '7213722');
+$banco_2_clabe       = trim($_POST['banco_2_clabe'] ?? '002 650 70107213722 1');
+$banco_2_sucursal    = trim($_POST['banco_2_sucursal'] ?? '7010');
+
+// Empaquetamos los datos bancarios en un arreglo JSON codificado en base64 para proteger acentos y caracteres especiales
+$datos_bancos_empaquetados = base64_encode(json_encode([
+    'condicion' => $condicion_comercial,
+    'b1_nom'    => $banco_1_nombre,
+    'b1_cta'    => $banco_1_cuenta,
+    'b1_clabe'  => $banco_1_clabe,
+    'b2_nom'    => $banco_2_nombre,
+    'b2_cta'    => $banco_2_cuenta,
+    'b2_clabe'  => $banco_2_clabe,
+    'b2_suc'    => $banco_2_sucursal
+]));
+
+// Unimos las observaciones originales con el bloque cifrado bancario usando nuestro separador único (|||)
+$notes_final = $notes_original . "|||" . $datos_bancos_empaquetados;
 
 if ($id_cotizacion <= 0 || $id_maquina <= 0 || empty($cliente_razon)) {
     header("Location: ../Ventas/leads_crm.php?msg=error_datos");
@@ -64,7 +89,7 @@ try {
     $stmt_form = $pdo->prepare("SELECT id_formulario FROM prospectos WHERE id_prospecto = ? LIMIT 1");
     $stmt_form->execute([$id_prospecto]);
     $prospecto_actual = $stmt_form->fetch(PDO::FETCH_ASSOC);
-    $id_formulario = $prospecto_actual['id_formulario'];
+    $id_formulario = $prospecto_actual ? $prospecto_actual['id_formulario'] : null;
 
     // Obtener el nombre de la máquina basado en el id_maquina seleccionado
     $stmt_maq_name = $pdo->prepare("SELECT modelo FROM maquinaria WHERE id_maquina = ? LIMIT 1");
@@ -72,8 +97,7 @@ try {
     $maquina_info = $stmt_maq_name->fetch(PDO::FETCH_ASSOC);
     $modelo_texto = $maquina_info ? $maquina_info['modelo'] : '';
 
-
-    // 4. PASO A: Actualizar la tabla madre 'cotizacion' (Campos reales de la tabla)
+    // 4. PASO A: Actualizar la tabla madre 'cotizacion' (Campos reales de la tabla con notes_final)
     $sql_update_cot = "UPDATE cotizacion 
                        SET id_maquina = :id_maquina,
                            rfc_receptor = :rfc_receptor,
@@ -102,57 +126,56 @@ try {
         ':precio_pactado'          => $precio_pactado_unitario, 
         ':especificacion_cotizada' => $especificacion,
         ':costo_envio'             => $costo_envio,
-        ':notes'                   => $notas,
+        ':notes'                   => $notes_final, // <-- ACTUALIZADO: Guarda la combinación de notas + bancos
         ':id_cotizacion'           => $id_cotizacion
     ]);
 
+    // 5. PASO B: Separación inteligente de Nombres y Apellidos para la tabla 'formulario' (Si está enlazado)
+    if ($id_formulario) {
+        $partes_nombre = explode(' ', $cliente_razon);
+        $total_palabras = count($partes_nombre);
 
-    // 5. PASO B: Separación inteligente de Nombres y Apellidos para la tabla 'formulario'
-    $partes_nombre = explode(' ', $cliente_razon);
-    $total_palabras = count($partes_nombre);
-
-    $nuevo_nombre = '';
-    $nuevos_apellidos = '';
-
-    if ($total_palabras == 1) {
-        $nuevo_nombre = $partes_nombre[0];
+        $nuevo_nombre = '';
         $nuevos_apellidos = '';
-    } elseif ($total_palabras == 2) {
-        $nuevo_nombre = $partes_nombre[0];
-        $nuevos_apellidos = $partes_nombre[1];
-    } elseif ($total_palabras == 3) {
-        // Ejemplo: Juan Pérez Gómez -> Nombre: Juan, Apellidos: Pérez Gómez
-        $nuevo_nombre = $partes_nombre[0];
-        $nuevos_apellidos = $partes_nombre[1] . ' ' . $partes_nombre[2];
-    } else {
-        // Ejemplo: Sergio Mauricio Campos Carranza -> Nombre: Sergio Mauricio, Apellidos: Campos Carranza
-        $nuevo_nombre = $partes_nombre[0] . ' ' . $partes_nombre[1];
-        $nuevos_apellidos = implode(' ', array_slice($partes_nombre, 2));
+
+        if ($total_palabras == 1) {
+            $nuevo_nombre = $partes_nombre[0];
+            $nuevos_apellidos = '';
+        } elseif ($total_palabras == 2) {
+            $nuevo_nombre = $partes_nombre[0];
+            $nuevos_apellidos = $partes_nombre[1];
+        } elseif ($total_palabras == 3) {
+            $nuevo_nombre = $partes_nombre[0];
+            $nuevos_apellidos = $partes_nombre[1] . ' ' . $partes_nombre[2];
+        } else {
+            $nuevo_nombre = $partes_nombre[0] . ' ' . $partes_nombre[1];
+            $nuevos_apellidos = implode(' ', array_slice($partes_nombre, 2));
+        }
+
+        $sql_update_form = "UPDATE formulario 
+                            SET nombre = :nuevo_nombre, 
+                                apellidos = :nuevos_apellidos, 
+                                maquina_interes = :maquina_interes
+                            WHERE id_formulario = :id_formulario";
+        
+        $stmt2 = $pdo->prepare($sql_update_form);
+        $stmt2->execute([
+            ':nuevo_nombre'   => $nuevo_nombre,
+            ':nuevos_apellidos'=> $nuevos_apellidos,
+            ':maquina_interes'=> $modelo_texto,
+            ':id_formulario'  => $id_formulario
+        ]);
     }
 
-    // Actualizamos la tabla formulario de manera limpia usando su ID directo
-    $sql_update_form = "UPDATE formulario 
-                        SET nombre = :nuevo_nombre, 
-                            apellidos = :nuevos_apellidos, 
-                            maquina_interes = :maquina_interes
-                        WHERE id_formulario = :id_formulario";
-    
-    $stmt2 = $pdo->prepare($sql_update_form);
-    $stmt2->execute([
-        ':nuevo_nombre'   => $nuevo_nombre,
-        ':nuevos_apellidos'=> $nuevos_apellidos,
-        ':maquina_interes'=> $modelo_texto,
-        ':id_formulario'  => $id_formulario
-    ]);
-
-
     // 6. PASO C: Sincronizar el Semáforo y Tiempos de Prospección
-    $sql_update_pros = "UPDATE prospectos 
-                        SET status_comercial = 'Cotizado', 
-                            status_operativo = 'Cotizado',
-                            fecha_ultimo_contacto = NOW()
-                        WHERE id_prospecto = ?";
-    $pdo->prepare($sql_update_pros)->execute([$id_prospecto]);
+    if ($id_prospecto) {
+        $sql_update_pros = "UPDATE prospectos 
+                            SET status_comercial = 'Cotizado', 
+                                status_operativo = 'Cotizado',
+                                fecha_ultimo_contacto = NOW()
+                            WHERE id_prospecto = ?";
+        $pdo->prepare($sql_update_pros)->execute([$id_prospecto]);
+    }
 
     // Cerramos la transacción con éxito
     $pdo->commit();
