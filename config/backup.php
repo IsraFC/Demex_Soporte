@@ -6,58 +6,74 @@
  * Implementa una política de retención de los últimos 5 archivos para optimizar
  * el espacio en disco y garantizar la disponibilidad de versiones históricas.
  * * @author Israel Fernández Carrera
- * @version 1.3
+ * @version 1.6
  */
 
-/**
- * Ejecuta un volcado de la base de datos si el intervalo de tiempo ha expirado.
- * * @param PDO $pdo Instancia de conexión a la base de datos.
- */
 function ejecutarRespaldoSilencioso($pdo) {
     date_default_timezone_set('America/Mexico_City');
     
-    // Al estar en config/ (en la raíz), el archivo de marcas de tiempo se mantiene local en este directorio
+    // PRUEBA DE VIDA: Forzamos que se cree el log para saber que la función responde
+    file_put_contents(__DIR__ . '/debug_backup.log', "Iniciando proceso de respaldo... \n");
+    
     $archivo_registro = __DIR__ . '/ultimo_respaldo.txt'; 
     $tiempo_actual = time();
-    $intervalo = 3600; // Bloqueo de seguridad: 1 hora (3600 segundos)
+    $intervalo = 3600;
 
     /**
      * 1. VALIDACIÓN DE INTERVALO TEMPORAL
-     * Evita sobrecargar el servidor con ejecuciones redundantes en cada carga de página.
      */
     if (file_exists($archivo_registro)) {
         $ultimo_respaldo = (int)file_get_contents($archivo_registro);
-        // Si la diferencia es menor a una hora, abortamos el proceso
         if (($tiempo_actual - $ultimo_respaldo) < $intervalo) {
+            file_put_contents(__DIR__ . '/debug_backup.log', "Proceso omitido: El último respaldo fue hace menos de una hora.\n", FILE_APPEND);
             return; 
         }
     }
 
     /**
      * 2. CONFIGURACIÓN DEL ENTORNO Y BASE DE DATOS
-     * Sincronizado con el nuevo nombre global de la base de datos.
      */
-    $host = 'localhost';
-    $user = 'root';
-    $pass = ''; 
-    $db   = 'portal_demex';
-    
-    // Ajuste de ruta relativo: la carpeta backups/ está saliendo de config/ un nivel hacia atrás
-    $folder = __DIR__ . "/../backups/";
-    
-    // Generación de nombre de archivo único
-    $timestamp = date('Y-m-d_Hi');
-    $nuevo_backup = $folder . "db_backup_{$timestamp}.sql";
-    
-    // Ruta absoluta al ejecutable de MySQL en entorno XAMPP
-    $mysqldump = "C:\\xampp\\mysql\\bin\\mysqldump.exe";
+    $db = 'portal_demex';
+
+    // ASIGNACIÓN DE RUTAS ABSOLUTAS SEGÚN EL SISTEMA OPERATIVO
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        // --- ENTORNO LOCAL (XAMPP WINDOWS) ---
+        $folder = __DIR__ . "/../backups/";
+        if (!is_dir($folder)) {
+            mkdir($folder, 0755, true);
+        }
+        $mysqldump = "C:\\xampp\\mysql\\bin\\mysqldump.exe";
+        $timestamp = date('Y-m-d_Hi');
+        $nuevo_backup = $folder . "db_backup_{$timestamp}.sql";
+        $comando = "\"{$mysqldump}\" -h localhost -u root {$db} > \"{$nuevo_backup}\" 2>&1";
+    } else {
+        // --- ENTORNO PRODUCCIÓN (HETZNER LINUX) ---
+        // Usamos la ruta real absoluta del sistema de archivos de tu servidor
+        $folder = "/var/www/html/Soporte/backups/";
+        
+        if (!is_dir($folder)) {
+            mkdir($folder, 0755, true);
+        }
+        
+        $db_user = 'admin_demex';
+        $db_pass = 'M@rietta2015';
+        $timestamp = date('Y-m-d_Hi');
+        $nuevo_backup = $folder . "db_backup_{$timestamp}.sql";
+        
+        // Comando limpio con redirección estándar de errores
+        $comando = "mysqldump -h localhost -u {$db_user} -p'{$db_pass}' {$db} > '{$nuevo_backup}' 2>&1";
+    }
 
     /**
-     * 3. EJECUCIÓN DEL RESPALDO (MYSQL DUMP)
+     * 3. EJECUCIÓN DEL RESPALDO
      */
-    $pass_param = empty($pass) ? "" : "-p\"{$pass}\""; 
-    $comando = "\"{$mysqldump}\" --opt -h {$host} -u {$user} {$pass_param} {$db} > \"{$nuevo_backup}\" 2>&1";
-    exec($comando);
+    $output = [];
+    $result_code = null;
+    exec($comando, $output, $result_code);
+
+    // Guardamos el código resultante en nuestra bitácora visual
+    $log_status = "Código de salida del comando: " . $result_code . "\n" . implode("\n", $output) . "\n";
+    file_put_contents(__DIR__ . '/debug_backup.log', $log_status, FILE_APPEND);
 
     /**
      * 4. LÓGICA DE ROTACIÓN DE ARCHIVOS (Retention Policy: 5)
@@ -79,4 +95,5 @@ function ejecutarRespaldoSilencioso($pdo) {
      * 5. ACTUALIZACIÓN DEL REGISTRO DE CONTROL
      */
     file_put_contents($archivo_registro, $tiempo_actual);
+    file_put_contents(__DIR__ . '/debug_backup.log', "Respaldo finalizado con éxito. Archivo de control actualizado.\n", FILE_APPEND);
 }
