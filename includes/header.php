@@ -115,18 +115,6 @@ if ($en_subcarpeta) {
     $staff_link = "usuarios.php";
     $logout_link = "logout.php";
 }
-
-if (!isset($modulo_actual)) {
-    if (strpos($url_actual, '/Soporte/') !== false) {
-        $tema_sistema = 'soporte';
-    } elseif (strpos($url_actual, '/Ventas/') !== false) {
-        $tema_sistema = 'ventas';
-    } else {
-        $tema_sistema = 'global';
-    }
-} else {
-    $tema_sistema = $modulo_actual;
-}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -150,22 +138,8 @@ if (!isset($modulo_actual)) {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body data-theme="<?= $tema_sistema ?>">
+<body>
 
-<script>
-    (function() {
-        const temaAnterior = localStorage.getItem('demex_last_module_theme');
-        const temaNuevo = '<?= $tema_sistema ?>';
-        
-        if (temaAnterior && temaAnterior !== temaNuevo && temaAnterior !== 'global') {
-            document.body.setAttribute('data-theme', temaAnterior);
-            window.requestAnimationFrame(() => {
-                document.body.setAttribute('data-theme', temaNuevo);
-            });
-        }
-        localStorage.setItem('demex_last_module_theme', temaNuevo);
-    })();
-</script>
 
 <div id="wrapper" class="shadow-sm">
     <script>
