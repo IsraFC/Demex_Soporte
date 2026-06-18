@@ -34,14 +34,15 @@ $pagina_actual_php = basename($_SERVER['SCRIPT_NAME']);
 
 $en_soporte = (strpos($url_actual, '/Soporte/') !== false);
 $en_ventas = (strpos($url_actual, '/Ventas/') !== false);
-$en_subcarpeta = ($en_soporte || $en_ventas);
+$en_almacen = (strpos($url_actual, '/Almacen/') !== false); // <-- AGREGADO
+$en_subcarpeta = ($en_soporte || $en_ventas || $en_almacen);  // <-- ACTUALIZADO
 
 // Lista de páginas públicas que bajo ninguna circunstancia deben validar sesión o redirigir
 $paginas_publicas = ['login.php', 'recuperar.php', 'restablecer.php', 'verificar.php'];
 
 // Si la página actual no es pública, aplicamos el guardián de seguridad
 if (!in_array($pagina_actual_php, $paginas_publicas)) {
-    if (!isset($_SESSION['roles']) || !is_array($_SESSION['roles']) || !tieneAcceso(['Administrador', 'Soporte', 'Ventas', 'Cliente'])) {
+    if (!isset($_SESSION['roles']) || !is_array($_SESSION['roles']) || !tieneAcceso(['Administrador', 'Soporte', 'Ventas', 'Almacen', 'Cliente'])) {
         
         // Calculamos la ruta de escape al login de forma exacta basándonos en la profundidad del archivo
         $regreso_login = $en_subcarpeta ? '../' : './';
@@ -104,14 +105,21 @@ if ($en_subcarpeta) {
     if ($en_ventas) {
         $link_prefix_soporte = "../Soporte/";
         $link_prefix_ventas  = "./";
-    } else {
+        $link_prefix_almacen = "../Almacen/";
+    } elseif ($en_soporte) {
         $link_prefix_soporte = "./";
         $link_prefix_ventas  = "../Ventas/";
+        $link_prefix_almacen = "../Almacen/";
+    } elseif ($en_almacen) { 
+        $link_prefix_soporte = "../Soporte/";
+        $link_prefix_ventas  = "../Ventas/";
+        $link_prefix_almacen = "./";
     }
 } else {
     $base_path = "./";
     $link_prefix_soporte = "Soporte/";
     $link_prefix_ventas  = "Ventas/";
+    $link_prefix_almacen = "Almacen/";
     $staff_link = "usuarios.php";
     $logout_link = "logout.php";
 }
@@ -129,7 +137,7 @@ if ($en_subcarpeta) {
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
     
-    <link rel="stylesheet" href="/css/estilos.css">
+    <link rel="stylesheet" href="/desarrollo_mexicano/css/estilos.css">
 
     <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -166,6 +174,10 @@ if ($en_subcarpeta) {
 
                 <?php if (tieneAcceso(['Administrador', 'Ventas'])): ?>
                     <?php include __DIR__ . '/sidebar/menu_ventas.php'; ?>
+                <?php endif; ?>
+                
+                <?php if (tieneAcceso(['Administrador', 'Almacen'])): ?>
+                    <?php include __DIR__ . '/sidebar/menu_almacen.php'; ?>
                 <?php endif; ?>
                 
                 <?php if (tieneAcceso(['Administrador'])): ?>
