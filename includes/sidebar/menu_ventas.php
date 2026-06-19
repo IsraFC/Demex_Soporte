@@ -17,6 +17,9 @@ global $link_prefix_ventas, $pagina_actual_php, $en_ventas;
 <a href="<?= $link_prefix_ventas ?>cotizaciones.php" class="sidebar-link <?= ($pagina_actual_php === 'cotizaciones.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
     <div class="sidebar-icon"><i class="bi bi-file-earmark-pdf"></i></div> <span>Generar Cotización</span>
 </a>
+<a href="<?= $link_prefix_ventas ?>clientes.php" class="sidebar-link <?= ($pagina_actual_php === 'clientes.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
+    <div class="sidebar-icon"><i class="bi bi-people-fill"></i></div> <span>Catálogo de Clientes</span>
+</a>
 
 <div class="seccion-herramientas pt-3 mt-2 mx-3">
     <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Analítica</span>
