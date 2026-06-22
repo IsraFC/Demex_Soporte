@@ -8,8 +8,13 @@ require_once '../../config/db.php';
 
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
+// Respaldo de seguridad en caso de discrepancias en la cabecera HTTP del servidor local
+if ($id <= 0 && isset($_REQUEST['id'])) {
+    $id = intval($_REQUEST['id']);
+}
+
 if ($id <= 0) {
-    echo '<div class="alert alert-danger m-3 small">ID de equipo inválido.</div>';
+    echo '<div class="alert alert-danger m-3 small">ID de equipo inválido o vacío.</div>';
     exit();
 }
 
@@ -146,9 +151,7 @@ document.getElementById('formCambiarFase')?.addEventListener('submit', function(
             
             Swal.fire({ icon: 'success', title: 'Actualizado', text: data.message, timer: 1500, showConfirmButton: false });
             
-            // Recarga la tabla de forma asíncrona sin mover la paginación
             table.ajax.reload(null, false);
-            // Ejecuta la recarga asíncrona de los contadores KPI superiores sin refrescar la página
             actualizarKPIs();
         } else {
             Swal.fire({ icon: 'error', title: 'Falla al Actualizar', text: data.message, confirmButtonColor: '#dc3545' });

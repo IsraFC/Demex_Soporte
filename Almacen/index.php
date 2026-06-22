@@ -4,7 +4,7 @@
  * DESCRIPCIÓN: Panel de Control Principal de Almacén con Server-side Processing.
  * Realiza el seguimiento completo del ciclo de vida de los equipos desde su ingreso.
  * @project Almacén Técnico DEMEX
- * @version 3.3 (Filtros corregidos y normalizados)
+ * @version 3.4 (Corrección de mapeo de IDs en DataTables)
  */
 
 require_once '../config/db.php';
@@ -68,7 +68,7 @@ include '../includes/header.php';
                 <option value="DISPONIBLE PARA SOPORTE">DISPONIBLE PARA SOPORTE</option>
                 <option value="EN REVISIÓN SOPORTE">EN REVISIÓN SOPORTE</option>
                 <option value="REINGRESO A ALMACÉN">REINGRESO A ALMACÉN</option>
-                <option value="DISPONIBLE PARA VENTA">DISPONIBLE PARA VENTA</option>
+                <option value="DISPONIBLE PARA VENTA">DISDISPONIBLE PARA VENTA</option>
                 <option value="COMODATO">COMODATO</option>
                 <option value="PAGADA / POR ENTREGAR">PAGADA / POR ENTREGAR</option>
                 <option value="CAMBIO">CAMBIO</option>
@@ -110,7 +110,7 @@ include '../includes/header.php';
                 </tr>
             </thead>
             <tbody class="small fw-semibold text-dark">
-                </tbody>
+            </tbody>
         </table>
     </div>
 </div>
@@ -189,12 +189,12 @@ include '../includes/header.php';
                     { "data": "dias_inventario_total", "className": "text-center text-danger fw-bold" },
                     { "data": "nombre_cliente", "defaultContent": "<span class='text-muted' style='font-size:0.75rem; font-weight:400;'>Por asignar</span>" },
                     {
-                        "data": null,
+                        "data": "id",
                         "orderable": false,
                         "className": "text-center",
                         "render": function(data, type, row) {
                             return `<div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-danger border-0" onclick="abrirModalFase(${row.id})" title="Avanzar de Fase u Obtener Bitácora"><i class="bi bi-arrow-right-circle-fill fs-5"></i></button>
+                                <button type="button" class="btn btn-outline-danger border-0" onclick="abrirModalFase(${data})" title="Avanzar de Fase u Obtener Bitácora"><i class="bi bi-arrow-right-circle-fill fs-5"></i></button>
                             </div>`;
                         }
                     }
@@ -230,14 +230,23 @@ include '../includes/header.php';
     });
 
     function abrirModalFase(id) {
+        var idLimpio = parseInt(id, 10);
+        if (isNaN(idLimpio) || idLimpio <= 0) {
+            Swal.fire({ icon: 'error', title: 'Error de lectura', text: 'El identificador de la fila es inválido.' });
+            return;
+        }
+
         $('#modalActualizarFase').appendTo("body").modal('show');
         $('#contenidoFase').html('<div class="text-center p-5"><div class="spinner-border text-danger" role="status"></div></div>');
+        
         $.ajax({
-            url: 'actions/abrir_modal_fase.php',
+            url: 'actions/abrir_modal_fase.php?id=' + idLimpio,
             method: 'GET',
-            data: { id: id },
             success: function(html) {
                 $('#contenidoFase').html(html);
+            },
+            error: function() {
+                $('#contenidoFase').html('<div class="alert alert-danger m-3 small">Error al conectar con el servidor.</div>');
             }
         });
     }

@@ -4,6 +4,9 @@
  * DESCRIPCIÓN: Ejecuta la actualización física del estatus y guarda la fecha de la etapa en la base de datos.
  */
 
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
 require_once '../../config/db.php';
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -23,7 +26,10 @@ $campo_fecha   = isset($_POST['campo_fecha']) ? trim($_POST['campo_fecha']) : ''
 $fecha_fase    = isset($_POST['fecha_fase']) ? trim($_POST['fecha_fase']) : '';
 
 if ($id <= 0 || empty($nuevo_estatus) || empty($campo_fecha) || empty($fecha_fase)) {
-    echo json_encode(['success' => false, 'message' => 'Parámetros incompletos para actualizar la fase.']);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'Parámetros incompletos o ID de equipo no válido para actualizar la fase.'
+    ]);
     exit();
 }
 

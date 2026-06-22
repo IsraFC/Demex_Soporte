@@ -3,15 +3,20 @@
  * ARCHIVO: Almacen/actions/procesar_lote.php
  * DESCRIPCIÓN: Guarda el registro logístico individual tras validar la serie.
  */
+
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
 require_once '../../config/db.php';
 header('Content-Type: application/json; charset=utf-8');
 
-$no_serie     = isset($_POST['no_serie']) ? strtoupper(trim($_POST['no_serie'])) : '';
-$contenedor   = isset($_POST['contenedor']) ? strtoupper(trim($_POST['contenedor'])) : '';
-$tipo         = isset($_POST['tipo']) ? strtoupper(trim($_POST['tipo'])) : 'ORIGINAL';
+$no_serie      = isset($_POST['no_serie']) ? strtoupper(trim($_POST['no_serie'])) : '';
+$contenedor    = isset($_POST['contenedor']) ? strtoupper(trim($_POST['contenedor'])) : '';
+$tipo          = isset($_POST['tipo']) ? strtoupper(trim($_POST['tipo'])) : 'ORIGINAL';
 $fecha_ingreso = isset($_POST['fecha_ingreso']) ? trim($_POST['fecha_ingreso']) : '';
 
 if (empty($no_serie) || empty($contenedor) || empty($fecha_ingreso)) {
+    if (ob_get_length()) ob_clean();
     echo json_encode(['success' => false, 'message' => 'Todos los campos son obligatorios.']);
     exit();
 }
@@ -22,6 +27,7 @@ try {
     $stmtCheck->execute([$no_serie]);
     
     if ($stmtCheck->fetchColumn() > 0) {
+        if (ob_get_length()) ob_clean();
         echo json_encode(['success' => false, 'message' => 'Este número de serie ya cuenta con un registro activo en Almacén y aún no ha sido entregado.']);
         exit();
     }
@@ -32,6 +38,7 @@ try {
     $stmtInsert = $pdo->prepare($sqlInsert);
     $stmtInsert->execute([$contenedor, $no_serie, $tipo, $fecha_ingreso]);
 
+    if (ob_get_length()) ob_clean();
     echo json_encode([
         'success' => true,
         'message' => "¡Excelente! La entrada del equipo con serie {$no_serie} fue registrada exitosamente."
@@ -39,6 +46,7 @@ try {
     exit();
 
 } catch (Exception $e) {
+    if (ob_get_length()) ob_clean();
     echo json_encode(['success' => false, 'message' => 'Error en base de datos: ' . $e->getMessage()]);
     exit();
 }
