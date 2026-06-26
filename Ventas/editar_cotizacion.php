@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: Ventas/editar_cotizacion.php
  * DESCRIPCIÓN: Formulario de Modificación y Re-configuración Comercial de Cotizaciones.
- * Respeta al 100% las matrices de precios, cálculos y lógica estructurada por IDs.
+ * Respeta al 100% las matrices de precios, cálculos y lógica estructurada por IDs con soporte bancario vertical.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 5.2 (Sincronizado estilo Soporte con IDs de Maquinaria)
+ * @version 5.3 (Sincronizado con Soporte de Datos Bancarios por Columnas)
  */
 
 $page_title = "Editar Cotización | CRM Ventas";
@@ -33,6 +33,23 @@ $cotizacion = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$cotizacion) {
     echo "<div class='container mt-4'><div class='alert alert-danger'>Error: La cotización seleccionada no existe en el sistema.</div></div>";
     exit();
+}
+
+// --- NUEVO: PROCESADOR DE DESEMPAQUETADO BANCARIO EN EDICIÓN ---
+$notas_limpias = $cotizacion['notes'];
+$bancos = [
+    'condicion' => "Precios de promoción para pagos por transferencia o efectivo.\nNo incluyen el envío.",
+    'b1_nom'    => "BANORTE", 'b1_cta' => "0434571284", 'b1_clabe' => "072 650 00434571284 8",
+    'b2_nom'    => "BANAMEX", 'b2_cta' => "7213722", 'b2_clabe' => "002 650 70107213722 1", 'b2_suc' => "7010"
+];
+
+if (strpos($cotizacion['notes'], '|||') !== false) {
+    $partes_notas = explode('|||', $cotizacion['notes']);
+    $notas_limpias = trim($partes_notas[0]);
+    $json_desencriptado = json_decode(base64_decode($partes_notas[1]), true);
+    if ($json_desencriptado) {
+        $bancos = $json_desencriptado;
+    }
 }
 
 // 2. CONSULTA DE CATÁLOGO COMPLETO (Estilo Isra): Traemos todas las máquinas con sus IDs de la BD
@@ -157,17 +174,72 @@ include '../includes/header.php';
             </div>
 
             <div class="col-12 col-md-6 d-flex align-items-center justify-content-center">
-                <label class="form-label small d-block">&nbsp;</label>
                 <div class="p-3 text-center rounded shadow-sm bg-light border w-100" style="min-height: 320px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fafafa;">
                     <small class="text-muted d-block mb-3 fw-semibold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.8px;">Vista Previa del Equipo</small>
                     <img id="img_maquina_preview" src="../img/maquinas/default.png" alt="Previsualización" class="img-fluid rounded animate__animated animate__fadeIn" style="max-height: 260px; width: auto; object-fit: contain; display: none;">
                     <div id="img_placeholder" class="text-muted small py-4"><i class="bi bi-image fs-2 d-block mb-2 text-danger"></i>Selecciona un modelo para ver su imagen</div>
                 </div>
             </div>
+        </div>
 
+        <div class="row g-3 mb-4 border-top pt-3">
+            <div class="col-12">
+                <h6 class="fw-bold text-danger mb-2"><i class="bi bi-bank me-2"></i> Datos Bancarios y Fiscales Oficiales</h6>
+                <p class="text-muted small mb-3">Establece las condiciones de pago y cuentas oficiales corporativas que se imprimirán de forma visual en la cotización.</p>
+            </div>
+            
+            <div class="col-12 col-md-4">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold text-dark small">Condiciones Comerciales Base</label>
+                    <textarea class="form-control small text-muted" name="condicion_comercial_bancos" rows="2" style="background-color: #f8f9fa; height: 74px; resize: none;" required><?= htmlspecialchars($bancos['condicion']) ?></textarea>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold text-dark small">Razón Social / Beneficiario</label>
+                    <input type="text" class="form-control bg-light fw-semibold text-dark" name="banco_beneficiario" value="DEMEXTOR SA DE CV" readonly style="height: 38px;" required>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold text-dark small">Banco Opción 1</label>
+                    <input type="text" class="form-control text-uppercase" name="banco_1_nombre" value="<?= htmlspecialchars($bancos['b1_nom']) ?>" style="height: 38px;" required>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold text-dark small">Cuenta Banorte</label>
+                    <input type="text" class="form-control fw-bold text-secondary" name="banco_1_cuenta" value="<?= htmlspecialchars($bancos['b1_cta']) ?>" style="height: 38px;" required>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold text-dark small">Clabe Interbancaria Banorte</label>
+                    <input type="text" class="form-control fw-bold text-danger" name="banco_1_clabe" value="<?= htmlspecialchars($bancos['b1_clabe']) ?>" style="height: 38px;" required>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold text-dark small">Banco Opción 2</label>
+                    <input type="text" class="form-control text-uppercase" name="banco_2_nombre" value="<?= htmlspecialchars($bancos['b2_nom']) ?>" style="height: 38px;" required>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-7">
+                        <label class="form-label fw-semibold text-dark small">Cuenta Banamex</label>
+                        <input type="text" class="form-control fw-bold text-secondary" name="banco_2_cuenta" value="<?= htmlspecialchars($bancos['b2_cta']) ?>" style="height: 38px;" required>
+                    </div>
+                    <div class="col-5">
+                        <label class="form-label fw-semibold text-dark small">Sucursal</label>
+                        <input type="text" class="form-control fw-bold text-secondary" name="banco_2_sucursal" value="<?= htmlspecialchars($bancos['b2_suc']) ?>" style="height: 38px;" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold text-dark small">Clabe Interbancaria Banamex</label>
+                    <input type="text" class="form-control fw-bold text-danger" name="banco_2_clabe" value="<?= htmlspecialchars($bancos['b2_clabe']) ?>" style="height: 38px;" required>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4 border-top pt-3">
             <div class="col-12 col-md-6">
                 <label class="form-label fw-semibold text-dark small">Notas / Observaciones</label>
-                <textarea class="form-control" name="notas" rows="4" placeholder="Garantías, plazos de entrega o condiciones de pago..." style="height: 180px; resize: none;"><?= htmlspecialchars($cotizacion['notes']) ?></textarea>
+                <textarea class="form-control" name="notas" rows="4" placeholder="Garantías, plazos de entrega o condiciones de pago..." style="height: 180px; resize: none;"><?= htmlspecialchars($notas_limpias) ?></textarea>
             </div>
 
             <div class="col-12 col-md-6 ms-auto mt-3">
@@ -227,21 +299,26 @@ const especificacionesMaquinas = {
 };
 
 function calcularFlujoComercial() {
-    // CORREGIDO: Sintaxis limpia de jQuery para extraer el atributo data de la opción seleccionada
+    const idMaquina = $('#id_maquina_select').val();
     const modeloTexto = $('#id_maquina_select').find('option:selected').data('model-name');
     const tipoCliente = $('#tipo_cliente').val();
     const pctDesc = parseFloat($('#descuento_porcentaje').val()) || 0;
     const flete = parseFloat($('#costo_envio').val()) || 0;
     const cantidad = parseInt($('#cantidad').val()) || 1;
 
-    // Validación preventiva por si no hay un modelo seleccionado válidamente
     if (!modeloTexto || !matrizPrecios[modeloTexto]) return;
 
-    const precioBaseOriginal = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
-    $('#precio_base_origen').val(precioBaseOriginal.toFixed(2));
+    // 1. Extraemos el precio oficial CON IVA del catálogo estático
+    const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
+    
+    // Mantenemos el input de arriba mostrando el precio redondo oficial con IVA para comodidad de la vendedora
+    $('#precio_base_origen').val(precioConIvaLista.toFixed(2));
 
-    const montoDescuentoUnitario = precioBaseOriginal * (pctDesc / 100);
-    const precioPactadoUnitario = precioBaseOriginal - montoDescuentoUnitario;
+    // 2. Por detrás (en background), hacemos el desglose matemático entre 1.16 para las etiquetas de abajo
+    const precioBaseOriginalSinIva = precioConIvaLista / 1.16;
+
+    const montoDescuentoUnitario = precioBaseOriginalSinIva * (pctDesc / 100);
+    const precioPactadoUnitario = precioBaseOriginalSinIva - montoDescuentoUnitario;
     
     const subtotalPartidaBruta = precioPactadoUnitario * cantidad;
     const baseConFlete = subtotalPartidaBruta + flete;
@@ -250,12 +327,14 @@ function calcularFlujoComercial() {
 
     const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-    $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginal));
+    // 3. Inyectamos los valores desglosados en las etiquetas de abajo
+    $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginalSinIva));
     $('#lbl_descuento_monto').text('-' + formatoMXN.format(montoDescuentoUnitario * cantidad));
     $('#lbl_flete_monto').text(formatoMXN.format(flete));
-    $('#lbl_subtotal').text(formatoMXN.format(subtotalPartidaBruta + flete));
+    $('#lbl_subtotal').text(formatoMXN.format(baseConFlete));
     $('#lbl_iva').text(formatoMXN.format(ivaCalculado));
     $('#lbl_total').text(formatoMXN.format(totalNeto));
+
 
     const imagenesMaquinas = {
         'SPICE MT15': 'spice_mt15.png',
@@ -278,7 +357,6 @@ function calcularFlujoComercial() {
 }
 
 $(document).ready(function() {
-    // CORREGIDO: Sintaxis corregida usando .find('option:selected') para emular la reactividad de Isra
     $('#id_maquina_select').on('change', function() {
         const modeloNombre = $(this).find('option:selected').data('model-name');
         if(especificacionesMaquinas[modeloNombre]) {
@@ -295,7 +373,6 @@ $(document).ready(function() {
         calcularFlujoComercial();
     });
     
-    // Disparo inicial manual con retraso sutil estilo Isra para pintar los datos de la BD al cargar
     setTimeout(function() {
         calcularFlujoComercial();
     }, 150);
