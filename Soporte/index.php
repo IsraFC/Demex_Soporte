@@ -3,19 +3,13 @@
  * ARCHIVO: index.php
  * DESCRIPCIÓN: Panel de Control Principal (Dashboard) con Server-side Processing.
  * Centraliza la visualización de tickets mediante un motor de filtrado remoto.
- * Mantiene lógica de indicadores (KPI) y sistema de alarmas de urgencia.
- * * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 2.0 (Optimizado)
+ * @version 2.4 (Alertas y filtros separados para control de urgencias y carga logística)
  */
 
 require_once '../config/db.php';
 $page_title = "Panel de Control - Soporte";
 
-/**
- * CONSULTAS DE INDICADORES (KPIs):
- * Estas se mantienen porque alimentan las tarjetas superiores al cargar la página.
- */
 $total = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte")->fetchColumn();
 $pendientes = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte WHERE estatus = 'Abierto'")->fetchColumn();
 
@@ -24,9 +18,11 @@ JOIN Tickets_Soporte t ON d.id_ticket = t.id_ticket
 WHERE d.estatus_pago = 'Pendiente' AND t.estatus = 'Abierto'";
 $por_cobrar = $pdo->query($sql_cobro)->fetchColumn() ?: 0;
 
-$criticos = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte 
-                         WHERE estatus = 'Abierto' 
-                         AND DATEDIFF(CURDATE(), fecha_inicial) >= 14")->fetchColumn();
+$criticos = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte WHERE estatus = 'Abierto' AND DATEDIFF(CURDATE(), fecha_inicial) >= 14")->fetchColumn();
+
+// NUEVA CONSULTA SEPARADA: Cuenta los equipos activos asignados al área técnica en la tabla de Almacén
+$sql_logistica = "SELECT COUNT(*) FROM almacen_inventario WHERE estatus IN ('DISPONIBLE PARA SOPORTE', 'EN REVISIÓN SOPORTE')";
+$equipos_taller = $pdo->query($sql_logistica)->fetchColumn() ?: 0;
 
 $modulo_actual = 'soporte';
 include '../includes/header.php';
@@ -69,6 +65,18 @@ include '../includes/header.php';
         </div>
         <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold" id="btnFiltrarCriticos">
             <i class="bi bi-funnel-fill me-1"></i> Ver Urgentes
+        </button>
+    </div>
+<?php endif; ?>
+
+<?php if ($equipos_taller > 0): ?>
+    <div class="alert alert-info shadow-sm border-0 border-start border-4 border-primary bg-white d-flex align-items-center justify-content-between animate__animated animate__fadeInUp" role="alert" id="alertaLogistica" style="margin-top: -5px;">
+        <div>
+            <i class="bi bi-boxes fs-4 me-3 text-primary"></i>
+            <span class="fw-bold text-dark">Logística de Almacén:</span> Tienes <strong><?= $equipos_taller ?></strong> máquina(s) en tránsito o disponibles para revisión técnica en el taller.
+        </div>
+        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold shadow-sm" id="btnFiltrarLogistica">
+            <i class="bi bi-boxes me-1"></i> Filtrar Equipos taller
         </button>
     </div>
 <?php endif; ?>
@@ -159,7 +167,7 @@ include '../includes/header.php';
                 </tr>
             </thead>
             <tbody>
-                </tbody>
+            </tbody>
         </table>
     </div>
 </div>
@@ -187,9 +195,6 @@ include '../includes/header.php';
 <?php include '../includes/footer.php'; ?>
 
 <script>
-    /**
-     * AJAX: Recupera el desglose técnico y financiero del ticket.
-     */
     function abrirModalVisualizar(id) {
         $('#modalVisualizar').appendTo("body").modal('show');
         $('#contenidoTicket').html('<div class="text-center p-5"><div class="spinner-border text-danger"></div></div>');
@@ -203,9 +208,6 @@ include '../includes/header.php';
         });
     }
 
-    /**
-     * CONTROL DE FLUJO: Actualiza el estatus del ticket con recarga AJAX.
-     */
     function cambiarEstatus(id, nuevoEstatus) {
         const colorEstatus = { 'Abierto': '#ffc107', 'Cerrado': '#198754', 'Cancelado': '#6c757d' };
 
@@ -228,8 +230,6 @@ include '../includes/header.php';
                     success: function(response) {
                         if (response.success) {
                             Swal.fire({ title: '¡Hecho!', icon: 'success', timer: 1000, showConfirmButton: false });
-                            // Al ser Server-side, simplemente recargamos los datos del servidor
-                            // 'false' mantiene la posición de la página actual
                             table.ajax.reload(null, false); 
                         }
                     }
@@ -238,9 +238,6 @@ include '../includes/header.php';
         });
     }
 
-    /**
-     * FUNCIÓN DEL BOTÓN EXCEL (Respaldo y Limpieza)
-     */
     function confirmarRespaldo() {
         Swal.fire({
             title: '¿Generar Respaldo y Limpiar?',
@@ -260,10 +257,82 @@ include '../includes/header.php';
         });
     }
 
-    /**
-     * CONFIGURACIÓN DATATABLES SERVER-SIDE (VERSIÓN 2.0 BLINDADA)
-     * @author Israel Fernández Carrera
-     */
+    function recibirEquipoTaller(almacenId) {
+        Swal.fire({
+            title: '¿Recibir equipo en taller?',
+            text: 'Se registrará el inicio del proceso en Soporte y se notificará a Almacén.',
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonColor: '#0d6efd',
+            confirmButtonText: 'Sí, recibir equipo',
+            cancelButtonText: 'Regresar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({ title: 'Firmando fase...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                
+                const fd = new FormData();
+                fd.append('id', almacenId);
+                fd.append('nuevo_estatus', 'EN REVISIÓN SOPORTE');
+                fd.append('campo_fecha', 'fecha_entrega_soporte');
+                fd.append('fecha_fase', new Date().toISOString().split('T')[0]);
+
+                fetch('../Almacen/actions/actualizar_fase.php', { method: 'POST', body: fd })
+                .then(res => res.json())
+                .then(data => {
+                    Swal.close();
+                    if (data.success) {
+                        Swal.fire({ icon: 'success', title: '¡Equipo Recibido!', text: 'La traza logística se actualizó.', timer: 1500, showConfirmButton: false });
+                        table.ajax.reload(null, false);
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Falla', text: data.message });
+                    }
+                })
+                .catch(() => {
+                    Swal.close();
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Ocurrió un colapso de red.' });
+                });
+            }
+        });
+    }
+
+    function devolverEquipoAlmacen(almacenId) {
+        Swal.fire({
+            title: '¿Devolver equipo a Almacén?',
+            text: 'Se confirmará que Soporte terminó los diagnósticos y regresa el equipo para su embalaje/entrega.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#198754',
+            confirmButtonText: 'Sí, enviar a Almacén',
+            cancelButtonText: 'Regresar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({ title: 'Procesando devolución...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                
+                const fd = new FormData();
+                fd.append('id', almacenId);
+                fd.append('nuevo_estatus', 'REINGRESO A ALMACÉN');
+                fd.append('campo_fecha', 'fecha_reingreso_almacen');
+                fd.append('fecha_fase', new Date().toISOString().split('T')[0]);
+
+                fetch('../Almacen/actions/actualizar_fase.php', { method: 'POST', body: fd })
+                .then(res => res.json())
+                .then(data => {
+                    Swal.close();
+                    if (data.success) {
+                        Swal.fire({ icon: 'success', title: '¡Equipo Devuelto!', text: 'La estafeta regresó al área de Almacén.', timer: 1500, showConfirmButton: false });
+                        table.ajax.reload(null, false);
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Falla', text: data.message });
+                    }
+                })
+                .catch(() => {
+                    Swal.close();
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Ocurrió un colapso de red.' });
+                });
+            }
+        });
+    }
+
     var table;
     $(document).ready(function() {
         if ($('#tablaTickets').length) {
@@ -274,20 +343,17 @@ include '../includes/header.php';
                     "url": "actions/obtener_tickets_datatable.php",
                     "type": "POST",
                     "data": function(d) {
-                        // INTEGRAMOS TODOS TUS FILTROS AL ENVÍO DEL SERVIDOR
                         d.filterTipo   = $('#filterTipo').val();
                         d.filterFalla  = $('#filterFalla').val();
                         d.filterAccion = $('#filterAccion').val();
                         d.fechaDesde   = $('#fechaDesde').val();
                         d.fechaHasta   = $('#fechaHasta').val();
-                        
-                        // Captura de Switches (Boleanos enviados como 1 o 0)
                         d.soloPendientes = $('#checkSoloPendientes').is(':checked') ? 1 : 0;
                         d.soloGarantia   = $('#checkGarantia').is(':checked') ? 1 : 0;
                         d.soloDeuda      = $('#checkSoloDeuda').is(':checked') ? 1 : 0;
                         
-                        // Captura de Alarma de Urgentes (Basado en la clase del botón)
-                        d.soloUrgentes   = $('#btnFiltrarCriticos').hasClass('btn-dark') ? 1 : 0;
+                        d.soloUrgentes = $('#btnFiltrarCriticos').length && $('#btnFiltrarCriticos').hasClass('btn-dark') ? 1 : 0;
+                        d.soloFaseSoporte = $('#btnFiltrarLogistica').length && $('#btnFiltrarLogistica').hasClass('btn-dark') ? 1 : 0;
                     }
                 },
                 "columns": [
@@ -300,7 +366,25 @@ include '../includes/header.php';
                         }
                     },
                     { "data": "nombre_cliente" },
-                    { "data": "modelo_serie" },
+                    { 
+                        "data": "modelo_serie",
+                        "render": function(data, type, row) {
+                            let htmlLogistica = '';
+                            
+                            if (row.almacen_estatus === 'DISPONIBLE PARA SOPORTE') {
+                                htmlLogistica = `<br><div class="mt-1 d-grid"><button type="button" class="btn btn-primary btn-xs rounded-pill fw-bold py-1 animate__animated animate__pulse animate__infinite shadow-sm" style="font-size: 10px;" onclick="recibirEquipoTaller(${row.almacen_id})"><i class="bi bi-box-arrow-in-right me-1"></i> Recibir en Taller</button></div>`;
+                            } else if (row.almacen_estatus === 'EN REVISIÓN SOPORTE') {
+                                htmlLogistica = `<br><span class="badge bg-info text-dark mt-1 d-block py-1 mb-1" style="font-size: 9px; font-weight:700; letter-spacing:0.3px;"><i class="bi bi-tools me-1"></i> En Diagnóstico Soporte</span>
+                                                 <div class="d-grid"><button type="button" class="btn btn-success btn-xs rounded-pill fw-bold py-1 shadow-sm" style="font-size: 10px;" onclick="devolverEquipoAlmacen(${row.almacen_id})"><i class="bi bi-send-check me-1"></i> Enviar a Almacén</button></div>`;
+                            } else if (row.almacen_estatus === 'SIN REVISAR' || row.almacen_estatus === 'EN REVISIÓN ALMACÉN') {
+                                htmlLogistica = `<br><span class="badge bg-warning text-dark mt-1" style="font-size: 9px; font-weight:700;"><i class="bi bi-hourglass-split me-1"></i> Retenido en Almacén</span>`;
+                            } else if (row.almacen_estatus === 'REINGRESO A ALMACÉN' || row.almacen_estatus === 'DISPONIBLE PARA VENTA') {
+                                htmlLogistica = `<br><span class="badge bg-success text-white mt-1" style="font-size: 9px; font-weight:700;"><i class="bi bi-check-circle-fill me-1"></i> Devuelto a Almacén</span>`;
+                            }
+
+                            return `${data}${htmlLogistica}`;
+                        }
+                    },
                     { "data": "tipo_llamada", "visible": false },
                     { "data": "tipo_falla" },
                     { "data": "accion_realizada", "visible": false },
@@ -314,14 +398,9 @@ include '../includes/header.php';
                     { 
                         "data": "estatus_pago",
                         "render": function(data) {
-                            let color = 'text-success fw-bold'; // Por defecto verde (Pagado)
-                            
-                            if (data === 'Pendiente') {
-                                color = 'text-danger fw-bold';
-                            } else if (data === 'NO APLICA' || data === 'N/A') {
-                                color = 'text-muted fw-normal'; // Si no aplica, gris y letra normal
-                            }
-                            
+                            let color = 'text-success fw-bold';
+                            if (data === 'Pendiente') { color = 'text-danger fw-bold'; } 
+                            else if (data === 'NO APLICA' || data === 'N/A') { color = 'text-muted fw-normal'; }
                             return `<span class="small ${color}">${data}</span>`;
                         }
                     },
@@ -334,32 +413,29 @@ include '../includes/header.php';
                     },
                     { "data": "fecha_inicial" },
                     { 
-                        "data": null, // Usamos null para poder evaluar de forma simultánea 'creador' y 'editor'
+                        "data": null,
                         "render": function(data, type, row) {
-                            // 1. Pintamos de golpe la insignia neumórfica premium del Creador Original
-                            let html = `<span class="badge bg-dark bg-opacity-10 text-dark border border-secondary border-opacity-25" style="font-size: 0.7rem; font-weight: 500; padding: 0.35rem 0.6rem; border-radius: 6px;">
-                                            <i class="bi bi-person-fill text-muted me-1"></i>${row.creador}
-                                        </span>`;
-                            
-                            // 2. Si el ticket fue editado por alguien diferente al creador, añadimos la traza de auditoría abajo
+                            let html = `<span class="badge bg-dark bg-opacity-10 text-dark border border-secondary border-opacity-25" style="font-size: 0.7rem; font-weight: 500; padding: 0.35rem 0.6rem; border-radius: 6px;"><i class="bi bi-person-fill text-muted me-1"></i>${row.creador}</span>`;
                             if (row.editor && row.editor !== row.creador) {
-                                html += `<br><small class="text-muted d-block" style="font-size: 0.6rem; margin-top: 4px;">
-                                            <i class="bi bi-pencil-square text-secondary me-1"></i>Edición: ${row.editor}
-                                        </small>`;
+                                html += `<br><small class="text-muted d-block" style="font-size: 0.6rem; margin-top: 4px;"><i class="bi bi-pencil-square text-secondary me-1"></i>Edición: ${row.editor}</small>`;
                             }
                             return html;
                         }
                     },
-                    { 
+                    {
                         "data": null,
                         "orderable": false,
                         "className": "text-center",
                         "render": function(data, type, row) {
                             let btns = `<button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(${row.id_ticket})" title="Ver detalles"><i class="bi bi-eye-fill"></i></button>`;
                             if (row.estatus === 'Abierto') {
-                                btns += `<a href="editar_ticket.php?id_ticket=${row.id_ticket}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square"></i></a>
-                                        <button type="button" class="btn btn-outline-success border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cerrado')" title="Cerrar"><i class="bi bi-lock-fill"></i></button>
-                                        <button type="button" class="btn btn-outline-secondary border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cancelado')" title="Cancelar"><i class="bi bi-x-circle-fill"></i></button>`;
+                                if (row.almacen_estatus === 'SIN REVISAR' || row.almacen_estatus === 'EN REVISIÓN ALMACÉN') {
+                                    btns += `<button type="button" class="btn btn-outline-secondary border-0 opacity-50" title="Retenido por Almacén" onclick="Swal.fire({icon:'warning', title:'Equipo Retenido', text:'Almacén Técnico aún no libera ni abre la caja de esta maquinaria.'})"><i class="bi bi-slash-circle"></i></button>`;
+                                } else {
+                                    btns += `<a href="editar_ticket.php?id_ticket=${row.id_ticket}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square"></i></a>
+                                             <button type="button" class="btn btn-outline-success border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cerrado')" title="Cerrar"><i class="bi bi-lock-fill"></i></button>
+                                             <button type="button" class="btn btn-outline-secondary border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cancelado')" title="Cancelar"><i class="bi bi-x-circle-fill"></i></button>`;
+                                }
                             }
                             return `<div class="btn-group btn-group-sm">${btns}</div>`;
                         }
@@ -368,32 +444,16 @@ include '../includes/header.php';
                         "data": null,
                         "className": "text-center",
                         "render": function(data, type, row) {
-                            const iconMap = {
-                                'Envio base': 'bi bi-truck',
-                                'Envio técnico': 'bi bi-tools',
-                                'Envio refacciones': 'bi bi-box-seam',
-                                'Envio técnico y refacciones': 'bi bi-tools'
-                            };
-                            
+                            const iconMap = { 'Envio base': 'bi bi-truck', 'Envio técnico': 'bi bi-tools', 'Envio refacciones': 'bi bi-box-seam', 'Envio técnico y refacciones': 'bi bi-tools' };
                             let iconClass = iconMap[row.accion_realizada] || 'bi bi-question-circle';
-                            let bgClass = 'bg-secondary text-white';
-                            let suffix = '';
-
+                            let bgClass = 'bg-secondary text-white'; let suffix = '';
                             if (iconMap[row.accion_realizada]) {
-                                if (!row.f_ini_acc) { 
-                                    bgClass = 'bg-warning text-dark'; suffix = ' (Pendiente)'; 
-                                } else if (row.f_ini_acc && !row.f_fin_acc) { 
-                                    bgClass = 'bg-primary text-white'; suffix = ' (Iniciado)'; 
-                                } else { 
-                                    bgClass = 'bg-success text-white'; suffix = ' (Finalizado)'; 
-                                }
+                                if (!row.f_ini_acc) { bgClass = 'bg-warning text-dark'; suffix = ' (Pendiente)'; } 
+                                else if (row.f_ini_acc && !row.f_fin_acc) { bgClass = 'bg-primary text-white'; suffix = ' (Iniciado)'; } 
+                                else { bgClass = 'bg-success text-white'; suffix = ' (Finalizado)'; }
                             }
-
                             let extraIcon = (row.accion_realizada === 'Envio técnico y refacciones') ? '<i class="bi bi-box-seam ms-1"></i>' : '';
-
-                            return `<span class="badge ${bgClass} rounded-pill px-3 py-2 badge-envio" style="font-size: 0.65rem;" title="${row.accion_realizada}${suffix}">
-                                    <i class="${iconClass}"></i>${extraIcon}
-                                    </span>`;
+                            return `<span class="badge ${bgClass} rounded-pill px-3 py-2 badge-envio" style="font-size: 0.65rem;" title="${row.accion_realizada}${suffix}"><i class="${iconClass}"></i>${extraIcon}</span>`;
                         }
                     }
                 ],
@@ -411,39 +471,36 @@ include '../includes/header.php';
                 "pageLength": 13,
                 "order": [[0, "desc"]],
                 "createdRow": function(row, data, dataIndex) {
-                    // Si el backend envía que el estatus de pago es 'NO APLICA'
                     if (data.estatus_pago === 'NO APLICA' || data.estatus_pago === 'N/A') {
                         $(row).addClass('bg-light text-muted opacity-75 text-decoration-none');
-                        $(row).css('background-color', '#f8f9fa'); // Asegura un gris claro limpio
+                        $(row).css('background-color', '#f8f9fa');
                     }
                 }
             });
 
-            // 1. EVENTOS DE RECARGA (REDAW) AL CAMBIAR FILTROS
             $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
+            $('#filterTipo, #filterFalla, #filterAccion, #fechaDesde, #fechaHasta').on('change', function() { table.draw(); });
+            $('#checkSoloPendientes, #checkGarantia, #checkSoloDeuda').on('change', function() { table.draw(); });
 
-            $('#filterTipo, #filterFalla, #filterAccion, #fechaDesde, #fechaHasta').on('change', function() {
-                table.draw(); 
-            });
-
-            $('#checkSoloPendientes, #checkGarantia, #checkSoloDeuda').on('change', function() {
-                table.draw();
-            });
-
-            // 2. LÓGICA DE BOTÓN URGENTES
             $('#btnFiltrarCriticos').on('click', function() {
                 const btn = $(this);
                 btn.toggleClass('btn-danger btn-dark');
                 const activo = btn.hasClass('btn-dark');
                 btn.html(activo ? '<i class="bi bi-arrow-counterclockwise me-1"></i> Quitar Filtro' : '<i class="bi bi-funnel-fill me-1"></i> Ver Urgentes');
-                table.draw(); // Esto dispara el AJAX enviando soloUrgentes = 1
+                table.draw();
             });
 
-            // 3. BLOQUEO DE CALENDARIOS (UI)
+            $('#btnFiltrarLogistica').on('click', function() {
+                const btn = $(this);
+                btn.toggleClass('btn-outline-primary btn-dark');
+                const activo = btn.hasClass('btn-dark');
+                btn.html(activo ? '<i class="bi bi-arrow-counterclockwise me-1"></i> Quitar Filtro Taller' : '<i class="bi bi-boxes me-1"></i> Filtrar Equipos taller');
+                table.draw();
+            });
+
             $('#fechaDesde').on('change', function() { $('#fechaHasta').attr('min', $(this).val()); });
             $('#fechaHasta').on('change', function() { $('#fechaDesde').attr('max', $(this).val()); });
 
-            // 4. TOOLTIPS
             var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
         }

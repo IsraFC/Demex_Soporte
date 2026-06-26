@@ -4,7 +4,7 @@
  * DESCRIPCIÓN: Panel de Control Principal de Almacén con Server-side Processing.
  * Realiza el seguimiento completo del ciclo de vida de los equipos desde su ingreso.
  * @project Almacén Técnico DEMEX
- * @version 3.4 (Corrección de mapeo de IDs en DataTables)
+ * @version 3.5 (Bloqueo dinámico de acciones en fases exclusivas de Soporte)
  */
 
 require_once '../config/db.php';
@@ -68,7 +68,7 @@ include '../includes/header.php';
                 <option value="DISPONIBLE PARA SOPORTE">DISPONIBLE PARA SOPORTE</option>
                 <option value="EN REVISIÓN SOPORTE">EN REVISIÓN SOPORTE</option>
                 <option value="REINGRESO A ALMACÉN">REINGRESO A ALMACÉN</option>
-                <option value="DISPONIBLE PARA VENTA">DISDISPONIBLE PARA VENTA</option>
+                <option value="DISPONIBLE PARA VENTA">DISPONIBLE PARA VENTA</option>
                 <option value="COMODATO">COMODATO</option>
                 <option value="PAGADA / POR ENTREGAR">PAGADA / POR ENTREGAR</option>
                 <option value="CAMBIO">CAMBIO</option>
@@ -193,6 +193,13 @@ include '../includes/header.php';
                         "orderable": false,
                         "className": "text-center",
                         "render": function(data, type, row) {
+                            // CORRECCIÓN: Si el equipo está en manos de Soporte Técnico, bloqueamos el botón de la flecha roja
+                            if (row.estatus === 'DISPONIBLE PARA SOPORTE' || row.estatus === 'EN REVISIÓN SOPORTE') {
+                                return `<button type="button" class="btn btn-outline-secondary border-0 opacity-50" title="Retenido por área de Soporte Técnico" onclick="Swal.fire({icon:'warning', title:'Fase Bloqueada', text:'El equipo físico está bajo el resguardo y diagnóstico del laboratorio de Soporte.'})">
+                                            <i class="bi bi-lock-fill fs-5 text-muted"></i>
+                                        </button>`;
+                            }
+                            
                             return `<div class="btn-group btn-group-sm">
                                 <button type="button" class="btn btn-outline-danger border-0" onclick="abrirModalFase(${data})" title="Avanzar de Fase u Obtener Bitácora"><i class="bi bi-arrow-right-circle-fill fs-5"></i></button>
                             </div>`;

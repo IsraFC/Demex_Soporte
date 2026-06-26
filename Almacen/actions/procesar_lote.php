@@ -1,7 +1,7 @@
 <?php
 /**
  * ARCHIVO: Almacen/actions/procesar_lote.php
- * DESCRIPCIÓN: Guarda el registro logístico individual tras validar la serie.
+ * DESCRIPCIÓN: Guarda el registro logístico individual tras validar la serie, vinculando el id_ticket.
  */
 
 ini_set('display_errors', 0);
@@ -14,6 +14,9 @@ $no_serie      = isset($_POST['no_serie']) ? strtoupper(trim($_POST['no_serie'])
 $contenedor    = isset($_POST['contenedor']) ? strtoupper(trim($_POST['contenedor'])) : '';
 $tipo          = isset($_POST['tipo']) ? strtoupper(trim($_POST['tipo'])) : 'ORIGINAL';
 $fecha_ingreso = isset($_POST['fecha_ingreso']) ? trim($_POST['fecha_ingreso']) : '';
+
+// CORRECCIÓN: Capturamos el ID del ticket enviado desde el input oculto; si está vacío, se fuerza como NULL
+$id_ticket     = !empty($_POST['id_ticket']) ? intval($_POST['id_ticket']) : null;
 
 if (empty($no_serie) || empty($contenedor) || empty($fecha_ingreso)) {
     if (ob_get_length()) ob_clean();
@@ -32,16 +35,18 @@ try {
         exit();
     }
 
-    // 2. Inserción limpia e individual
-    $sqlInsert = "INSERT INTO almacen_inventario (contenedor, no_serie, tipo, estatus, fecha_ingreso_contenedor) 
-                  VALUES (?, ?, ?, 'SIN REVISAR', ?)";
+    // 2. Inserción limpia incluyendo la columna id_ticket para respetar la llave foránea
+    $sqlInsert = "INSERT INTO almacen_inventario (contenedor, no_serie, tipo, estatus, fecha_ingreso_contenedor, id_ticket) 
+                  VALUES (?, ?, ?, 'SIN REVISAR', ?, ?)";
     $stmtInsert = $pdo->prepare($sqlInsert);
-    $stmtInsert->execute([$contenedor, $no_serie, $tipo, $fecha_ingreso]);
+    
+    // Pasamos las variables ordenadas al arreglo ejecutor
+    $stmtInsert->execute([$contenedor, $no_serie, $tipo, $fecha_ingreso, $id_ticket]);
 
     if (ob_get_length()) ob_clean();
     echo json_encode([
         'success' => true,
-        'message' => "¡Excelente! La entrada del equipo con serie {$no_serie} fue registrada exitosamente."
+        'message' => "¡Excelente! La entrada del equipo con serie {$no_serie} fue registrada exitosamente amarrada al ticket del laboratorio."
     ]);
     exit();
 

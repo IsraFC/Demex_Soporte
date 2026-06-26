@@ -2,10 +2,9 @@
 /**
  * ARCHIVO: Almacen/registro_lote.php
  * DESCRIPCIÓN: Interfaz para el registro individual de maquinaria en Almacén.
- * Realiza la búsqueda y validación asíncrona del equipo y cliente para confirmación visual.
- * @author Israel Fernández Carrera
+ * Incluye un catálogo modal asíncrono para buscar y seleccionar números de serie cómodamente.
  * @project Almacén Técnico DEMEX
- * @version 3.0 - Validación Cruzada en Tiempo Real (AJAX)
+ * @version 4.2 - Mapeo Asíncrono Amarrado a ID de Ticket con Visualización en Modal
  */
 require_once '../config/db.php';
 $page_title = "Registrar Entrada de Equipo";
@@ -13,14 +12,27 @@ $page_title = "Registrar Entrada de Equipo";
 include '../includes/header.php';
 ?>
 
+<style>
+#modalCatalogoSeries .dataTables_filter input {
+    background-color: transparent !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 50rem !important;
+    padding: 0.25rem 1rem !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+</style>
+
 <div class="row mb-4">
     <div class="col-12">
         <h1 class="fw-bold text-danger mb-0 text-uppercase">Registrar Ingreso de Equipo</h1>
-        <p class="text-muted">Introduce el número de serie para validar y confirmar los datos del cliente y garantía.</p>
+        <p class="text-muted">Introduce o selecciona el número de serie para validar y confirmar los datos del cliente y garantía.</p>
     </div>
 </div>
 
 <form action="actions/procesar_lote.php" method="POST" id="formRegistroLote">
+    <input type="hidden" name="id_ticket" id="id_ticket_input">
+
     <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-danger mb-4">
         <div class="row g-4">
             
@@ -29,7 +41,12 @@ include '../includes/header.php';
                 
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Número de Serie</label>
-                    <input type="text" name="no_serie" id="no_serie_input" class="form-control border-0 bg-light shadow-sm fw-bold text-uppercase text-danger" placeholder="Escriba o escanee la serie..." required autocomplete="off">
+                    <div class="input-group shadow-sm rounded-pill overflow-hidden bg-light border px-2 py-1">
+                        <input type="text" name="no_serie" id="no_serie_input" class="form-control border-0 bg-transparent fw-bold text-uppercase text-danger small" placeholder="Escriba o busque un numero de serie..." required autocomplete="off">
+                        <button class="btn btn-outline-danger border-0 rounded-pill px-3 py-1 small fw-bold d-flex align-items-center gap-1" type="button" data-bs-toggle="modal" data-bs-target="#modalCatalogoSeries" style="font-size: 12px;">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                    </div>
                     
                     <div id="status_busqueda" class="mt-2 p-2 rounded small fw-bold" style="display:none; background-color: #f8f9fa; border-left: 4px solid #dee2e6;">
                         <span id="txt_status_busqueda">Esperando serie...</span>
@@ -38,7 +55,7 @@ include '../includes/header.php';
 
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Identificador del Contenedor / Lote</label>
-                    <input type="text" name="contenedor" id="contenedor" class="form-control border-0 bg-light shadow-sm fw-bold text-uppercase" placeholder="Ej. 35DM25" required autocomplete="off">
+                    <input type="text" name="contenedor" id="contenedor" class="form-control border-0 bg-light shadow-sm fw-bold text-uppercase text-dark" placeholder="Identificador lote..." required autocomplete="off">
                 </div>
 
                 <div class="mb-3">
@@ -98,14 +115,87 @@ include '../includes/header.php';
     </div>
 </form>
 
+<div class="modal fade" id="modalCatalogoSeries" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header bg-dark text-white border-0 py-3 px-4 shadow-sm">
+                <h5 class="modal-title fw-bold text-uppercase mb-0" style="font-size: 0.9rem;"><i class="bi bi-journal-bookmark-fill me-2 text-danger"></i> Catálogo de Maquinaria Registrada</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-3">Utiliza el cuadro de búsqueda para filtrar de forma inmediata por nombre del cliente, modelo o serie.</p>
+                <div class="table-responsive">
+                    <table id="tablaModalSeries" class="table table-hover align-middle w-100" style="font-size: 13px;">
+                        <thead class="table-light text-uppercase fw-bold small" style="font-size: 11px;">
+                            <tr>
+                                <th>Ticket ID</th>
+                                <th>Cliente Asignado</th>
+                                <th>Nº de Serie</th>
+                                <th>Modelo</th>
+                                <th class="text-center">Selección</th>
+                            </tr>
+                        </thead>
+                        <tbody class="fw-semibold text-dark">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php include '../includes/footer.php'; ?>
 
 <script>
 $(document).ready(function() {
     let serieValida = false;
     var typingTimer;
+    var tableModal;
 
-    // Evaluador asíncrono para buscar el equipo en caliente conforme escriben
+    // Inicialización del DataTable interno del Catálogo Modal
+    $('#modalCatalogoSeries').appendTo('body').on('shown.bs.modal', function () {
+        if (!$.fn.DataTable.isDataTable('#tablaModalSeries')) {
+            tableModal = $('#tablaModalSeries').DataTable({
+                "processing": true,
+                "serverSide": true,
+                "ajax": {
+                    "url": "actions/obtener_series_modal.php",
+                    "type": "POST"
+                },
+                "columns": [
+                    // CORRECCIÓN JS: Mapeamos la nueva propiedad de datos del folio al inicio
+                    { "data": "id_ticket" },
+                    { "data": "nombre_cliente" },
+                    { "data": "no_serie", "render": function(data) { return `<code class="fw-bold text-danger">${data}</code>`; } },
+                    { "data": "modelo" },
+                    { "data": "accion", "orderable": false, "className": "text-center" }
+                ],
+                "language": {
+                    "sProcessing":     "Buscando en base de datos...",
+                    "sLengthMenu":     "Ver _MENU_",
+                    "sZeroRecords":    "No se encontraron coincidencias",
+                    "sInfo":           "Mostrando _START_ al _END_ de _TOTAL_",
+                    "sInfoFiltered":   "",
+                    "sSearch":         "Filtrar:",
+                    "oPaginate": { "sNext": "Sig", "sPrevious": "Ant" }
+                },
+                "pageLength": 6,
+                "dom": 'ftp',
+                "initComplete": function() {
+                    $('#modalCatalogoSeries .dataTables_filter input').addClass('bg-transparent border border-secondary border-opacity-20 shadow-none');
+                }
+            });
+        } else {
+            tableModal.ajax.reload();
+        }
+    });
+
+    $(document).on('click', '.btn-seleccionar-serie', function() {
+        const serie = $(this).data('serie');
+        $('#no_serie_input').val(serie).trigger('input'); 
+        $('#modalCatalogoSeries').modal('hide');
+    });
+
     $('#no_serie_input').on('input', function() {
         clearTimeout(typingTimer);
         let val = $(this).val().trim();
@@ -113,8 +203,7 @@ $(document).ready(function() {
         let txtStatus = $('#txt_status_busqueda');
         let btnGuardar = $('#btnGuardarLote');
 
-        // Limpiar campos de confirmación por defecto
-        $('#confirm_modelo, #confirm_garantia, #confirm_cliente, #confirm_telefono, #confirm_ubicacion').val('');
+        $('#confirm_modelo, #confirm_garantia, #confirm_cliente, #confirm_telefono, #confirm_ubicacion, #id_ticket_input').val('');
         btnGuardar.prop('disabled', true);
         serieValida = false;
 
@@ -134,12 +223,13 @@ $(document).ready(function() {
                             txtStatus.text('✅ Equipo Localizado').css('color', '#198754');
                             msgDiv.css('border-left', '4px solid #198754');
                             
-                            // Poblar los inputs de solo lectura
                             $('#confirm_modelo').val(res.modelo);
                             $('#confirm_garantia').val(res.garantia_status);
                             $('#confirm_cliente').val(res.nombre_cliente);
                             $('#confirm_telefono').val(res.telefono ? res.telefono : 'N/A');
                             $('#confirm_ubicacion').val(res.ubicacion ? res.ubicacion : 'N/A');
+                            
+                            $('#id_ticket_input').val(res.id_ticket);
                             
                             btnGuardar.prop('disabled', false);
                             serieValida = true;
@@ -149,13 +239,12 @@ $(document).ready(function() {
                         }
                     }
                 });
-            }, 500);
+            }, 300); 
         } else {
             msgDiv.hide();
         }
     });
 
-    // Envío seguro por Fetch API
     $('#formRegistroLote').on('submit', function(e) {
         e.preventDefault();
         if (!serieValida) return false;
