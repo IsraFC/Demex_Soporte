@@ -17,6 +17,10 @@ global $link_prefix_ventas, $pagina_actual_php, $en_ventas;
 <a href="<?= $link_prefix_ventas ?>cotizaciones.php" class="sidebar-link <?= ($pagina_actual_php === 'cotizaciones.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
     <div class="sidebar-icon"><i class="bi bi-file-earmark-pdf"></i></div> <span>Generar Cotización</span>
 </a>
+<!-- NUEVA OPCIÓN: Integrada con la estructura nativa del sidebar-link -->
+<a href="<?= $link_prefix_ventas ?>recompras_crm.php" class="sidebar-link <?= ($pagina_actual_php === 'recompras_crm.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
+    <div class="sidebar-icon"><i class="bi bi-arrow-repeat"></i></div> <span>CRM Recompras</span>
+</a>
 <a href="<?= $link_prefix_ventas ?>clientes.php" class="sidebar-link <?= ($pagina_actual_php === 'clientes.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
     <div class="sidebar-icon"><i class="bi bi-people-fill"></i></div> <span>Catálogo de Clientes</span>
 </a>

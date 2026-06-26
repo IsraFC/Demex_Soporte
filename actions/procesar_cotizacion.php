@@ -100,6 +100,10 @@ try {
     )";
 
     $stmt = $pdo->prepare($sql_cotizacion);
+    // Al momento de ejecutar el insert de la cotización, nos aseguramos de cachar si viene de recompra:
+    $id_cliente_recompra = isset($_POST['id_cliente_recompra']) ? intval($_POST['id_cliente_recompra']) : 0;
+
+    // (Dentro de tu bloque TRY de inserción de cotización)
     $stmt->execute([
         ':id_prospecto'            => $id_prospecto > 0 ? $id_prospecto : null,
         ':id_maquina'              => $id_maquina_real,
@@ -114,7 +118,7 @@ try {
         ':precio_pactado'          => $precio_pactado_unitario,
         ':especificacion_cotizada' => $especificacion_cotizada,
         ':costo_envio'             => $costo_envio,
-        ':notes'                   => $notes_final, // <-- INYECTADO: Guarda notas + JSON de bancos
+        ':notes'                   => $notes_final,
         ':fecha_emision'           => $fecha_emision,
         ':fecha_vencimiento'       => $fecha_vencimiento,
         ':status_cotizacion'       => $status_cotizacion
@@ -122,18 +126,10 @@ try {
 
     $id_cotizacion_generada = $pdo->lastInsertId();
 
-    // 3. Avanzamos de forma automática el embudo comercial del prospecto si está enlazado
-    if ($id_prospecto > 0) {
-        $sql_prospecto = "UPDATE prospectos SET status_comercial = 'Cotizado', fecha_ultimo_contacto = NOW() WHERE id_prospecto = ?";
-        $stmt_pros = $pdo->prepare($sql_prospecto);
-        $stmt_pros->execute([$id_prospecto]);
+    // --- NUEVO CONTROL DE RECOMPRA ---
+    // Si la cotización se generó desde el catálogo de clientes, le creamos una alerta de seguimiento o la dejamos disponible para el panel de recompras
+    if ($id_cliente_recompra > 0 && $id_prospecto <= 0) {
+        // Si quieres, aquí podemos actualizar algún estatus o simplemente redirigir al PDF de recompra
+        header("Location: ../Ventas/generar_pdf_cotizacion.php?id_cotizacion=" . $id_cotizacion_generada . "&msg=success_recompra");
+        exit();
     }
-
-    // Redirigimos directo al renderizador del documento impresible pasándole el ID
-    header("Location: ../Ventas/generar_pdf_cotizacion.php?id_cotizacion=" . $id_cotizacion_generada . "&msg=success");
-    exit();
-
-} catch (\Exception $e) {
-    header("Location: ../Ventas/cotizaciones.php?id_prospecto=" . $id_prospecto . "&msg=error&desc=" . urlencode($e->getMessage()));
-    exit();
-}

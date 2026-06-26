@@ -3,9 +3,10 @@
  * ARCHIVO: cotizaciones.php
  * DESCRIPCIÓN: Formulario de Configuración Comercial de Cotizaciones.
  * Soporta creación fluida por pasos asíncronos y edición de campos bancarios corporativos.
+ * MODIFICACIÓN: Integración nativa de flujos para Clientes Recurrentes (Recompras).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 4.6 (Sección de Campos Bancarios Independientes)
+ * @version 5.0 (Soporte Unificado Prospectos & Cartera de Clientes)
  */
 
 $page_title = "Generador de Cotizaciones | CRM Ventas";
@@ -37,6 +38,10 @@ $catalogo_precios = [
 
 // Detección de Prospecto enlazado si viene de la Bandeja de Leads
 $id_prospecto = isset($_GET['id_prospecto']) ? intval($_GET['id_prospecto']) : 0;
+
+// --- DETECCIÓN DE CLIENTE RECURRENTE (RECOMPRA) ---
+$id_cliente_recompra = isset($_GET['cliente_recompra']) ? intval($_GET['cliente_recompra']) : 0;
+
 $cliente_nombre = "";
 $cliente_apellidos = "";
 $cliente_correo = "";
@@ -64,6 +69,22 @@ if ($id_prospecto > 0) {
         $maquina_interes = $lead_data['maquina_interes'];
         $canal_origen = $lead_data['canal_origen'];
     }
+} 
+// --- Mapeo Automático desde el Dashboard de Clientes ---
+elseif ($id_cliente_recompra > 0) {
+    $sql_rec = "SELECT * FROM clientes WHERE id_cliente = :id_cliente LIMIT 1";
+    $stmt_rec = $pdo->prepare($sql_rec);
+    $stmt_rec->execute([':id_cliente' => $id_cliente_recompra]);
+    $client_data = $stmt_rec->fetch(PDO::FETCH_ASSOC);
+
+    if ($client_data) {
+        $cliente_nombre    = $client_data['nombre_cliente'];
+        $cliente_apellidos = $client_data['apellidos_cliente'] ?? '';
+        $cliente_correo    = $client_data['correo'] ?? '';
+        $cliente_telefono  = $client_data['telefono'] ?? '';
+        $cliente_region    = $client_data['ubicacion'] ?? 'Puebla';
+        $canal_origen      = 'Cliente Frecuente'; 
+    }
 }
 
 include '../includes/header.php';
@@ -83,15 +104,15 @@ include '../includes/header.php';
     <div class="row g-3">
         <div class="col-12 col-md-4">
             <label class="form-label fw-semibold small text-dark">Nombre(s) <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ctrl-lead" id="lead_nombre" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Ej. Sergio Mauricio" <?= ($id_prospecto > 0) ? 'readonly' : '' ?> required>
+            <input type="text" class="form-control ctrl-lead" id="lead_nombre" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Ej. Sergio Mauricio" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
         </div>
         <div class="col-12 col-md-4">
             <label class="form-label fw-semibold small text-dark">Apellidos <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ctrl-lead" id="lead_apellidos" value="<?= htmlspecialchars($cliente_apellidos) ?>" placeholder="Ej. Campos Carranza" <?= ($id_prospecto > 0) ? 'readonly' : '' ?> required>
+            <input type="text" class="form-control ctrl-lead" id="lead_apellidos" value="<?= htmlspecialchars($cliente_apellidos) ?>" placeholder="Ej. Campos Carranza" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
         </div>
         <div class="col-12 col-md-4">
             <label class="form-label fw-semibold small text-dark">Canal de Origen <span class="text-danger">*</span></label>
-            <?php if ($id_prospecto > 0): ?>
+            <?php if ($id_prospecto > 0 || $id_cliente_recompra > 0): ?>
                 <input type="text" class="form-control" value="<?= htmlspecialchars($canal_origen) ?>" readonly>
             <?php else: ?>
                 <select class="form-select ctrl-lead" id="lead_canal" required>
@@ -106,22 +127,22 @@ include '../includes/header.php';
         </div>
         <div class="col-12 col-md-3">
             <label class="form-label fw-semibold small text-dark">Teléfono Directo <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ctrl-lead" id="lead_telefono" value="<?= htmlspecialchars($cliente_telefono) ?>" placeholder="10 dígitos" maxlength="15" <?= ($id_prospecto > 0) ? 'readonly' : '' ?> required>
+            <input type="text" class="form-control ctrl-lead" id="lead_telefono" value="<?= htmlspecialchars($cliente_telefono) ?>" placeholder="10 dígitos" maxlength="15" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
         </div>
         <div class="col-12 col-md-3">
             <label class="form-label fw-semibold small text-dark">Correo Electrónico</label>
-            <input type="email" class="form-control ctrl-lead" id="lead_correo" value="<?= htmlspecialchars($cliente_correo) ?>" placeholder="cliente@correo.com" <?= ($id_prospecto > 0) ? 'readonly' : '' ?>>
+            <input type="email" class="form-control ctrl-lead" id="lead_correo" value="<?= htmlspecialchars($cliente_correo) ?>" placeholder="cliente@correo.com" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?>>
         </div>
         <div class="col-12 col-md-3">
             <label class="form-label fw-semibold small text-dark">Estado / Región</label>
-            <input type="text" class="form-control ctrl-lead" id="lead_region" value="<?= htmlspecialchars($cliente_region) ?>" placeholder="Ej. Puebla" <?= ($id_prospecto > 0) ? 'readonly' : '' ?>>
+            <input type="text" class="form-control ctrl-lead" id="lead_region" value="<?= htmlspecialchars($cliente_region) ?>" placeholder="Ej. Puebla" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?>>
         </div>
         <div class="col-12 col-md-3">
             <label class="form-label fw-semibold small text-dark">País</label>
-            <input type="text" class="form-control ctrl-lead" id="lead_pais" value="<?= htmlspecialchars($cliente_pais) ?>" placeholder="Ej. México" <?= ($id_prospecto > 0) ? 'readonly' : '' ?>>
+            <input type="text" class="form-control ctrl-lead" id="lead_pais" value="<?= htmlspecialchars($cliente_pais) ?>" placeholder="Ej. México" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?>>
         </div>
         
-        <?php if ($id_prospecto <= 0): ?>
+        <?php if ($id_prospecto <= 0 && $id_cliente_recompra <= 0): ?>
         <div class="col-12 col-md-6 mt-2">
             <label class="form-label fw-semibold small text-dark">Equipo de Interés Inicial <span class="text-danger">*</span></label>
             <select class="form-select ctrl-lead" id="lead_maquina" required>
@@ -140,11 +161,14 @@ include '../includes/header.php';
     </div>
 </div>
 
-<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded <?= ($id_prospecto <= 0) ? 'opacity-50' : '' ?>" id="cardSeccionCotizacion" style="<?= ($id_prospecto <= 0) ? 'pointer-events: none;' : '' ?>">
+<!-- MODIFICADO: Se remueve opacidad y bloqueos si es Prospecto O si es Cliente de Recompra Directo -->
+<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded <?= ($id_prospecto <= 0 && $id_cliente_recompra <= 0) ? 'opacity-50' : '' ?>" id="cardSeccionCotizacion" style="<?= ($id_prospecto <= 0 && $id_cliente_recompra <= 0) ? 'pointer-events: none;' : '' ?>">
     <h5 class="fw-bold text-dark mb-4"><i class="bi bi-calculator text-danger me-2"></i> Paso 2: Detalles y Precios de la Cotización</h5>
     
     <form action="../actions/procesar_cotizacion.php" method="POST" id="formCotizacion">
         <input type="hidden" name="id_prospecto" id="sec_id_prospecto" value="<?= $id_prospecto ?>">
+        <!-- NUEVO: Input oculto para que el procesador identifique la recompra -->
+        <input type="hidden" name="id_cliente_recompra" value="<?= $id_cliente_recompra ?>">
 
         <div class="row g-3 mb-3">
             <div class="col-12 col-md-4">
@@ -244,7 +268,7 @@ include '../includes/header.php';
             
             <div class="col-12 col-md-4">
                 <div class="mb-3">
-                    <label class="form-label fw-semibold text-dark small">Condiciones Comerciales Base</label>
+                    <label class="form-label fw-semibold text-dark small">Conditions Comerciales Base</label>
                     <textarea class="form-control small text-muted" name="condicion_comercial_bancos" rows="2" style="background-color: #f8f9fa; height: 74px; resize: none;" required>Precios de promoción para pagos por transferencia o efectivo.&#10;No incluyen el envío.</textarea>
                 </div>
                 <div>
@@ -360,40 +384,29 @@ function calcularFlujoComercial() {
 
     if (!modeloTexto || !matrizPrecios[modeloTexto]) return;
 
-    // 1. Extraemos el precio con IVA del catálogo estático
     const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
     
-    // CORREGIDO: Dividimos entre 1.16 para pintar en pantalla el precio BASE REAL SIN IVA
     const precioBaseOriginalSinIva = precioConIvaLista / 1.16;
     $('#precio_base_origen').off('change input').val(precioBaseOriginalSinIva.toFixed(2));
 
-    // 2. Rellenado dinámico de especificaciones técnicas
     $('#especificion_cotizada').val(especificacionesMaquinas[modeloTexto] || "");
 
-    // 3. Cálculos matemáticos comerciales corregidos
     const montoDescuentoUnitario = precioBaseOriginalSinIva * (pctDesc / 100);
     const precioPactadoUnitario = precioBaseOriginalSinIva - montoDescuentoUnitario;
     
-    // El subtotal acumulado de las máquinas y los gastos de envío (Todo sin IVA)
     const subtotalPactadoAcumulado = (precioPactadoUnitario * cantidad) + flete;
-    
-    // Calculamos el IVA real sobre ese subtotal desglosado
     const ivaCalculado = subtotalPactadoAcumulado * 0.16;
-    
-    // El Gran Total Neto vuelve a dar el valor esperado con IVA incluido
     const totalNeto = subtotalPactadoAcumulado + ivaCalculado;
 
-    // 4. Formateador de Divisas en Pesos Mexicanos (MXN)
     const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-    // 5. Inyección a las etiquetas visuales
     $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginalSinIva));
     $('#lbl_descuento_monto').text('-' + formatoMXN.format(montoDescuentoUnitario * cantidad));
     $('#lbl_flete_monto').text(formatoMXN.format(flete));
     $('#lbl_subtotal').text(formatoMXN.format(subtotalPactadoAcumulado));
     $('#lbl_iva').text(formatoMXN.format(ivaCalculado));
     $('#lbl_total').text(formatoMXN.format(totalNeto));
-    
+
     const imagenesMaquinas = {
         'SPICE MT15': 'spice_mt15.png',
         'SPICE MV89': 'spice_mv89.png',
