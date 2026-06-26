@@ -6,7 +6,7 @@
  * MODIFICACIÓN: Integración nativa de flujos para Clientes Recurrentes (Recompras).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 5.0 (Soporte Unificado Prospectos & Cartera de Clientes)
+ * @version 5.1 (Corregido flujo de entrada reactivo para Cartera de Clientes)
  */
 
 $page_title = "Generador de Cotizaciones | CRM Ventas";
@@ -83,6 +83,7 @@ elseif ($id_cliente_recompra > 0) {
         $cliente_correo    = $client_data['correo'] ?? '';
         $cliente_telefono  = $client_data['telefono'] ?? '';
         $cliente_region    = $client_data['ubicacion'] ?? 'Puebla';
+        $cliente_pais      = $client_data['pais'] ?? 'México'; // Corregido: Mapeo explícito de país
         $canal_origen      = 'Cliente Frecuente'; 
     }
 }
@@ -161,13 +162,11 @@ include '../includes/header.php';
     </div>
 </div>
 
-<!-- MODIFICADO: Se remueve opacidad y bloqueos si es Prospecto O si es Cliente de Recompra Directo -->
 <div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded <?= ($id_prospecto <= 0 && $id_cliente_recompra <= 0) ? 'opacity-50' : '' ?>" id="cardSeccionCotizacion" style="<?= ($id_prospecto <= 0 && $id_cliente_recompra <= 0) ? 'pointer-events: none;' : '' ?>">
     <h5 class="fw-bold text-dark mb-4"><i class="bi bi-calculator text-danger me-2"></i> Paso 2: Detalles y Precios de la Cotización</h5>
     
     <form action="../actions/procesar_cotizacion.php" method="POST" id="formCotizacion">
         <input type="hidden" name="id_prospecto" id="sec_id_prospecto" value="<?= $id_prospecto ?>">
-        <!-- NUEVO: Input oculto para que el procesador identifique la recompra -->
         <input type="hidden" name="id_cliente_recompra" value="<?= $id_cliente_recompra ?>">
 
         <div class="row g-3 mb-3">
@@ -382,7 +381,15 @@ function calcularFlujoComercial() {
     const flete = parseFloat($('#costo_envio').val()) || 0;
     const cantidad = parseInt($('#cantidad').val()) || 1;
 
-    if (!modeloTexto || !matrizPrecios[modeloTexto]) return;
+    // MODIFICADO: Si no hay máquina seleccionada aún (caso Recompra Inicial), limpiar campos de totales y salir elegantemente sin romper JS
+    if (!modeloTexto || !matrizPrecios[modeloTexto]) {
+        $('#precio_base_origen').val('');
+        $('#especificion_cotizada').val('');
+        $('#lbl_base_unitario, #lbl_descuento_monto, #lbl_flete_monto, #lbl_subtotal, #lbl_iva, #lbl_total').text('$0.00');
+        $('#img_maquina_preview').hide();
+        $('#img_placeholder').show();
+        return;
+    }
 
     const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
     
@@ -428,6 +435,12 @@ function calcularFlujoComercial() {
 }
 
 $(document).ready(function() {
+    // NUEVO: Asegurar que si es una recompra de cliente directo, el Paso 2 esté completamente desbloqueado y visible desde el inicio
+    const idClienteRecompra = parseInt("<?= $id_cliente_recompra ?>") || 0;
+    if (idClienteRecompra > 0) {
+        $('#cardSeccionCotizacion').removeClass('opacity-50').css('pointer-events', 'auto');
+    }
+
     $('#maquina_select, #tipo_cliente').on('change', function() {
         calcularFlujoComercial();
     });

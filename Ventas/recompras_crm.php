@@ -6,7 +6,7 @@
  * ORDENAMIENTO: Clasificación por Prioridad Estricta de Semáforo (Urgente > Atención > En Curso > Al día).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.1 (Estructura espejo homologada con Leads)
+ * @version 6.8 (Diseño Nativo Espejo Homologado con Leads)
  */
 
 $page_title = "Pipeline de Recompras | CRM Ventas";
@@ -107,21 +107,15 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                        $sql = "SELECT c.*, cl.nombre_cliente, cl.apellidos_cliente, cl.telefono, cl.correo, cl.ubicacion, m.nombre_maquina,
-                    DATEDIFF(CURDATE(), c.fecha_emision) AS dias_transcurridos
-                FROM cotizacion c
-                INNER JOIN clientes cl ON (c.cliente = CONCAT(cl.nombre_cliente, ' ', IFNULL(cl.apellidos_cliente, '')) OR c.rfc_receptor = cl.rfc_receptor)
-                INNER JOIN maquinas m ON c.id_maquina = m.id_maquina
-                WHERE c.id_prospecto IS NULL OR c.id_prospecto = 0
-                GROUP BY c.id_cotizacion
-                ORDER BY 
-                    CASE 
-                        WHEN c.status_cotizacion = 'Vencida' OR DATEDIFF(CURDATE(), c.fecha_emision) > 30 THEN 1
-                        WHEN c.status_cotizacion = 'Vigente' AND DATEDIFF(CURDATE(), c.fecha_emision) <= 30 THEN 2
-                        WHEN c.status_cotizacion = 'Cerrada' THEN 4
-                        ELSE 5
-                    END ASC, 
-                    c.fecha_emision DESC";
+                // Mapeo robusto desde la tabla clientes histórica
+                $sql = "SELECT c.*, cl.id_cliente, cl.nombre_cliente, cl.apellidos_cliente, cl.telefono, cl.correo, cl.ubicacion, cl.pais, m.modelo AS nombre_maquina,
+                               DATEDIFF(CURDATE(), c.fecha_emision) AS dias_transcurridos
+                        FROM cotizacion c
+                        INNER JOIN clientes cl ON (TRIM(c.cliente) = TRIM(CONCAT(cl.nombre_cliente, ' ', IFNULL(cl.apellidos_cliente, ''))) OR c.rfc_receptor = cl.rfc_receptor)
+                        INNER JOIN maquinaria m ON c.id_maquina = m.id_maquina
+                        WHERE c.id_prospecto IS NULL OR c.id_prospecto = 0
+                        GROUP BY c.id_cotizacion
+                        ORDER BY c.fecha_emision DESC";
                 
                 $stmt = $pdo->query($sql);
                 while ($recompra = $stmt->fetch()):
@@ -150,7 +144,7 @@ include '../includes/header.php';
                         </div>
                     </td>
                     <td class="small text-secondary">
-                        <i class="bi bi-geo-alt-fill text-muted me-1"></i><?= htmlspecialchars($recompra['ubicacion'] ?? 'Puebla, México') ?>
+                        <i class="bi bi-geo-alt-fill text-muted me-1"></i><?= htmlspecialchars(($recompra['ubicacion'] ?? 'Puebla') . ', ' . ($recompra['pais'] ?? 'México')) ?>
                     </td>
                     <td>
                         <span class="badge bg-light text-dark border py-1.5 px-2.5 fw-semibold" style="border-radius: 6px; font-size: 0.75rem;">
@@ -172,9 +166,9 @@ include '../includes/header.php';
                     </td>
                     <td class="text-center">
                         <div class="btn-group btn-group-sm col-acciones-comerciales" 
-                             data-id-prospecto="0" 
+                             data-id-cliente="<?= $recompra['id_cliente'] ?>" 
                              data-id-cotizacion="<?= htmlspecialchars($recompra['id_cotizacion'] ?? '0') ?>"
-                             data-status-venta="<?= ($estatus_real_cotizacion === 'Cerrada') ? 'Venta Cerrada' : 'Cotizado' ?>">
+                             data-status-venta="<?= htmlspecialchars($estatus_real_cotizacion ?? '') ?>">
                         </div>
                     </td>
                 </tr>
@@ -193,6 +187,7 @@ include '../includes/header.php';
             </div>
             <form id="formConfirmarVenta">
                 <input type="hidden" id="liberar_id_cotizacion" name="id_cotizacion">
+                <input type="hidden" id="liberar_id_cliente" name="id_cliente">
                 <div class="modal-body p-4">
                     <p class="text-muted small mb-3">La cotización se guardará como 'Cerrada' y el nuevo equipo se sumará automáticamente al historial acumulado de este cliente.</p>
                     
@@ -236,20 +231,7 @@ include '../includes/header.php';
 <script>
 $(document).ready(function() {
     
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('msg') === 'success') {
-        Swal.fire({
-            title: '¡Cambios Guardados!',
-            text: 'La cotización de recompra se actualizó exitosamente.',
-            icon: 'success',
-            confirmButtonColor: '#198754',
-            confirmButtonText: 'Entendido'
-        }).then(() => {
-            window.history.replaceState({}, document.title, window.location.pathname);
-        });
-    }
-
-    // --- 1. MOTOR DE REACTIVIDAD EN TIEMPO REAL HOMOLOGADO ---
+    // --- 1. MOTOR DE REACTIVIDAD EN TIEMPO REAL (DISEÑO ESPEJO EXACTO CON LEADS) ---
     function calcularSemaforosComerciales() {
         const ahora = Date.now();
         
@@ -268,8 +250,9 @@ $(document).ready(function() {
             const contenedorCotizBadge = fila.find('.col-cotizacion-badge');
             
             const idCotizacion = contenedorAcciones.data('id-cotizacion');
+            const idCliente = contenedorAcciones.data('id-cliente');
 
-            // --- A. RENDEREADO DE ESTATUS DE VENTA ---
+            // --- A. RENDEREADO DE ESTATUS DE VENTA (NATIVO) ---
             let statusBadgeHtml = '';
             if (statusVenta === 'Venta Cerrada' || statusCotiz === 'Cerrada') {
                 statusBadgeHtml = '<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;">Venta Cerrada</span>';
@@ -280,7 +263,7 @@ $(document).ready(function() {
                 contenedorStatusBadge.html(statusBadgeHtml);
             }
 
-            // --- B. RENDEREADO DE ESTATUS DE COTIZACIÓN ---
+            // --- B. RENDEREADO DE ESTATUS DE COTIZACIÓN (NATIVO) ---
             let cotizBadgeHtml = '';
             if (statusCotiz === 'Cerrada') {
                 cotizBadgeHtml = '<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;"><i class="bi bi-calendar-check me-1"></i> Cerrada</span>';
@@ -300,16 +283,16 @@ $(document).ready(function() {
             } else {
                 botonesHtml = `<button type="button" onclick="verDetallesCotizacion(${idCotizacion})" class="btn btn-outline-info border-0" title="Visualizar Detalle Cotización"><i class="bi bi-eye-fill fs-5"></i></button>
                                <a href="editar_cotizacion.php?id_cotizacion=${idCotizacion}" class="btn btn-outline-warning border-0" title="Editar Cotización"><i class="bi bi-pencil-square fs-5"></i></a>
-                               <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperacionComercial(${idCotizacion})" title="Cerrar Recompra"><i class="bi bi-check-circle-fill fs-5"></i></button>`;
+                               <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperacionComercial(${idCotizacion}, ${idCliente})" title="Cerrar Recompra"><i class="bi bi-check-circle-fill fs-5"></i></button>`;
             }
             if (contenedorAcciones.html() !== botonesHtml) {
                 contenedorAcciones.html(botonesHtml);
             }
 
-            // --- D. LÓGICA DE SEMÁFOROS ---
+            // --- D. LÓGICA DE SEMÁFOROS (PROPIEDADES INTERNAS - DEJA EL renglón CON SU FONDO BLANCO ORIGINAL) ---
             if (statusCotiz === 'Cerrada') {
                 $(this).html('<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;"><i class="bi bi-check-circle-fill me-1"></i> Al día</span>');
-                fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '0');
+                fila.attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '0');
                 return;
             }
 
@@ -318,15 +301,15 @@ $(document).ready(function() {
             
             if (statusCotiz === 'Vencida' || diasCotizado > 30) {
                 $(this).html('<span class="badge bg-danger animate__animated animate__headShake animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 3.5s !important;"><i class="bi bi-fire me-1"></i> Urgente</span>');
-                fila.removeClass('table-warning-sutil').addClass('table-danger-sutil').attr('data-urgente', '1').attr('data-atencion', '0').attr('data-encurso', '0');
+                fila.attr('data-urgente', '1').attr('data-atencion', '0').attr('data-encurso', '0');
                 countUrgentes++;
             } else if (diasCotizado > 15) {
                 $(this).html('<span class="badge bg-warning text-dark animate__animated animate__flash animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 6.5s !important;"><i class="bi bi-exclamation-triangle-fill me-1"></i> Atención</span>');
-                fila.removeClass('table-danger-sutil').addClass('table-warning-sutil').attr('data-urgente', '0').attr('data-atencion', '1').attr('data-encurso', '0');
+                fila.attr('data-urgente', '0').attr('data-atencion', '1').attr('data-encurso', '0');
                 countAtencion++;
             } else {
                 $(this).html('<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 3.5s !important;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
-                fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
+                fila.attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
                 countEnCurso++;
             }
         });
@@ -366,6 +349,7 @@ $(document).ready(function() {
         e.preventDefault();
         
         const idCotizacion = $('#liberar_id_cotizacion').val();
+        const idCliente = $('#liberar_id_cliente').val();
         const fechaCompra = $('#liberar_fecha_compra').val();
         const observaciones = $('#liberar_observaciones').val();
 
@@ -374,6 +358,7 @@ $(document).ready(function() {
             method: 'POST',
             data: { 
                 id_cotizacion: idCotizacion, 
+                id_cliente: idCliente,
                 fecha_compra: fechaCompra,
                 observaciones_venta: observaciones
             },
@@ -394,9 +379,10 @@ $(document).ready(function() {
     });
 });
 
-function cerrarOperacionComercial(idCotizacion) {
+function cerrarOperacionComercial(idCotizacion, idCliente) {
     $('#formConfirmarVenta')[0].reset();
     $('#liberar_id_cotizacion').val(idCotizacion);
+    $('#liberar_id_cliente').val(idCliente);
     $('#liberar_fecha_compra').val(new Date().toISOString().split('T')[0]);
     $('#modalLiberarVenta').appendTo("body").modal('show');
 }

@@ -2,7 +2,7 @@
 /**
  * @file procesar_cotizacion.php
  * @package Portal_Demex
- * @version 4.7 - Gestión Comercial Inteligente con Almacenamiento de Datos Bancarios
+ * @version 4.8 - Gestión Comercial Inteligente con Almacenamiento de Datos Bancarios
  * @brief Controlador encargado de registrar las cotizaciones y avanzar el estatus comercial del prospecto.
  */
 
@@ -86,7 +86,10 @@ try {
 
     $id_maquina_real = $maquinaria_row['id_maquina'];
 
-    // 2. Insertamos la cotización en la base de datos
+    // Captura si viene del dashboard de clientes (recompra)
+    $id_cliente_recompra = isset($_POST['id_cliente_recompra']) ? intval($_POST['id_cliente_recompra']) : 0;
+
+    // 2. Insertamos la cotización permitiendo el NULL legítimo que tu base de datos ahora acepta
     $sql_cotizacion = "INSERT INTO cotizacion (
         id_prospecto, id_maquina, id_usuario, rfc_receptor, direccion_entrega, 
         sucursal, cantidad, unidad, tipo_cliente, precio_base_origen, 
@@ -100,12 +103,9 @@ try {
     )";
 
     $stmt = $pdo->prepare($sql_cotizacion);
-    // Al momento de ejecutar el insert de la cotización, nos aseguramos de cachar si viene de recompra:
-    $id_cliente_recompra = isset($_POST['id_cliente_recompra']) ? intval($_POST['id_cliente_recompra']) : 0;
 
-    // (Dentro de tu bloque TRY de inserción de cotización)
     $stmt->execute([
-        ':id_prospecto'            => $id_prospecto > 0 ? $id_prospecto : null,
+        ':id_prospecto'            => $id_prospecto > 0 ? $id_prospecto : null, // Manda NULL limpio si es recompra
         ':id_maquina'              => $id_maquina_real,
         ':id_usuario'              => $id_usuario,
         ':rfc_receptor'            => $rfc_receptor,
@@ -126,10 +126,20 @@ try {
 
     $id_cotizacion_generada = $pdo->lastInsertId();
 
-    // --- NUEVO CONTROL DE RECOMPRA ---
-    // Si la cotización se generó desde el catálogo de clientes, le creamos una alerta de seguimiento o la dejamos disponible para el panel de recompras
+    // 3. --- CONTROL DE FLUJO DE REDIRECCIÓN ---
     if ($id_cliente_recompra > 0 && $id_prospecto <= 0) {
-        // Si quieres, aquí podemos actualizar algún estatus o simplemente redirigir al PDF de recompra
         header("Location: ../Ventas/generar_pdf_cotizacion.php?id_cotizacion=" . $id_cotizacion_generada . "&msg=success_recompra");
         exit();
+    } else {
+        $sql_update_lead = "UPDATE prospectos SET status_comercial = 'Cotizado', fecha_ultimo_contacto = NOW() WHERE id_prospecto = ?";
+        $stmt_up = $pdo->prepare($sql_update_lead);
+        $stmt_up->execute([$id_prospecto]);
+
+        header("Location: ../Ventas/leads_crm.php?msg=success");
+        exit();
     }
+
+} catch (PDOException $e) {
+    header("Location: ../Ventas/cotizaciones.php?msg=error&desc=" . urlencode($e->getMessage()));
+    exit();
+}
