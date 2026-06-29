@@ -2,10 +2,11 @@
 /**
  * ARCHIVO: cotizaciones.php
  * DESCRIPCIÓN: Formulario de Configuración Comercial de Cotizaciones.
- * Soporta creación fluida por pasos asíncronos cuando se genera desde 0.
+ * Soporta creación fluida por pasos asíncronos y edición de campos bancarios corporativos.
+ * MODIFICACIÓN: Integración nativa de flujos para Clientes Recurrentes (Recompras).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 4.4 (Sincronización Total de Máquina de Interés e Imagen Previa)
+ * @version 5.1 (Corregido flujo de entrada reactivo para Cartera de Clientes)
  */
 
 $page_title = "Generador de Cotizaciones | CRM Ventas";
@@ -37,6 +38,10 @@ $catalogo_precios = [
 
 // Detección de Prospecto enlazado si viene de la Bandeja de Leads
 $id_prospecto = isset($_GET['id_prospecto']) ? intval($_GET['id_prospecto']) : 0;
+
+// --- DETECCIÓN DE CLIENTE RECURRENTE (RECOMPRA) ---
+$id_cliente_recompra = isset($_GET['cliente_recompra']) ? intval($_GET['cliente_recompra']) : 0;
+
 $cliente_nombre = "";
 $cliente_apellidos = "";
 $cliente_correo = "";
@@ -64,6 +69,23 @@ if ($id_prospecto > 0) {
         $maquina_interes = $lead_data['maquina_interes'];
         $canal_origen = $lead_data['canal_origen'];
     }
+} 
+// --- Mapeo Automático desde el Dashboard de Clientes ---
+elseif ($id_cliente_recompra > 0) {
+    $sql_rec = "SELECT * FROM clientes WHERE id_cliente = :id_cliente LIMIT 1";
+    $stmt_rec = $pdo->prepare($sql_rec);
+    $stmt_rec->execute([':id_cliente' => $id_cliente_recompra]);
+    $client_data = $stmt_rec->fetch(PDO::FETCH_ASSOC);
+
+    if ($client_data) {
+        $cliente_nombre    = $client_data['nombre_cliente'];
+        $cliente_apellidos = $client_data['apellidos_cliente'] ?? '';
+        $cliente_correo    = $client_data['correo'] ?? '';
+        $cliente_telefono  = $client_data['telefono'] ?? '';
+        $cliente_region    = $client_data['ubicacion'] ?? 'Puebla';
+        $cliente_pais      = $client_data['pais'] ?? 'México'; // Corregido: Mapeo explícito de país
+        $canal_origen      = 'Cliente Frecuente'; 
+    }
 }
 
 include '../includes/header.php';
@@ -83,15 +105,15 @@ include '../includes/header.php';
     <div class="row g-3">
         <div class="col-12 col-md-4">
             <label class="form-label fw-semibold small text-dark">Nombre(s) <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ctrl-lead" id="lead_nombre" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Ej. Sergio Mauricio" <?= ($id_prospecto > 0) ? 'readonly' : '' ?> required>
+            <input type="text" class="form-control ctrl-lead" id="lead_nombre" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Ej. Sergio Mauricio" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
         </div>
         <div class="col-12 col-md-4">
             <label class="form-label fw-semibold small text-dark">Apellidos <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ctrl-lead" id="lead_apellidos" value="<?= htmlspecialchars($cliente_apellidos) ?>" placeholder="Ej. Campos Carranza" <?= ($id_prospecto > 0) ? 'readonly' : '' ?> required>
+            <input type="text" class="form-control ctrl-lead" id="lead_apellidos" value="<?= htmlspecialchars($cliente_apellidos) ?>" placeholder="Ej. Campos Carranza" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
         </div>
         <div class="col-12 col-md-4">
             <label class="form-label fw-semibold small text-dark">Canal de Origen <span class="text-danger">*</span></label>
-            <?php if ($id_prospecto > 0): ?>
+            <?php if ($id_prospecto > 0 || $id_cliente_recompra > 0): ?>
                 <input type="text" class="form-control" value="<?= htmlspecialchars($canal_origen) ?>" readonly>
             <?php else: ?>
                 <select class="form-select ctrl-lead" id="lead_canal" required>
@@ -106,22 +128,22 @@ include '../includes/header.php';
         </div>
         <div class="col-12 col-md-3">
             <label class="form-label fw-semibold small text-dark">Teléfono Directo <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ctrl-lead" id="lead_telefono" value="<?= htmlspecialchars($cliente_telefono) ?>" placeholder="10 dígitos" maxlength="15" <?= ($id_prospecto > 0) ? 'readonly' : '' ?> required>
+            <input type="text" class="form-control ctrl-lead" id="lead_telefono" value="<?= htmlspecialchars($cliente_telefono) ?>" placeholder="10 dígitos" maxlength="15" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
         </div>
         <div class="col-12 col-md-3">
             <label class="form-label fw-semibold small text-dark">Correo Electrónico</label>
-            <input type="email" class="form-control ctrl-lead" id="lead_correo" value="<?= htmlspecialchars($cliente_correo) ?>" placeholder="cliente@correo.com" <?= ($id_prospecto > 0) ? 'readonly' : '' ?>>
+            <input type="email" class="form-control ctrl-lead" id="lead_correo" value="<?= htmlspecialchars($cliente_correo) ?>" placeholder="cliente@correo.com" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?>>
         </div>
         <div class="col-12 col-md-3">
             <label class="form-label fw-semibold small text-dark">Estado / Región</label>
-            <input type="text" class="form-control ctrl-lead" id="lead_region" value="<?= htmlspecialchars($cliente_region) ?>" placeholder="Ej. Puebla" <?= ($id_prospecto > 0) ? 'readonly' : '' ?>>
+            <input type="text" class="form-control ctrl-lead" id="lead_region" value="<?= htmlspecialchars($cliente_region) ?>" placeholder="Ej. Puebla" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?>>
         </div>
         <div class="col-12 col-md-3">
             <label class="form-label fw-semibold small text-dark">País</label>
-            <input type="text" class="form-control ctrl-lead" id="lead_pais" value="<?= htmlspecialchars($cliente_pais) ?>" placeholder="Ej. México" <?= ($id_prospecto > 0) ? 'readonly' : '' ?>>
+            <input type="text" class="form-control ctrl-lead" id="lead_pais" value="<?= htmlspecialchars($cliente_pais) ?>" placeholder="Ej. México" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?>>
         </div>
         
-        <?php if ($id_prospecto <= 0): ?>
+        <?php if ($id_prospecto <= 0 && $id_cliente_recompra <= 0): ?>
         <div class="col-12 col-md-6 mt-2">
             <label class="form-label fw-semibold small text-dark">Equipo de Interés Inicial <span class="text-danger">*</span></label>
             <select class="form-select ctrl-lead" id="lead_maquina" required>
@@ -140,11 +162,12 @@ include '../includes/header.php';
     </div>
 </div>
 
-<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded <?= ($id_prospecto <= 0) ? 'opacity-50' : '' ?>" id="cardSeccionCotizacion" style="<?= ($id_prospecto <= 0) ? 'pointer-events: none;' : '' ?>">
+<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded <?= ($id_prospecto <= 0 && $id_cliente_recompra <= 0) ? 'opacity-50' : '' ?>" id="cardSeccionCotizacion" style="<?= ($id_prospecto <= 0 && $id_cliente_recompra <= 0) ? 'pointer-events: none;' : '' ?>">
     <h5 class="fw-bold text-dark mb-4"><i class="bi bi-calculator text-danger me-2"></i> Paso 2: Detalles y Precios de la Cotización</h5>
     
     <form action="../actions/procesar_cotizacion.php" method="POST" id="formCotizacion">
         <input type="hidden" name="id_prospecto" id="sec_id_prospecto" value="<?= $id_prospecto ?>">
+        <input type="hidden" name="id_cliente_recompra" value="<?= $id_cliente_recompra ?>">
 
         <div class="row g-3 mb-3">
             <div class="col-12 col-md-4">
@@ -224,7 +247,7 @@ include '../includes/header.php';
         <div class="row g-3 mb-4 border-top pt-3">
             <div class="col-12 col-md-6">
                 <label class="form-label fw-semibold text-dark small">Especificaciones Técnicas Incluidas</label>
-                <textarea class="form-control small text-muted" id="especificion_cotizada" name="especificion_cotizada" style="background-color: #f8f9fa; height: 320px; resize: none;" placeholder="Se auto-rellenarán según la máquina seleccionada..."></textarea>
+                <textarea class="form-control small text-muted" id="especificion_cotizada" name="especificion_cotizada" style="background-color: #f8f9fa; height: 320px; resize: none;" placeholder="Se auto-rellenarán según la máquina seleccionada..." required></textarea>
             </div>
 
             <div class="col-12 col-md-6 d-flex align-items-center justify-content-center">
@@ -234,7 +257,63 @@ include '../includes/header.php';
                     <div id="img_placeholder" class="text-muted small py-4"><i class="bi bi-image fs-2 d-block mb-2 text-danger"></i>Selecciona un modelo para ver su imagen</div>
                 </div>
             </div>
+        </div>
 
+       <div class="row g-3 mb-4 border-top pt-3">
+            <div class="col-12">
+                <h6 class="fw-bold text-danger mb-2"><i class="bi bi-bank me-2"></i> Datos Bancarios y Fiscales</h6>
+                <p class="text-muted small mb-3">Establece las condiciones de pago y cuentas oficiales corporativas que se imprimirán de forma visual en la cotización.</p>
+            </div>
+            
+            <div class="col-12 col-md-4">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold text-dark small">Conditions Comerciales Base</label>
+                    <textarea class="form-control small text-muted" name="condicion_comercial_bancos" rows="2" style="background-color: #f8f9fa; height: 74px; resize: none;" required>Precios de promoción para pagos por transferencia o efectivo.&#10;No incluyen el envío.</textarea>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold text-dark small">Razón Social / Beneficiario</label>
+                    <input type="text" class="form-control bg-light fw-semibold text-dark" name="banco_beneficiario" value="DEMEXTOR SA DE CV" readonly style="height: 38px;" required>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold text-dark small">Banco Opción 1</label>
+                    <input type="text" class="form-control text-uppercase" name="banco_1_nombre" value="BANORTE" style="height: 38px;" required>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold text-dark small">Cuenta Banorte</label>
+                    <input type="text" class="form-control fw-bold text-secondary" name="banco_1_cuenta" value="0434571284" style="height: 38px;" required>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold text-dark small">Clabe Interbancaria Banorte</label>
+                    <input type="text" class="form-control fw-bold text-danger" name="banco_1_clabe" value="072 650 00434571284 8" style="height: 38px;" required>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold text-dark small">Banco Opción 2</label>
+                    <input type="text" class="form-control text-uppercase" name="banco_2_nombre" value="BANAMEX" style="height: 38px;" required>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-7">
+                        <label class="form-label fw-semibold text-dark small">Cuenta Banamex</label>
+                        <input type="text" class="form-control fw-bold text-secondary" name="banco_2_cuenta" value="7213722" style="height: 38px;" required>
+                    </div>
+                    <div class="col-5">
+                        <label class="form-label fw-semibold text-dark small">Sucursal</label>
+                        <input type="text" class="form-control fw-bold text-secondary" name="banco_2_sucursal" value="7010" style="height: 38px;" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label fw-semibold text-dark small">Clabe Interbancaria Banamex</label>
+                    <input type="text" class="form-control fw-bold text-danger" name="banco_2_clabe" value="002 650 70107213722 1" style="height: 38px;" required>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4 border-top pt-3">
             <div class="col-12 col-md-6">
                 <label class="form-label fw-semibold text-dark small">Notas / Observaciones</label>
                 <textarea class="form-control" name="notas" rows="4" placeholder="Garantías, plazos de entrega o condiciones de pago..." style="height: 180px; resize: none;"></textarea>
@@ -302,15 +381,25 @@ function calcularFlujoComercial() {
     const flete = parseFloat($('#costo_envio').val()) || 0;
     const cantidad = parseInt($('#cantidad').val()) || 1;
 
-    if (!modeloTexto || !matrizPrecios[modeloTexto]) return;
+    // MODIFICADO: Si no hay máquina seleccionada aún (caso Recompra Inicial), limpiar campos de totales y salir elegantemente sin romper JS
+    if (!modeloTexto || !matrizPrecios[modeloTexto]) {
+        $('#precio_base_origen').val('');
+        $('#especificion_cotizada').val('');
+        $('#lbl_base_unitario, #lbl_descuento_monto, #lbl_flete_monto, #lbl_subtotal, #lbl_iva, #lbl_total').text('$0.00');
+        $('#img_maquina_preview').hide();
+        $('#img_placeholder').show();
+        return;
+    }
 
-    const precioBaseOriginal = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
-    $('#precio_base_origen').off('change input').val(precioBaseOriginal.toFixed(2));
+    const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
+    
+    const precioBaseOriginalSinIva = precioConIvaLista / 1.16;
+    $('#precio_base_origen').off('change input').val(precioBaseOriginalSinIva.toFixed(2));
 
     $('#especificion_cotizada').val(especificacionesMaquinas[modeloTexto] || "");
 
-    const montoDescuentoUnitario = precioBaseOriginal * (pctDesc / 100);
-    const precioPactadoUnitario = precioBaseOriginal - montoDescuentoUnitario;
+    const montoDescuentoUnitario = precioBaseOriginalSinIva * (pctDesc / 100);
+    const precioPactadoUnitario = precioBaseOriginalSinIva - montoDescuentoUnitario;
     
     const subtotalPactadoAcumulado = (precioPactadoUnitario * cantidad) + flete;
     const ivaCalculado = subtotalPactadoAcumulado * 0.16;
@@ -318,7 +407,7 @@ function calcularFlujoComercial() {
 
     const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-    $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginal));
+    $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginalSinIva));
     $('#lbl_descuento_monto').text('-' + formatoMXN.format(montoDescuentoUnitario * cantidad));
     $('#lbl_flete_monto').text(formatoMXN.format(flete));
     $('#lbl_subtotal').text(formatoMXN.format(subtotalPactadoAcumulado));
@@ -346,7 +435,12 @@ function calcularFlujoComercial() {
 }
 
 $(document).ready(function() {
-    // Escucha inicial del Paso 2
+    // NUEVO: Asegurar que si es una recompra de cliente directo, el Paso 2 esté completamente desbloqueado y visible desde el inicio
+    const idClienteRecompra = parseInt("<?= $id_cliente_recompra ?>") || 0;
+    if (idClienteRecompra > 0) {
+        $('#cardSeccionCotizacion').removeClass('opacity-50').css('pointer-events', 'auto');
+    }
+
     $('#maquina_select, #tipo_cliente').on('change', function() {
         calcularFlujoComercial();
     });
@@ -357,7 +451,6 @@ $(document).ready(function() {
     
     calcularFlujoComercial();
 
-    // --- NUEVO: EVENTO AJAX PASO 1 (ALTA MANUAL CON TRASLADO AUTOMÁTICO DE EQUIPO) ---
     $('#btnCrearLeadManual').on('click', function() {
         const nombre = $('#lead_nombre').val().trim();
         const apellidos = $('#lead_apellidos').val().trim();
@@ -366,7 +459,7 @@ $(document).ready(function() {
         const correo = $('#lead_correo').val().trim();
         const region = $('#lead_region').val().trim();
         const pais = $('#lead_pais').val().trim();
-        const maquinaSeleccionada = $('#lead_maquina').val(); // <-- Captura el modelo del paso 1
+        const maquinaSeleccionada = $('#lead_maquina').val();
 
         if (nombre === '' || apellidos === '' || telefono === '' || !maquinaSeleccionada) {
             Swal.fire({ title: 'Campos Obligatorios', text: 'Por favor, llena el nombre, apellidos, teléfono y equipo de interés.', icon: 'warning' });
@@ -384,26 +477,17 @@ $(document).ready(function() {
                 correo: correo,
                 estado_region: region,
                 pais: pais,
-                maquina_interes: maquinaSeleccionada // <-- Mandamos el equipo real al Backend
+                maquina_interes: maquinaSeleccionada
             },
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
                     Swal.fire({ title: '¡Lead Registrado!', text: 'Expediente comercial creado. Configura los costos de la cotización.', icon: 'success', timer: 1500, showConfirmButton: false });
                     
-                    // 1. Inyectamos el ID generado en el formulario oculto de la cotización
                     $('#sec_id_prospecto').val(response.id_prospecto);
-                    
-                    // 2. Concatenamos e inyectamos el nombre completo en la sección fiscal
                     $('#txt_cliente_fiscal').val(nombre + ' ' + apellidos);
-                    
-                    // 3. CAMBIO CLAVE: Sincroniza la máquina seleccionada con el select del Paso 2
                     $('#maquina_select').val(maquinaSeleccionada).trigger('change');
-                    
-                    // 4. Desbloqueamos visualmente el paso 2 de la cotización
                     $('#cardSeccionCotizacion').removeClass('opacity-50').css('pointer-events', 'auto');
-                    
-                    // 5. Bloqueamos los controles del paso 1 para mantener integridad
                     $('.ctrl-lead').attr('readonly', true).attr('disabled', true);
                     $('#btnCrearLeadManual').hide();
                 } else {

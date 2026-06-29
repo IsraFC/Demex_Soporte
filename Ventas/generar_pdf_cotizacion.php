@@ -5,7 +5,7 @@
  * Integra el panel superior con el diseño y la paleta roja oficial del sistema de DEMEX (.btn-danger).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 7.6 (Red System Palette Integration)
+ * @version 7.7 (Integración de Datos Bancarios Corporativos)
  */
 
 $page_title = "Propuesta Comercial Generada | CRM Ventas";
@@ -203,19 +203,59 @@ include '../includes/header.php';
             </div>
         </div>
 
-        <div class="row align-items-start mt-2">
+<div class="row align-items-start mt-2">
             <div class="col-7" style="font-size: 0.72rem; color: #555; line-height: 1.4;">
+                
+                <?php
+                // PROCESADOR DE DESEMPAQUETADO: Separamos las notas de los bancos mediante el divisor (|||)
+                $notas_limpias = $cotizacion['notes'];
+                $bancos = [
+                    'condicion' => "Precios de promoción para pagos por transferencia o efectivo.\nNo incluyen el envío.",
+                    'b1_nom'    => "BANORTE", 'b1_cta' => "0434571284", 'b1_clabe' => "072 650 00434571284 8",
+                    'b2_nom'    => "BANAMEX", 'b2_cta' => "7213722", 'b2_clabe' => "002 650 70107213722 1", 'b2_suc' => "7010"
+                ];
+
+                if (strpos($cotizacion['notes'], '|||') !== false) {
+                    $partes_notas = explode('|||', $cotizacion['notes']);
+                    $notas_limpias = trim($partes_notas[0]);
+                    $json_desencriptado = json_decode(base64_decode($partes_notas[1]), true);
+                    if ($json_desencriptado) {
+                        $bancos = $json_desencriptado;
+                    }
+                }
+                ?>
+
                 <div class="fw-bold text-uppercase text-secondary mb-1" style="letter-spacing: 0.3px;">Condiciones Comerciales y de Garantía:</div>
                 <div class="p-2 border rounded bg-light mb-2 text-muted">
                     <ul class="mb-0 ps-3">
+                        <?= implode('', array_map(function($linea) { return "<li>" . htmlspecialchars(trim($linea)) . "</li>"; }, explode("\n", $bancos['condicion']))) ?>
                         <li>Garantía de 1 año integral contra cualquier defectuación de fábrica (excepto consumibles).</li>
                         <li>Garantía de 2 años en componentes críticos (compresor principal y tarjetas electrónicas).</li>
                         <li>Precios cotizados en Pesos Mexicanos ($ MXN) con vigencia ligada a la fecha de vencimiento.</li>
                     </ul>
                 </div>
-                <?php if(!empty($cotizacion['notes'])): ?>
+
+                <div class="fw-bold text-uppercase text-secondary mb-1" style="letter-spacing: 0.3px;">Datos Bancarios para Liquidación:</div>
+                <div class="p-3 border rounded bg-white mb-2 shadow-sm" style="border-left: 4px solid #dc3545 !important;">
+                    <div class="mb-2"><strong>Beneficiario:</strong> <span class="text-dark fw-bold">DEMEXTOR SA DE CV</span></div>
+                    <div class="row small g-2">
+                        <div class="col-6 border-end pe-2">
+                            <span class="badge bg-dark mb-1 text-uppercase" style="font-size: 0.6rem;">Opción 1: <?= htmlspecialchars($bancos['b1_nom']) ?></span>
+                            <div class="mt-1"><strong>Cuenta:</strong> <?= htmlspecialchars($bancos['b1_cta']) ?></div>
+                            <div><strong>Clabe:</strong> <?= htmlspecialchars($bancos['b1_clabe']) ?></div>
+                        </div>
+                        <div class="col-6 ps-2">
+                            <span class="badge bg-primary mb-1 text-uppercase" style="font-size: 0.6rem; background-color: #002d72 !important;">Opción 2: <?= htmlspecialchars($bancos['b2_nom']) ?></span>
+                            <div class="mt-1"><strong>Cuenta:</strong> <?= htmlspecialchars($bancos['b2_cta']) ?></div>
+                            <div><strong>Clabe:</strong> <?= htmlspecialchars($bancos['b2_clabe']) ?></div>
+                            <div><strong>Sucursal:</strong> <?= htmlspecialchars($bancos['b2_suc']) ?></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <?php if(!empty($notas_limpias)): ?>
                     <div class="fw-bold text-uppercase text-secondary mb-1" style="letter-spacing: 0.3px;">Observaciones Especiales:</div>
-                    <div class="p-2 border rounded bg-white text-dark border-start border-3 border-danger" style="white-space: pre-wrap;"><?= htmlspecialchars($cotizacion['notes']) ?></div>
+                    <div class="p-2 border rounded bg-white text-dark border-start border-3 border-danger" style="white-space: pre-wrap;"><?= htmlspecialchars($notas_limpias) ?></div>
                 <?php endif; ?>
             </div>
             
@@ -231,7 +271,7 @@ include '../includes/header.php';
                     </tr>
                     <tr class="border-bottom">
                         <td class="text-muted">I.V.A. Traslado (16%):</td>
-                        <td class="fw-semibold text-dark">$<?= number_format($iva_lado, 2, '.', ',') ?></td>
+                        <td class="fw-semibold text-dark">$<?= number_format($iva_traslado, 2, '.', ',') ?></td>
                     </tr>
                     <tr class="fs-6">
                         <td class="fw-bold text-dark pt-2">Total Neto:</td>

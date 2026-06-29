@@ -6,7 +6,7 @@
  * ORDENAMIENTO: Clasificación por Prioridad Estricta de Semáforo (Urgente > Atención > En Curso > Al día).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.0 (Filtro Adicional de Cotizaciones En Curso)
+ * @version 6.1 (Cierre Comercial con Captura de Datos para Cartera)
  */
 
 $page_title = "Panel de Seguimiento | CRM Ventas";
@@ -141,7 +141,8 @@ include '../includes/header.php';
                     data-equipo="<?= htmlspecialchars($lead['maquina_interes']) ?>" 
                     data-urgente="0"
                     data-atencion="0"
-                    data-encurso="0"> <td class="small fw-semibold text-secondary"><?= date('d/m/Y g:i A', strtotime($lead['fecha_registro'])) ?></td>
+                    data-encurso="0"> 
+                    <td class="small fw-semibold text-secondary"><?= date('d/m/Y g:i A', strtotime($lead['fecha_registro'])) ?></td>
                     <td>
                         <div class="fw-bold text-dark lh-sm"><?= htmlspecialchars($lead['nombre'] . ' ' . $lead['apellidos']) ?></div>
                         <span class="badge mt-1 text-uppercase text-muted border bg-white" style="font-size: 0.65rem; letter-spacing: 0.5px; font-weight: 500; padding: 0.2rem 0.4rem; border-radius: 4px;"><?= htmlspecialchars($lead['canal_origen']) ?></span>
@@ -189,6 +190,37 @@ include '../includes/header.php';
     </div>
 </div>
 
+<div class="modal fade" id="modalLiberarVenta" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow border-0" style="border-radius: 16px;">
+            <div class="modal-header bg-success text-white" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
+                <h5 class="modal-title fw-bold"><i class="bi bi-check-circle-fill me-2"></i> Formulario de Cierre de Venta</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formConfirmarVenta">
+                <input type="hidden" id="liberar_id_prospecto" name="id_prospecto">
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-3">El prospecto se convertirá en Cliente formal y se dará de alta su equipo en el historial cronológico de compras.</p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-dark small">Fecha Exacta de Compra <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="liberar_fecha_compra" name="fecha_compra" value="<?= date('Y-m-d') ?>" required>
+                    </div>
+
+                    <div class="mb-0">
+                        <label class="form-label fw-semibold text-dark small">Observaciones Especiales del Cierre</label>
+                        <textarea class="form-control small text-muted" id="liberar_observaciones" name="observaciones_venta" rows="3" placeholder="Ej. Pago realizado en efectivo de liquidación, entrega programada..." style="font-size: 0.82rem; resize: none;"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 px-4 py-3" style="border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;">
+                    <button type="button" class="btn btn-secondary px-3 fw-bold small" data-bs-dismiss="modal">Regresar</button>
+                    <button type="submit" class="btn btn-success px-4 fw-bold small"><i class="bi bi-send-check me-1"></i> Liberar y Pasar a Clientes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="modalDetallesCotizacion" tabindex="-1" aria-hidden="true" data-bs-backdrop="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content shadow border-0" style="border-radius: 12px;">
@@ -210,7 +242,6 @@ include '../includes/header.php';
 <script>
 $(document).ready(function() {
     
-    // --- Interceptor de Mensajes en URL para Alertas Animadas ---
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('msg') === 'success') {
         Swal.fire({
@@ -237,7 +268,6 @@ $(document).ready(function() {
         });
     }
 
-    // --- 1. MOTOR DE REACTIVIDAD EN TIEMPO REAL ---
     function calcularSemaforosComerciales() {
         const ahora = Date.now();
         
@@ -259,7 +289,6 @@ $(document).ready(function() {
             const idProspecto = contenedorAcciones.data('id-prospecto');
             const idCotizacion = contenedorAcciones.data('id-cotizacion');
 
-            // --- A. RENDEREADO DE LA INSIGNIA DE ESTATUS DE VENTA ---
             let statusBadgeHtml = '';
             if (statusVenta === 'Venta Cerrada') {
                 statusBadgeHtml = '<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;">Venta Cerrada</span>';
@@ -272,7 +301,6 @@ $(document).ready(function() {
                 contenedorStatusBadge.html(statusBadgeHtml);
             }
 
-            // --- B. RENDEREADO DE LA INSIGNIA DE ESTATUS DE LA COTIZACIÓN ---
             const tieneCotizacion = contenedorCotizBadge.data('tiene-cotizacion');
             const valorStatusCotiz = contenedorCotizBadge.data('status-cotiz');
             let cotizBadgeHtml = '';
@@ -291,7 +319,6 @@ $(document).ready(function() {
                 contenedorCotizBadge.html(cotizBadgeHtml);
             }
 
-            // --- C. RENDEREADO DE LA BARRA DE ACCIONES AUTOMÁTICA ---
             let botonesHtml = '';
             if (statusVenta === 'Venta Cerrada') {
                 botonesHtml = `<button type="button" onclick="verDetallesCotizacion(${idCotizacion})" class="btn btn-outline-info border-0" title="Visualizar Detalle Cotización"><i class="bi bi-eye-fill fs-5"></i></button>`;
@@ -306,7 +333,6 @@ $(document).ready(function() {
                 contenedorAcciones.html(botonesHtml);
             }
 
-            // --- D. LÓGICA DE TIEMPOS DEL SEMÁFORO Y MAPEO DE ANIMACIONES ---
             if (statusVenta === 'Venta Cerrada') {
                 $(this).html('<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;"><i class="bi bi-check-circle-fill me-1"></i> Al día</span>');
                 fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '0');
@@ -322,7 +348,6 @@ $(document).ready(function() {
                     countUrgentes++;
                 } else {
                     $(this).html('<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 3.5s !important;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
-                    // MODIFICADO: Se setea data-encurso en 1 para que responda al nuevo switch de filtrado
                     fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
                     countEnCurso++;
                 }
@@ -355,7 +380,6 @@ $(document).ready(function() {
         $('#kpi-urgentes').text(countUrgentes);
     }
 
-    // --- 2. CONFIGURACIÓN DE DATATABLES ---
     var table = $('#tablaLeads').DataTable({
         "language": { "emptyTable": "No hay datos", "info": "Mostrando _START_ a _END_ de _TOTAL_", "infoEmpty": "0 registros", "infoFiltered": "(filtrado de _MAX_)", "zeroRecords": "Sin coincidencias", "paginate": { "next": "Sig.", "previous": "Ant." } },
         "dom": 'rtip', 
@@ -369,7 +393,6 @@ $(document).ready(function() {
     $('#filterCanal').on('change', function() { table.column(1).search(this.value).draw(); });
     $('#filterEquipo').on('change', function() { table.column(4).search(this.value).draw(); });
     
-    // CORREGIDO: Filtro combinado de DataTables expandido a 3 estados simultáneos (Urgente, Atención, En Curso)
     $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
         var row = $(table.row(dataIndex).node());
         
@@ -380,52 +403,64 @@ $(document).ready(function() {
         return cumpleUrgente && cumplePendiente && cumpleEnCurso;
     });
 
-    // Escuchadores de eventos para redibujar la tabla al cambiar cualquiera de los 3 switches
     $('#btnFiltrarCriticos').on('change', function() { table.draw(); });
     $('#btnFiltrarPendientes').on('change', function() { table.draw(); });
     $('#btnFiltrarEnCurso').on('change', function() { table.draw(); });
 
-    // --- 3. LAZO DE TIEMPO REAL E INICIALIZACIÓN ---
     calcularSemaforosComerciales();
     setInterval(calcularSemaforosComerciales, 500); 
+
+    // MODIFICADO: Captura de envío del formulario asíncrono para liberar la venta
+    $('#formConfirmarVenta').on('submit', function(e) {
+        e.preventDefault();
+        
+        const idProspecto = $('#liberar_id_prospecto').val();
+        const fechaCompra = $('#liberar_fecha_compra').val();
+        const observaciones = $('#liberar_observaciones').val();
+
+        $.ajax({
+            url: '../actions/actualizar_status_comercial.php',
+            method: 'POST',
+            data: { 
+                id_prospecto: idProspecto, 
+                status_comercial: 'Venta Cerrada',
+                fecha_compra: fechaCompra,
+                observaciones_venta: observaciones
+            },
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    $('#modalLiberarVenta').modal('hide');
+                    Swal.fire({ 
+                        title: '¡Venta Liberada!', 
+                        text: 'El prospecto ha pasado exitosamente a tu cartera de clientes activos.', 
+                        icon: 'success', 
+                        timer: 2000, 
+                        showConfirmButton: false 
+                    });
+                    const celda = $(`.col-acciones-comerciales[data-id-prospecto='${idProspecto}']`).closest('tr').find('.col-semaforo');
+                    celda.data('status-venta', 'Venta Cerrada').attr('data-status-venta', 'Venta Cerrada');
+                } else {
+                    Swal.fire({ title: 'Error', text: response.message, icon: 'error' });
+                }
+            },
+            error: function() {
+                Swal.fire({ title: 'Error de Red', text: 'No se pudo conectar con el servidor corporativo.', icon: 'error' });
+            }
+        });
+    });
 });
 
-// --- 4. CONTROL DE FLUJO COMERCIAL INTERACTIVO (SweetAlert2 & AJAX) ---
+// MODIFICADO: Muestra el modal interactivo en lugar de disparar la petición directa
 function cerrarOperacionComercial(idProspecto) {
-    Swal.fire({
-        title: `¿Cerrar venta del prospecto #${idProspecto}?`,
-        text: "El estatus de la venta cambiará a 'Venta Cerrada' de forma definitiva.",
-        icon: 'success',
-        showCancelButton: true,
-        confirmButtonColor: '#198754',
-        cancelButtonColor: '#adb5bd',
-        confirmButtonText: 'Sí, confirmar cierre',
-        cancelButtonText: 'Regresar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            $.ajax({
-                url: '../actions/actualizar_status_comercial.php',
-                method: 'POST',
-                data: { id_prospecto: idProspecto, status_comercial: 'Venta Cerrada' },
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success) {
-                        Swal.fire({ title: '¡Venta Cerrada!', text: 'El estatus se ha actualizado correctamente.', icon: 'success', timer: 1500, showConfirmButton: false });
-                        const celda = $(`.col-acciones-comerciales[data-id-prospecto='${idProspecto}']`).closest('tr').find('.col-semaforo');
-                        celda.data('status-venta', 'Venta Cerrada').attr('data-status-venta', 'Venta Cerrada');
-                    } else {
-                        Swal.fire({ title: 'Error', text: response.message, icon: 'error' });
-                    }
-                },
-                error: function() {
-                    Swal.fire({ title: 'Error de Red', text: 'No se pudo conectar con el servidor corporativo.', icon: 'error' });
-                }
-            });
-        }
-    });
+    $('#formConfirmarVenta')[0].reset();
+    $('#liberar_id_prospecto').val(idProspecto);
+    // Inyectamos la fecha actual en formato HTML de entrada
+    $('#liberar_fecha_compra').val(new Date().toISOString().split('T')[0]);
+    
+    $('#modalLiberarVenta').appendTo("body").modal('show');
 }
 
-// --- 5. VISUALIZADOR ASÍNCRONO DE EXPEDIENTE COMERCIAL EN MODAL ---
 function verDetallesCotizacion(idCotizacion) {
     $('#cuerpoModalCotizacion').html(`
         <div class="text-center py-4">
