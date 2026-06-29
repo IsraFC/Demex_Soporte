@@ -1,11 +1,10 @@
 <?php
 /**
  * ARCHIVO: actions/obtener_historial_compras_cliente.php
- * DESCRIPCIÓN: Componente backend encargado de consultar y renderizar el historial de adquisiciones de un cliente.
- * Diseñado para cargarse de forma asíncrona dentro del modal del dashboard.
+ * DESCRIPCIÓN: Componente backend encargado de consultar y renderizar el historial de adquisiciones comerciales.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.0 (Visor de Historial por AJAX)
+ * @version 2.0 (Filtro Exclusivo de Historial de Facturación de Ventas)
  */
 
 require_once '../config/db.php';
@@ -18,7 +17,7 @@ if ($id_cliente <= 0) {
 }
 
 try {
-    // Jalamos el historial uniendo con la tabla de maquinaria para traer el nombre del modelo
+    // Consulta enfocada de forma estricta y única en ventas_historial
     $sql = "SELECT vh.*, m.modelo AS maquina_nombre 
             FROM ventas_historial vh
             INNER JOIN maquinaria m ON vh.id_maquina = m.id_maquina
@@ -73,14 +72,14 @@ try {
                         <?php else: ?>
                             <span class="badge bg-secondary bg-opacity-10 text-secondary mb-1"><i class="bi bi-box-seam me-1"></i>Base Histórica</span>
                         <?php endif; ?>
-                        <div class="lh-sm"><?= htmlspecialchars($c['observaciones_venta']) ?></div>
+                        <div class="lh-sm"><?= htmlspecialchars($c['observaciones_venta'] ?? '') ?></div>
                     </td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
             <tfoot class="table-light border-top border-2">
                 <tr class="fw-bold fs-6">
-                    <td colspan="4" class="text-end text-dark pt-2">Inversión Acumulada de Flota:</td>
+                    <td colspan="4" class="text-end text-dark pt-2">Inversión Acumulada del Cliente:</td>
                     <td class="text-end text-danger pt-2">$<?= number_format($total_invertido_cliente, 2, '.', ',') ?></td>
                     <td></td>
                 </tr>
@@ -89,6 +88,5 @@ try {
     </div>
 <?php
 } catch (\Exception $e) {
-    echo '<div class="alert alert-danger m-0"><i class="bi bi-exclamation-octagon-fill me-2"></i> Fallo técnico al procesar el expediente: ' . htmlspecialchars($e->getMessage()) . '</div>';
+    echo '<div class="alert alert-danger m-0">Fallo técnico al procesar el expediente: ' . htmlspecialchars($e->getMessage()) . '</div>';
 }
-?>

@@ -2,19 +2,19 @@
 /**
  * ARCHIVO: Ventas/clientes.php
  * DESCRIPCIÓN: Panel de Control y Dashboard Avanzado de Clientes CRM.
- * Gestiona el historial acumulado de ventas, indicadores CLV y visor de flotas.
+ * Gestiona el historial unificado de ventas, indicadores CLV y visor de flotas comerciales.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.0 (Dashboard Comercial Unificado)
+ * @version 1.2 (Dashboard Comercial Unificado - Ordenamiento Priorizado)
  */
 
 $page_title = "Catálogo Histórico de Clientes | CRM Ventas";
 require_once '../config/db.php';
 
 /**
- * KPIs - INDICADORES CLAVE DE RENDIMIENTO (PHP Base)
+ * KPIs - INDICADORES CLAVE DE RENDIMIENTO (PHP Base Unificado)
  */
-// 1. Total de clientes únicos
+// 1. Total de clientes únicos (Ventas + Soporte combinados en la misma tabla)
 $total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn();
 
 // 2. Valor de Vida del Cliente (CLV Total) - Sumatoria total neta de ventas históricas
@@ -107,17 +107,31 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                // Consulta optimizada con agregaciones y subconsultas estructuradas
+                // CONSULTA CON LOGICA DE ORDENAMIENTO: Primero Prospectos a Clientes, luego los de Almacén/Soporte
                 $sql = "SELECT c.*, 
-                               MAX(vh.fecha_compra) AS ultima_fecha_compra,
-                               COUNT(vh.id_venta) AS total_equipos,
-                               IFNULL(SUM(vh.precio_pactado_neto * vh.cantidad), 0) AS inversion_acumulada,
-                               GROUP_CONCAT(DISTINCT m.modelo SEPARATOR ' | ') AS maquinas_compradas
+                               hist.ultima_fecha_compra,
+                               COALESCE(hist.equipos_ventas, 0) AS total_equipos,
+                               COALESCE(hist.inversion_acumulada, 0.00) AS inversion_acumulada,
+                               hist.maquinas_ventas AS maquinas_compradas
                         FROM clientes c
-                        LEFT JOIN ventas_historial vh ON c.id_cliente = vh.id_cliente
-                        LEFT JOIN maquinaria m ON vh.id_maquina = m.id_maquina
-                        GROUP BY c.id_cliente
-                        ORDER BY ultima_fecha_compra DESC, c.id_cliente DESC";
+                        
+                        -- Subconsulta A: Extrae exclusivamente el histórico de ventas comerciales
+                        LEFT JOIN (
+                            SELECT id_cliente,
+                                   MAX(fecha_compra) AS ultima_fecha_compra,
+                                   COUNT(id_venta) AS equipos_ventas,
+                                   SUM(precio_pactado_neto * cantidad) AS inversion_acumulada,
+                                   GROUP_CONCAT(DISTINCT m.modelo SEPARATOR ' | ') AS maquinas_ventas
+                            FROM ventas_historial vh
+                            LEFT JOIN maquinaria m ON vh.id_maquina = m.id_maquina
+                            GROUP BY id_cliente
+                        ) hist ON c.id_cliente = hist.id_cliente
+                        
+                        ORDER BY 
+                            -- CASE WHEN: Agrupa arriba (1) si id_prospecto_origen no está vacío; abajo (2) si es de soporte
+                            CASE WHEN c.id_prospecto_origen IS NOT NULL THEN 1 ELSE 2 END ASC,
+                            hist.ultima_fecha_compra DESC, 
+                            c.id_cliente DESC";
                 
                 $stmt = $pdo->query($sql);
                 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)):
@@ -190,24 +204,19 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
-    // Inicialización del motor de búsqueda de DataTables
     var table = $('#tablaClientes').DataTable({
         "language": { "emptyTable": "No hay datos", "info": "Mostrando _START_ a _END_ de _TOTAL_", "infoEmpty": "0 registros", "infoFiltered": "(filtrado de _MAX_)", "zeroRecords": "Sin coincidencias", "paginate": { "next": "Sig.", "previous": "Ant." } },
         "dom": 'rtip', 
         "pageLength": 10, 
         "responsive": true,
-        "order": [[3, "desc"]] // Ordena inicialmente por el cliente con la compra más reciente
+        "ordering": false // Desactivamos el ordenamiento por clicks de columna para preservar la prioridad SQL fija (Ventas > Soporte)
     });
 
-    // Mapeo interactivo de filtros de cabecera
     $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
     $('#filterTipo').on('change', function() { table.column(0).search(this.value).draw(); });
-    
-    // El filtro de máquinas indexa la columna oculta (columna 6)
     $('#filterMaquina').on('change', function() { table.column(6).search(this.value).draw(); });
 });
 
-// Función asíncrona para consultar el desglose granular de adquisiciones de un cliente
 function verHistorialCliente(idCliente) {
     $('#cuerpoModalHistorial').html(`
         <div class="text-center py-4">
@@ -216,7 +225,6 @@ function verHistorialCliente(idCliente) {
         </div>
     `);
     
-    // Blindaje de capas Bootstrap
     $('#modalHistorialCliente').appendTo("body").modal('show');
     
     $.ajax({
@@ -227,7 +235,7 @@ function verHistorialCliente(idCliente) {
             $('#cuerpoModalHistorial').html(response);
         },
         error: function() {
-            $('#cuerpoModalHistorial').html('<div class="alert alert-danger m-0"><i class="bi bi-exclamation-octagon-fill me-2"></i> Error al conectar con la base de datos de auditoría comercial.</div>');
+            $('#cuerpoModalCotizacion').html('<div class="alert alert-danger m-0"><i class="bi bi-exclamation-octagon-fill me-2"></i> Error al conectar con la base de datos de auditoría comercial.</div>');
         }
     });
 }
