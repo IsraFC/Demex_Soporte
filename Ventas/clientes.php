@@ -2,26 +2,26 @@
 /**
  * ARCHIVO: Ventas/clientes.php
  * DESCRIPCIÓN: Panel de Control y Dashboard Avanzado de Clientes CRM.
- * Gestiona el historial acumulado de ventas, indicadores CLV y visor de flotas.
+ * Gestiona el historial unificado de ventas, indicadores CLV y visor de flotas comerciales.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.0 (Dashboard Comercial Unificado)
+ * @version 1.3 (Dashboard Comercial Unificado - Ordenamiento y Filtro de Gran Volumen)
  */
 
 $page_title = "Catálogo Histórico de Clientes | CRM Ventas";
 require_once '../config/db.php';
 
 /**
- * KPIs - INDICADORES CLAVE DE RENDIMIENTO (PHP Base)
+ * KPIs - INDICADORES CLAVE DE RENDIMIENTO (PHP Base Unificado)
  */
-// 1. Total de clientes únicos
+// 1. Total de clientes únicos (Ventas + Soporte combinados en la misma tabla)
 $total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn();
 
 // 2. Valor de Vida del Cliente (CLV Total) - Sumatoria total neta de ventas históricas
 $clv_total = $pdo->query("SELECT IFNULL(SUM(precio_pactado_neto * cantidad), 0) FROM ventas_historial")->fetchColumn();
 
 // 3. Clientes Frecuentes (Clientes con 2 o más registros de compras)
-$clientes_frecuentes = $pdo->query("SELECT COUNT(*) FROM (SELECT id_cliente FROM ventas_historial GROUP BY id_cliente HAVING COUNT(id_venta) >= 2) AS frecuentes")->fetchColumn();
+$clientes_frecuentes = $pdo->query("SELECT COUNT(*) FROM (SELECT id_cliente FROM ventas_historial GROUP BY id_cliente HAVING COUNT(id_venta) >= 6) AS frecuentes")->fetchColumn();
 
 // 4. Clientes en Riesgo (Más de 6 meses sin comprar, basándose en la fecha actual del sistema: 2026)
 $clientes_riesgo = $pdo->query("SELECT COUNT(DISTINCT id_cliente) FROM clientes WHERE id_cliente NOT IN (SELECT DISTINCT id_cliente FROM ventas_historial WHERE fecha_compra >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH))")->fetchColumn();
@@ -61,30 +61,38 @@ include '../includes/header.php';
 
 <div class="card-main mb-4 py-3 shadow-sm border-top border-4 border-danger bg-white rounded">
     <div class="row g-0 align-items-center px-3 justify-content-between">
-        <div class="col-auto" style="width: 30%;">
+        <div class="col-auto" style="width: 25%;">
             <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
                 <span class="input-group-text bg-transparent border-0"><i class="bi bi-search text-danger"></i></span>
-                <input type="text" id="customSearch" class="form-control bg-transparent border-0" placeholder="Buscar Cliente, Teléfono o Correo...">
+                <input type="text" id="customSearch" class="form-control bg-transparent border-0" placeholder="Buscar Cliente...">
             </div>
         </div>
         <div class="col-auto">
-            <select id="filterTipo" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 200px;">
+            <select id="filterTipo" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 180px;">
                 <option value="">Todos los Perfiles</option>
                 <option value="Publico General">Público General</option>
                 <option value="Distribuidor">Distribuidor</option>
             </select>
         </div>
         <div class="col-auto">
-            <select id="filterMaquina" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 220px;">
-                <option value="">Filtrar por Máquina Comprada</option>
+            <select id="filterMaquina" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 200px;">
+                <option value="">Máquina Comprada</option>
                 <?php foreach ($maquinas_reales as $maquina): ?>
                     <option value="<?= htmlspecialchars($maquina) ?>"><?= htmlspecialchars($maquina) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
+        
+        <div class="col-auto">
+            <div class="form-check form-switch d-flex align-items-center gap-2 m-0">
+                <input class="form-check-input" type="checkbox" id="btnFiltrarFrecuentes" style="cursor:pointer;">
+                <label class="form-check-label small fw-bold text-muted" style="cursor:pointer;" for="btnFiltrarFrecuentes">Mostrar Clientes Frecuentes</label>
+            </div>
+        </div>
+
         <div class="col-auto">
             <a href="importar_clientes.php" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-bold shadow-sm py-2">
-                <i class="bi bi-file-earmark-excel me-1"></i> Herramienta de Carga CSV
+                <i class="bi bi-file-earmark-excel me-1"></i> Carga CSV
             </a>
         </div>
     </div>
@@ -107,23 +115,36 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                // Consulta optimizada con agregaciones y subconsultas estructuradas
+                // CONSULTA CON LOGICA DE ORDENAMIENTO: Primero Prospectos a Clientes, luego los de Almacén/Soporte
                 $sql = "SELECT c.*, 
-                               MAX(vh.fecha_compra) AS ultima_fecha_compra,
-                               COUNT(vh.id_venta) AS total_equipos,
-                               IFNULL(SUM(vh.precio_pactado_neto * vh.cantidad), 0) AS inversion_acumulada,
-                               GROUP_CONCAT(DISTINCT m.modelo SEPARATOR ' | ') AS maquinas_compradas
+                               hist.ultima_fecha_compra,
+                               COALESCE(hist.equipos_ventas, 0) AS total_equipos,
+                               COALESCE(hist.inversion_acumulada, 0.00) AS inversion_acumulada,
+                               hist.maquinas_ventas AS maquinas_compradas
                         FROM clientes c
-                        LEFT JOIN ventas_historial vh ON c.id_cliente = vh.id_cliente
-                        LEFT JOIN maquinaria m ON vh.id_maquina = m.id_maquina
-                        GROUP BY c.id_cliente
-                        ORDER BY ultima_fecha_compra DESC, c.id_cliente DESC";
+                        
+                        -- Subconsulta A: Extrae exclusivamente el histórico de ventas comerciales
+                        LEFT JOIN (
+                            SELECT id_cliente,
+                                   MAX(fecha_compra) AS ultima_fecha_compra,
+                                   COUNT(id_venta) AS equipos_ventas,
+                                   SUM(precio_pactado_neto * cantidad) AS inversion_acumulada,
+                                   GROUP_CONCAT(DISTINCT m.modelo SEPARATOR ' | ') AS maquinas_ventas
+                            FROM ventas_historial vh
+                            LEFT JOIN maquinaria m ON vh.id_maquina = m.id_maquina
+                            GROUP BY id_cliente
+                        ) hist ON c.id_cliente = hist.id_cliente
+                        
+                        ORDER BY 
+                            CASE WHEN c.id_prospecto_origen IS NOT NULL THEN 1 ELSE 2 END ASC,
+                            hist.ultima_fecha_compra DESC, 
+                            c.id_cliente DESC";
                 
                 $stmt = $pdo->query($sql);
                 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)):
                     $fecha_compra_formato = !empty($row['ultima_fecha_compra']) ? date('d/m/Y', strtotime($row['ultima_fecha_compra'])) : '<em>Ninguna</em>';
                 ?>
-                <tr class="row-cliente-item">
+                <tr class="row-cliente-item" data-equipos-count="<?= $row['total_equipos'] ?>">
                     <td>
                         <div class="fw-bold text-dark lh-sm"><?= htmlspecialchars($row['nombre_cliente'] . ' ' . ($row['apellidos_cliente'] ?? '')) ?></div>
                         <span class="badge mt-1 text-uppercase text-muted border bg-light" style="font-size: 0.65rem; padding: 0.2rem 0.4rem; border-radius: 4px;"><?= htmlspecialchars($row['tipo_cliente'] ?? 'Publico General') ?></span>
@@ -190,24 +211,37 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
-    // Inicialización del motor de búsqueda de DataTables
     var table = $('#tablaClientes').DataTable({
         "language": { "emptyTable": "No hay datos", "info": "Mostrando _START_ a _END_ de _TOTAL_", "infoEmpty": "0 registros", "infoFiltered": "(filtrado de _MAX_)", "zeroRecords": "Sin coincidencias", "paginate": { "next": "Sig.", "previous": "Ant." } },
         "dom": 'rtip', 
         "pageLength": 10, 
         "responsive": true,
-        "order": [[3, "desc"]] // Ordena inicialmente por el cliente con la compra más reciente
+        "ordering": false // Desactivamos el ordenamiento por clicks para preservar la prioridad fija de SQL
     });
 
-    // Mapeo interactivo de filtros de cabecera
     $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
     $('#filterTipo').on('change', function() { table.column(0).search(this.value).draw(); });
-    
-    // El filtro de máquinas indexa la columna oculta (columna 6)
     $('#filterMaquina').on('change', function() { table.column(6).search(this.value).draw(); });
+
+    // Algoritmo de filtrado personalizado para Clientes de Gran Volumen (6 o más compras)
+    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+        if (settings.nTable.id !== "tablaClientes") return true;
+
+        var row = $(table.row(dataIndex).node());
+        var cantidadEquipos = parseInt(row.attr('data-equipos-count')) || 0;
+        
+        // Condición estricta: Si el switch está activo, solo deja pasar a los que tienen 6 o más máquinas
+        var cumpleGranVolumen = !$('#btnFiltrarFrecuentes').is(':checked') || cantidadEquipos >= 6;
+        
+        return cumpleGranVolumen;
+    });
+
+    // Escuchador reactivo para redibujar la tabla en caliente al accionar el Switch
+    $('#btnFiltrarFrecuentes').on('change', function() {
+        table.draw();
+    });
 });
 
-// Función asíncrona para consultar el desglose granular de adquisiciones de un cliente
 function verHistorialCliente(idCliente) {
     $('#cuerpoModalHistorial').html(`
         <div class="text-center py-4">
@@ -216,7 +250,6 @@ function verHistorialCliente(idCliente) {
         </div>
     `);
     
-    // Blindaje de capas Bootstrap
     $('#modalHistorialCliente').appendTo("body").modal('show');
     
     $.ajax({

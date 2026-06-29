@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: Ventas/editar_cotizacion.php
  * DESCRIPCIÓN: Formulario de Modificación y Re-configuración Comercial de Cotizaciones.
- * Respeta al 100% las matrices de precios, cálculos y lógica estructurada por IDs con soporte bancario vertical.
+ * MODIFICACIÓN: Soportado para editar tanto prospectos del embudo como recompras del catálogo de clientes.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 5.3 (Sincronizado con Soporte de Datos Bancarios por Columnas)
+ * @version 5.4 (Unificación de Flujo de Edición Comercial)
  */
 
 $page_title = "Editar Cotización | CRM Ventas";
@@ -18,12 +18,15 @@ if ($id_cotizacion === 0) {
     exit();
 }
 
-// 1. CONSULTA DE RECUPERACIÓN (Estilo Isra): Extraemos el registro actual completo cruzando la maquinaria
-$sql = "SELECT c.*, m.modelo AS maquina_nombre, CONCAT(f.nombre, ' ', f.apellidos) AS lead_cliente_nombre
+// 1. CONSULTA DE RECUPERACIÓN UNIFICADA: Buscamos en formularios (leads) y también en clientes (cartera)
+$sql = "SELECT c.*, m.modelo AS maquina_nombre, 
+               CONCAT(f.nombre, ' ', f.apellidos) AS lead_cliente_nombre,
+               CONCAT(cl.nombre_cliente, ' ', cl.apellidos_cliente) AS cartera_cliente_nombre
         FROM cotizacion c
         INNER JOIN maquinaria m ON c.id_maquina = m.id_maquina
         LEFT JOIN prospectos p ON c.id_prospecto = p.id_prospecto
         LEFT JOIN formulario f ON p.id_formulario = f.id_formulario
+        LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
         WHERE c.id_cotizacion = :id_cotizacion LIMIT 1";
 
 $stmt = $pdo->prepare($sql);
@@ -35,7 +38,12 @@ if (!$cotizacion) {
     exit();
 }
 
-// --- NUEVO: PROCESADOR DE DESEMPAQUETADO BANCARIO EN EDICIÓN ---
+// Determinamos de forma limpia el nombre a renderizar y el archivo de retorno
+$es_recompra = !empty($cotizacion['id_cliente']);
+$nombre_cliente_final = $es_recompra ? $cotizacion['cartera_cliente_nombre'] : $cotizacion['lead_cliente_nombre'];
+$retorno_exitoso_view = $es_recompra ? "recompras_crm.php" : "leads_crm.php";
+
+// --- PROCESADOR DE DESEMPAQUETADO BANCARIO EN EDICIÓN ---
 $notas_limpias = $cotizacion['notes'];
 $bancos = [
     'condicion' => "Precios de promoción para pagos por transferencia o efectivo.\nNo incluyen el envío.",
@@ -52,7 +60,7 @@ if (strpos($cotizacion['notes'], '|||') !== false) {
     }
 }
 
-// 2. CONSULTA DE CATÁLOGO COMPLETO (Estilo Isra): Traemos todas las máquinas con sus IDs de la BD
+// 2. CONSULTA DE CATÁLOGO COMPLETO
 $stmt_maq = $pdo->query("SELECT id_maquina, modelo FROM maquinaria ORDER BY modelo ASC");
 $todas_maquinas = $stmt_maq->fetchAll(PDO::FETCH_ASSOC);
 
@@ -73,7 +81,10 @@ $precio_base_guardado = floatval($cotizacion['precio_base_origen']);
 $precio_pactado_guardado = floatval($cotizacion['precio_pactado']);
 $descuento_porcentaje_inicial = 0;
 if ($precio_base_guardado > 0) {
-    $descuento_porcentaje_inicial = round((($precio_base_guardado - $precio_pactado_guardado) / $precio_base_guardado) * 100);
+    // Calculamos el precio oficial sin IVA para poder realizar la comparación real contra el pactado unitario
+    $precio_oficial_con_iva = ($cotizacion['tipo_cliente'] === 'Publico General') ? $catalogo_precios[$cotizacion['maquina_nombre']]['publico'] : $catalogo_precios[$cotizacion['maquina_nombre']]['distribuidor'];
+    $precio_base_sin_iva = $precio_oficial_con_iva / 1.16;
+    $descuento_porcentaje_inicial = round((($precio_base_sin_iva - $precio_pactado_guardado) / $precio_base_sin_iva) * 100);
 }
 
 $modulo_actual = 'ventas';
@@ -96,7 +107,7 @@ include '../includes/header.php';
         <div class="row g-3 mb-3">
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold text-dark small">Cliente / Razón Social <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="cliente" value="<?= htmlspecialchars($cotizacion['razon_social'] ?? $cotizacion['lead_cliente_nombre']) ?>" placeholder="Nombre o Razón Social" required>
+                <input type="text" class="form-control" name="cliente" value="<?= htmlspecialchars($nombre_cliente_final) ?>" placeholder="Nombre o Razón Social" readonly required>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold text-dark small">RFC Receptor</label>
@@ -148,7 +159,7 @@ include '../includes/header.php';
                 <label class="form-label fw-semibold text-dark small">Precio Base de Lista ($ MXN)</label>
                 <div class="input-group">
                     <span class="input-group-text bg-white text-muted">$</span>
-                    <input type="number" class="form-control fw-bold" id="precio_base_origen" name="precio_base_origen" readonly style="background-color: #f8f9fa;" step="0.01" value="<?= $cotizacion['precio_base_origen'] ?>" required>
+                    <input type="number" class="form-control fw-bold" id="precio_base_origen" name="precio_base_origen" readonly style="background-color: #f8f9fa;" step="0.01" value="" required>
                 </div>
             </div>
             <div class="col-12 col-md-4">
@@ -274,7 +285,7 @@ include '../includes/header.php';
         </div>
 
         <div class="d-grid gap-2 d-md-flex justify-content-md-end border-top pt-3">
-            <a href="leads_crm.php" class="btn btn-secondary py-2.5 px-4 fw-bold shadow-sm" style="border-radius: 8px;">
+            <a href="<?= $retorno_exitoso_view ?>" class="btn btn-secondary py-2.5 px-4 fw-bold shadow-sm" style="border-radius: 8px;">
                 <i class="bi bi-x-circle me-1"></i> Cancelar
             </a>
             <button type="submit" class="btn btn-danger py-2.5 px-4 fw-bold shadow-sm" style="border-radius: 8px;">
@@ -335,7 +346,6 @@ function calcularFlujoComercial() {
     $('#lbl_iva').text(formatoMXN.format(ivaCalculado));
     $('#lbl_total').text(formatoMXN.format(totalNeto));
 
-
     const imagenesMaquinas = {
         'SPICE MT15': 'spice_mt15.png',
         'SPICE MV89': 'spice_mv89.png',
@@ -373,6 +383,7 @@ $(document).ready(function() {
         calcularFlujoComercial();
     });
     
+    // Pequeño retardo controlado para renderizar los KPIs en caliente al entrar
     setTimeout(function() {
         calcularFlujoComercial();
     }, 150);

@@ -2,8 +2,8 @@
 /**
  * @file procesar_cotizacion.php
  * @package Portal_Demex
- * @version 4.8 - Gestión Comercial Inteligente con Almacenamiento de Datos Bancarios
- * @brief Controlador encargado de registrar las cotizaciones y avanzar el estatus comercial del prospecto.
+ * @version 5.0 - Gestión Comercial Inteligente con Soporte a Recompras Unificadas
+ * @brief Controlador encargado de registrar las cotizaciones y avanzar el estatus comercial del prospecto o cliente.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -23,6 +23,8 @@ $id_usuario = $_SESSION['id_usuario'] ?? 1;
 
 // CAPTURA Y SANITIZACIÓN DE DATOS
 $id_prospecto        = isset($_POST['id_prospecto']) ? intval($_POST['id_prospecto']) : 0;
+$id_cliente_recompra = isset($_POST['id_cliente_recompra']) ? intval($_POST['id_cliente_recompra']) : 0;
+
 $rfc_receptor        = !empty($_POST['rfc_receptor']) ? strtoupper(trim($_POST['rfc_receptor'])) : 'XAXX010101000';
 $direccion_entrega   = trim($_POST['direccion_entrega'] ?? '');
 $sucursal            = !empty($_POST['sucursal']) ? trim($_POST['sucursal']) : 'Matriz';
@@ -38,7 +40,7 @@ $especificacion_cotizada = trim($_POST['especificion_cotizada'] ?? '');
 $notes_original          = trim($_POST['notas'] ?? '');
 $maquina_seleccionada    = trim($_POST['maquina'] ?? '');
 
-// --- NUEVO: CAPTURA Y EMPAQUETADO DE BLOQUE BANCARIO EDITABLE ---
+// --- CAPTURA Y EMPAQUETADO DE BLOQUE BANCARIO EDITABLE ---
 $condicion_comercial = trim($_POST['condicion_comercial_bancos'] ?? 'Precios de promoción para pagos por transferencia o efectivo.');
 $banco_1_nombre      = trim($_POST['banco_1_nombre'] ?? 'BANORTE');
 $banco_1_cuenta      = trim($_POST['banco_1_cuenta'] ?? '0434571284');
@@ -86,26 +88,24 @@ try {
 
     $id_maquina_real = $maquinaria_row['id_maquina'];
 
-    // Captura si viene del dashboard de clientes (recompra)
-    $id_cliente_recompra = isset($_POST['id_cliente_recompra']) ? intval($_POST['id_cliente_recompra']) : 0;
-
-    // 2. Insertamos la cotización permitiendo el NULL legítimo que tu base de datos ahora acepta
+    // 2. Insertamos la cotización en la tabla con soporte unificado para id_prospecto e id_cliente
     $sql_cotizacion = "INSERT INTO cotizacion (
-        id_prospecto, id_maquina, id_usuario, rfc_receptor, direccion_entrega, 
-        sucursal, cantidad, unidad, tipo_cliente, precio_base_origen, 
-        precio_pactado, especificacion_cotizada, costo_envio, notes, 
-        fecha_emision, fecha_vencimiento, status_cotizacion
+        id_prospecto, id_cliente, id_maquina, id_usuario, rfc_receptor, 
+        direccion_entrega, sucursal, cantidad, unidad, tipo_cliente, 
+        precio_base_origen, precio_pactado, especificacion_cotizada, 
+        costo_envio, notes, fecha_emision, fecha_vencimiento, status_cotizacion
     ) VALUES (
-        :id_prospecto, :id_maquina, :id_usuario, :rfc_receptor, :direccion_entrega, 
-        :sucursal, :cantidad, :unidad, :tipo_cliente, :precio_base_origen, 
-        :precio_pactado, :especificacion_cotizada, :costo_envio, :notes, 
-        :fecha_emision, :fecha_vencimiento, :status_cotizacion
+        :id_prospecto, :id_cliente, :id_maquina, :id_usuario, :rfc_receptor, 
+        :direccion_entrega, :sucursal, :cantidad, :unidad, :tipo_cliente, 
+        :precio_base_origen, :precio_pactado, :especificacion_cotizada, 
+        :costo_envio, :notes, :fecha_emision, :fecha_vencimiento, :status_cotizacion
     )";
 
     $stmt = $pdo->prepare($sql_cotizacion);
 
     $stmt->execute([
-        ':id_prospecto'            => $id_prospecto > 0 ? $id_prospecto : null, // Manda NULL limpio si es recompra
+        ':id_prospecto'            => $id_prospecto > 0 ? $id_prospecto : null,
+        ':id_cliente'              => $id_cliente_recompra > 0 ? $id_cliente_recompra : null,
         ':id_maquina'              => $id_maquina_real,
         ':id_usuario'              => $id_usuario,
         ':rfc_receptor'            => $rfc_receptor,
@@ -126,11 +126,13 @@ try {
 
     $id_cotizacion_generada = $pdo->lastInsertId();
 
-    // 3. --- CONTROL DE FLUJO DE REDIRECCIÓN ---
+    // 3. CONTROL DE FLUJO DE REDIRECCIÓN INTELIGENTE
     if ($id_cliente_recompra > 0 && $id_prospecto <= 0) {
+        // Redirección directa al visualizador PDF para clientes frecuentes
         header("Location: ../Ventas/generar_pdf_cotizacion.php?id_cotizacion=" . $id_cotizacion_generada . "&msg=success_recompra");
         exit();
     } else {
+        // Si pertenece a un lead activo del embudo, actualizamos su seguimiento y regresamos a la bandeja
         $sql_update_lead = "UPDATE prospectos SET status_comercial = 'Cotizado', fecha_ultimo_contacto = NOW() WHERE id_prospecto = ?";
         $stmt_up = $pdo->prepare($sql_update_lead);
         $stmt_up->execute([$id_prospecto]);

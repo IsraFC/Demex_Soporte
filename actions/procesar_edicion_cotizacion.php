@@ -3,10 +3,10 @@
  * ARCHIVO: actions/procesar_edicion_cotizacion.php
  * DESCRIPCIÓN: Procesador de Base de Datos para el UPDATE unificado.
  * Actualiza la cotización, empaqueta los datos bancarios editados y sincroniza
- * los cambios de datos en la tabla 'formulario' siguiendo la cadena de llaves foráneas.
+ * los cambios de datos ya sea en la tabla 'formulario' o en la redirección dinámica.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.3 (Soporte y Almacenamiento de Datos Bancarios Editables)
+ * @version 6.4 (Soporte Unificado para Edición de Leads y Recompras)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -36,7 +36,7 @@ $costo_envio          = floatval($_POST['costo_envio'] ?? 0);
 $especificacion       = trim($_POST['especificion_cotizada'] ?? '');
 $notes_original       = trim($_POST['notas'] ?? '');
 
-// --- NUEVO: CAPTURA DE BLOQUE BANCARIO MODIFICADO DESDE LA EDICIÓN ---
+// --- CAPTURA DE BLOQUE BANCARIO MODIFICADO DESDE LA EDICIÓN ---
 $condicion_comercial = trim($_POST['condicion_comercial_bancos'] ?? 'Precios de promoción para pagos por transferencia o efectivo.');
 $banco_1_nombre      = trim($_POST['banco_1_nombre'] ?? 'BANORTE');
 $banco_1_cuenta      = trim($_POST['banco_1_cuenta'] ?? '0434571284');
@@ -74,8 +74,8 @@ try {
     $monto_descuento_unitario = $precio_base_origen * ($descuento_porcentaje / 100);
     $precio_pactado_unitario  = $precio_base_origen - $monto_descuento_unitario;
 
-    // 3. OBTENER LOS IDs RELACIONADOS (id_prospecto -> id_formulario)
-    $stmt_ids = $pdo->prepare("SELECT id_prospecto FROM cotizacion WHERE id_cotizacion = ? LIMIT 1");
+    // 3. OBTENER LOS IDs RELACIONADOS DE ORIGEN (id_prospecto e id_cliente)
+    $stmt_ids = $pdo->prepare("SELECT id_prospecto, id_cliente FROM cotizacion WHERE id_cotizacion = ? LIMIT 1");
     $stmt_ids->execute([$id_cotizacion]);
     $cot_actual = $stmt_ids->fetch(PDO::FETCH_ASSOC);
 
@@ -84,12 +84,10 @@ try {
     }
     
     $id_prospecto = $cot_actual['id_prospecto'];
+    $id_cliente   = $cot_actual['id_cliente'];
 
-    // Obtenemos el id_formulario desde el prospecto
-    $stmt_form = $pdo->prepare("SELECT id_formulario FROM prospectos WHERE id_prospecto = ? LIMIT 1");
-    $stmt_form->execute([$id_prospecto]);
-    $prospecto_actual = $stmt_form->fetch(PDO::FETCH_ASSOC);
-    $id_formulario = $prospecto_actual ? $prospecto_actual['id_formulario'] : null;
+    // Determinamos dinámicamente el destino final de la redirección
+    $view_destino = (!empty($id_cliente)) ? "recompras_crm.php" : "leads_crm.php";
 
     // Obtener el nombre de la máquina basado en el id_maquina seleccionado
     $stmt_maq_name = $pdo->prepare("SELECT modelo FROM maquinaria WHERE id_maquina = ? LIMIT 1");
@@ -97,7 +95,7 @@ try {
     $maquina_info = $stmt_maq_name->fetch(PDO::FETCH_ASSOC);
     $modelo_texto = $maquina_info ? $maquina_info['modelo'] : '';
 
-    // 4. PASO A: Actualizar la tabla madre 'cotizacion' (Campos reales de la tabla con notes_final)
+    // 4. PASO A: Actualizar la tabla madre 'cotizacion'
     $sql_update_cot = "UPDATE cotizacion 
                        SET id_maquina = :id_maquina,
                            rfc_receptor = :rfc_receptor,
@@ -126,49 +124,56 @@ try {
         ':precio_pactado'          => $precio_pactado_unitario, 
         ':especificacion_cotizada' => $especificacion,
         ':costo_envio'             => $costo_envio,
-        ':notes'                   => $notes_final, // <-- ACTUALIZADO: Guarda la combinación de notas + bancos
+        ':notes'                   => $notes_final,
         ':id_cotizacion'           => $id_cotizacion
     ]);
 
-    // 5. PASO B: Separación inteligente de Nombres y Apellidos para la tabla 'formulario' (Si está enlazado)
-    if ($id_formulario) {
-        $partes_nombre = explode(' ', $cliente_razon);
-        $total_palabras = count($partes_nombre);
+    // 5. PASO B: Sincronización del Lead (Solo si existe un id_prospecto válido)
+    if (!empty($id_prospecto) && $id_prospecto > 0) {
+        
+        // Obtenemos el id_formulario desde el prospecto
+        $stmt_form = $pdo->prepare("SELECT id_formulario FROM prospectos WHERE id_prospecto = ? LIMIT 1");
+        $stmt_form->execute([$id_prospecto]);
+        $prospecto_actual = $stmt_form->fetch(PDO::FETCH_ASSOC);
+        $id_formulario = $prospecto_actual ? $prospecto_actual['id_formulario'] : null;
 
-        $nuevo_nombre = '';
-        $nuevos_apellidos = '';
+        if ($id_formulario) {
+            $partes_nombre = explode(' ', $cliente_razon);
+            $total_palabras = count($partes_nombre);
 
-        if ($total_palabras == 1) {
-            $nuevo_nombre = $partes_nombre[0];
+            $nuevo_nombre = '';
             $nuevos_apellidos = '';
-        } elseif ($total_palabras == 2) {
-            $nuevo_nombre = $partes_nombre[0];
-            $nuevos_apellidos = $partes_nombre[1];
-        } elseif ($total_palabras == 3) {
-            $nuevo_nombre = $partes_nombre[0];
-            $nuevos_apellidos = $partes_nombre[1] . ' ' . $partes_nombre[2];
-        } else {
-            $nuevo_nombre = $partes_nombre[0] . ' ' . $partes_nombre[1];
-            $nuevos_apellidos = implode(' ', array_slice($partes_nombre, 2));
+
+            if ($total_palabras == 1) {
+                $nuevo_nombre = $partes_nombre[0];
+                $nuevos_apellidos = '';
+            } elseif ($total_palabras == 2) {
+                $nuevo_nombre = $partes_nombre[0];
+                $nuevos_apellidos = $partes_nombre[1];
+            } elseif ($total_palabras == 3) {
+                $nuevo_nombre = $partes_nombre[0];
+                $nuevos_apellidos = $partes_nombre[1] . ' ' . $partes_nombre[2];
+            } else {
+                $nuevo_nombre = $partes_nombre[0] . ' ' . $partes_nombre[1];
+                $nuevos_apellidos = implode(' ', array_slice($partes_nombre, 2));
+            }
+
+            $sql_update_form = "UPDATE formulario 
+                                SET nombre = :nuevo_nombre, 
+                                    apellidos = :nuevos_apellidos, 
+                                    maquina_interes = :maquina_interes
+                                WHERE id_formulario = :id_formulario";
+            
+            $stmt2 = $pdo->prepare($sql_update_form);
+            $stmt2->execute([
+                ':nuevo_nombre'   => $nuevo_nombre,
+                ':nuevos_apellidos'=> $nuevos_apellidos,
+                ':maquina_interes'=> $modelo_texto,
+                ':id_formulario'  => $id_formulario
+            ]);
         }
 
-        $sql_update_form = "UPDATE formulario 
-                            SET nombre = :nuevo_nombre, 
-                                apellidos = :nuevos_apellidos, 
-                                maquina_interes = :maquina_interes
-                            WHERE id_formulario = :id_formulario";
-        
-        $stmt2 = $pdo->prepare($sql_update_form);
-        $stmt2->execute([
-            ':nuevo_nombre'   => $nuevo_nombre,
-            ':nuevos_apellidos'=> $nuevos_apellidos,
-            ':maquina_interes'=> $modelo_texto,
-            ':id_formulario'  => $id_formulario
-        ]);
-    }
-
-    // 6. PASO C: Sincronizar el Semáforo y Tiempos de Prospección
-    if ($id_prospecto) {
+        // 6. PASO C: Sincronizar el Semáforo y Tiempos de Prospección tradicionales
         $sql_update_pros = "UPDATE prospectos 
                             SET status_comercial = 'Cotizado', 
                                 status_operativo = 'Cotizado',
@@ -180,8 +185,8 @@ try {
     // Cerramos la transacción con éxito
     $pdo->commit();
 
-    // Redirección exitosa
-    header("Location: ../Ventas/leads_crm.php?msg=success");
+    // Redirección exitosa adaptada al contexto comercial real
+    header("Location: ../Ventas/" . $view_destino . "?msg=success");
     exit();
 
 } catch (\Exception $e) {
@@ -189,6 +194,8 @@ try {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    header("Location: ../Ventas/leads_crm.php?msg=error&desc=" . urlencode($e->getMessage()));
+    // Si ocurre un error, determinamos a dónde regresar basándonos en los datos rescatados
+    $view_error = (isset($view_destino)) ? $view_destino : "leads_crm.php";
+    header("Location: ../Ventas/" . $view_error . "?msg=error&desc=" . urlencode($e->getMessage()));
     exit();
 }
