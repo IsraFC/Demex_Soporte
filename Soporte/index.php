@@ -2,9 +2,9 @@
 /**
  * ARCHIVO: index.php
  * DESCRIPCIÓN: Panel de Control Principal (Dashboard) con Server-side Processing.
- * Centraliza la visualización de tickets mediante un motor de filtrado remoto.
+ * Centraliza la visualización de tickets mediante un motor de filtrado remoto puro.
  * @project Soporte Técnico DEMEX
- * @version 2.4 (Alertas y filtros separados para control de urgencias y carga logística)
+ * @version 3.0 - Purificado (Independiente de Importaciones de Almacén)
  */
 
 require_once '../config/db.php';
@@ -19,10 +19,6 @@ WHERE d.estatus_pago = 'Pendiente' AND t.estatus = 'Abierto'";
 $por_cobrar = $pdo->query($sql_cobro)->fetchColumn() ?: 0;
 
 $criticos = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte WHERE estatus = 'Abierto' AND DATEDIFF(CURDATE(), fecha_inicial) >= 14")->fetchColumn();
-
-// NUEVA CONSULTA SEPARADA: Cuenta los equipos activos asignados al área técnica en la tabla de Almacén
-$sql_logistica = "SELECT COUNT(*) FROM almacen_inventario WHERE estatus IN ('DISPONIBLE PARA SOPORTE', 'EN REVISIÓN SOPORTE')";
-$equipos_taller = $pdo->query($sql_logistica)->fetchColumn() ?: 0;
 
 $modulo_actual = 'soporte';
 include '../includes/header.php';
@@ -65,18 +61,6 @@ include '../includes/header.php';
         </div>
         <button type="button" class="btn btn-danger btn-sm rounded-pill px-3 fw-bold" id="btnFiltrarCriticos">
             <i class="bi bi-funnel-fill me-1"></i> Ver Urgentes
-        </button>
-    </div>
-<?php endif; ?>
-
-<?php if ($equipos_taller > 0): ?>
-    <div class="alert alert-info shadow-sm border-0 border-start border-4 border-primary bg-white d-flex align-items-center justify-content-between animate__animated animate__fadeInUp" role="alert" id="alertaLogistica" style="margin-top: -5px;">
-        <div>
-            <i class="bi bi-boxes fs-4 me-3 text-primary"></i>
-            <span class="fw-bold text-dark">Logística de Almacén:</span> Tienes <strong><?= $equipos_taller ?></strong> máquina(s) en tránsito o disponibles para revisión técnica en el taller.
-        </div>
-        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold shadow-sm" id="btnFiltrarLogistica">
-            <i class="bi bi-boxes me-1"></i> Filtrar Equipos taller
         </button>
     </div>
 <?php endif; ?>
@@ -257,82 +241,6 @@ include '../includes/header.php';
         });
     }
 
-    function recibirEquipoTaller(almacenId) {
-        Swal.fire({
-            title: '¿Recibir equipo en taller?',
-            text: 'Se registrará el inicio del proceso en Soporte y se notificará a Almacén.',
-            icon: 'info',
-            showCancelButton: true,
-            confirmButtonColor: '#0d6efd',
-            confirmButtonText: 'Sí, recibir equipo',
-            cancelButtonText: 'Regresar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                Swal.fire({ title: 'Firmando fase...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-                
-                const fd = new FormData();
-                fd.append('id', almacenId);
-                fd.append('nuevo_estatus', 'EN REVISIÓN SOPORTE');
-                fd.append('campo_fecha', 'fecha_entrega_soporte');
-                fd.append('fecha_fase', new Date().toISOString().split('T')[0]);
-
-                fetch('../Almacen/actions/actualizar_fase.php', { method: 'POST', body: fd })
-                .then(res => res.json())
-                .then(data => {
-                    Swal.close();
-                    if (data.success) {
-                        Swal.fire({ icon: 'success', title: '¡Equipo Recibido!', text: 'La traza logística se actualizó.', timer: 1500, showConfirmButton: false });
-                        table.ajax.reload(null, false);
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Falla', text: data.message });
-                    }
-                })
-                .catch(() => {
-                    Swal.close();
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'Ocurrió un colapso de red.' });
-                });
-            }
-        });
-    }
-
-    function devolverEquipoAlmacen(almacenId) {
-        Swal.fire({
-            title: '¿Devolver equipo a Almacén?',
-            text: 'Se confirmará que Soporte terminó los diagnósticos y regresa el equipo para su embalaje/entrega.',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: '#198754',
-            confirmButtonText: 'Sí, enviar a Almacén',
-            cancelButtonText: 'Regresar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                Swal.fire({ title: 'Procesando devolución...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-                
-                const fd = new FormData();
-                fd.append('id', almacenId);
-                fd.append('nuevo_estatus', 'REINGRESO A ALMACÉN');
-                fd.append('campo_fecha', 'fecha_reingreso_almacen');
-                fd.append('fecha_fase', new Date().toISOString().split('T')[0]);
-
-                fetch('../Almacen/actions/actualizar_fase.php', { method: 'POST', body: fd })
-                .then(res => res.json())
-                .then(data => {
-                    Swal.close();
-                    if (data.success) {
-                        Swal.fire({ icon: 'success', title: '¡Equipo Devuelto!', text: 'La estafeta regresó al área de Almacén.', timer: 1500, showConfirmButton: false });
-                        table.ajax.reload(null, false);
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Falla', text: data.message });
-                    }
-                })
-                .catch(() => {
-                    Swal.close();
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'Ocurrió un colapso de red.' });
-                });
-            }
-        });
-    }
-
     var table;
     $(document).ready(function() {
         if ($('#tablaTickets').length) {
@@ -353,7 +261,6 @@ include '../includes/header.php';
                         d.soloDeuda      = $('#checkSoloDeuda').is(':checked') ? 1 : 0;
                         
                         d.soloUrgentes = $('#btnFiltrarCriticos').length && $('#btnFiltrarCriticos').hasClass('btn-dark') ? 1 : 0;
-                        d.soloFaseSoporte = $('#btnFiltrarLogistica').length && $('#btnFiltrarLogistica').hasClass('btn-dark') ? 1 : 0;
                     }
                 },
                 "columns": [
@@ -366,25 +273,7 @@ include '../includes/header.php';
                         }
                     },
                     { "data": "nombre_cliente" },
-                    { 
-                        "data": "modelo_serie",
-                        "render": function(data, type, row) {
-                            let htmlLogistica = '';
-                            
-                            if (row.almacen_estatus === 'DISPONIBLE PARA SOPORTE') {
-                                htmlLogistica = `<br><div class="mt-1 d-grid"><button type="button" class="btn btn-primary btn-xs rounded-pill fw-bold py-1 animate__animated animate__pulse animate__infinite shadow-sm" style="font-size: 10px;" onclick="recibirEquipoTaller(${row.almacen_id})"><i class="bi bi-box-arrow-in-right me-1"></i> Recibir en Taller</button></div>`;
-                            } else if (row.almacen_estatus === 'EN REVISIÓN SOPORTE') {
-                                htmlLogistica = `<br><span class="badge bg-info text-dark mt-1 d-block py-1 mb-1" style="font-size: 9px; font-weight:700; letter-spacing:0.3px;"><i class="bi bi-tools me-1"></i> En Diagnóstico Soporte</span>
-                                                 <div class="d-grid"><button type="button" class="btn btn-success btn-xs rounded-pill fw-bold py-1 shadow-sm" style="font-size: 10px;" onclick="devolverEquipoAlmacen(${row.almacen_id})"><i class="bi bi-send-check me-1"></i> Enviar a Almacén</button></div>`;
-                            } else if (row.almacen_estatus === 'SIN REVISAR' || row.almacen_estatus === 'EN REVISIÓN ALMACÉN') {
-                                htmlLogistica = `<br><span class="badge bg-warning text-dark mt-1" style="font-size: 9px; font-weight:700;"><i class="bi bi-hourglass-split me-1"></i> Retenido en Almacén</span>`;
-                            } else if (row.almacen_estatus === 'REINGRESO A ALMACÉN' || row.almacen_estatus === 'DISPONIBLE PARA VENTA') {
-                                htmlLogistica = `<br><span class="badge bg-success text-white mt-1" style="font-size: 9px; font-weight:700;"><i class="bi bi-check-circle-fill me-1"></i> Devuelto a Almacén</span>`;
-                            }
-
-                            return `${data}${htmlLogistica}`;
-                        }
-                    },
+                    { "data": "modelo_serie" },
                     { "data": "tipo_llamada", "visible": false },
                     { "data": "tipo_falla" },
                     { "data": "accion_realizada", "visible": false },
@@ -429,13 +318,9 @@ include '../includes/header.php';
                         "render": function(data, type, row) {
                             let btns = `<button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(${row.id_ticket})" title="Ver detalles"><i class="bi bi-eye-fill"></i></button>`;
                             if (row.estatus === 'Abierto') {
-                                if (row.almacen_estatus === 'SIN REVISAR' || row.almacen_estatus === 'EN REVISIÓN ALMACÉN') {
-                                    btns += `<button type="button" class="btn btn-outline-secondary border-0 opacity-50" title="Retenido por Almacén" onclick="Swal.fire({icon:'warning', title:'Equipo Retenido', text:'Almacén Técnico aún no libera ni abre la caja de esta maquinaria.'})"><i class="bi bi-slash-circle"></i></button>`;
-                                } else {
-                                    btns += `<a href="editar_ticket.php?id_ticket=${row.id_ticket}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square"></i></a>
-                                             <button type="button" class="btn btn-outline-success border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cerrado')" title="Cerrar"><i class="bi bi-lock-fill"></i></button>
-                                             <button type="button" class="btn btn-outline-secondary border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cancelado')" title="Cancelar"><i class="bi bi-x-circle-fill"></i></button>`;
-                                }
+                                btns += `<a href="editar_ticket.php?id_ticket=${row.id_ticket}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square"></i></a>
+                                         <button type="button" class="btn btn-outline-success border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cerrado')" title="Cerrar"><i class="bi bi-lock-fill"></i></button>
+                                         <button type="button" class="btn btn-outline-secondary border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cancelado')" title="Cancelar"><i class="bi bi-x-circle-fill"></i></button>`;
                             }
                             return `<div class="btn-group btn-group-sm">${btns}</div>`;
                         }
@@ -487,14 +372,6 @@ include '../includes/header.php';
                 btn.toggleClass('btn-danger btn-dark');
                 const activo = btn.hasClass('btn-dark');
                 btn.html(activo ? '<i class="bi bi-arrow-counterclockwise me-1"></i> Quitar Filtro' : '<i class="bi bi-funnel-fill me-1"></i> Ver Urgentes');
-                table.draw();
-            });
-
-            $('#btnFiltrarLogistica').on('click', function() {
-                const btn = $(this);
-                btn.toggleClass('btn-outline-primary btn-dark');
-                const activo = btn.hasClass('btn-dark');
-                btn.html(activo ? '<i class="bi bi-arrow-counterclockwise me-1"></i> Quitar Filtro Taller' : '<i class="bi bi-boxes me-1"></i> Filtrar Equipos taller');
                 table.draw();
             });
 
