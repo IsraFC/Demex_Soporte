@@ -2,9 +2,9 @@
 /**
  * ARCHIVO: actions/obtener_tickets_datatable.php
  * DESCRIPCIÓN: Motor de procesamiento Server-side para DataTables en DEMEX.
- * CORRECCIÓN CRÍTICA: Enlace referencial exacto cruzando por id_ticket para evitar duplicación por número de serie.
+ * PURIFICADO: Remueve por completo las uniones y dependencias hacia la tabla de Almacén.
  * @project Soporte Técnico DEMEX
- * @version 1.7 (Vinculación Logística Blindada por Llave Foránea)
+ * @version 2.0 - Motor de Tickets Autónomo
  */
 
 require_once '../../config/db.php';
@@ -20,16 +20,14 @@ $length = $_POST['length'] ?? 13;
 $searchValue = $_POST['search']['value'] ?? '';
 
 /**
- * 2. CONSTRUCCIÓN DE LA CONSULTA BASE (CON DOBLE JOIN A USUARIOS + UNIÓN EXACTA POR TICKET ID)
+ * 2. CONSTRUCCIÓN DE LA CONSULTA BASE PURA
  */
 $queryBase = "FROM tickets_soporte t 
               JOIN clientes c ON t.id_cliente = c.id_cliente
               LEFT JOIN equipos_garantia e ON t.no_serie = e.no_serie
               LEFT JOIN detalles_costos_tiempos d ON t.id_ticket = d.id_ticket
               LEFT JOIN usuarios uc ON t.id_usuario_creador = uc.id_usuario
-              LEFT JOIN usuarios ue ON t.id_usuario_editor = ue.id_usuario
-              -- CORRECCIÓN: Relación directa y matemática para blindar el historial contra series repetidas
-              LEFT JOIN almacen_inventario alm ON t.id_ticket = alm.id_ticket AND alm.estatus != 'ENTREGADA'";
+              LEFT JOIN usuarios ue ON t.id_usuario_editor = ue.id_usuario";
 
 /**
  * 3. SISTEMA DE FILTRADO DINÁMICO (WHERE)
@@ -56,11 +54,6 @@ if (($_POST['soloUrgentes'] ?? 0) == 1) {
     $where .= " AND t.estatus = 'Abierto' AND DATEDIFF(NOW(), t.fecha_inicial) >= 14 ";
 }
 
-// Filtro para aislar tickets vinculados a fases activas de Soporte en Almacén
-if (($_POST['soloFaseSoporte'] ?? 0) == 1) {
-    $where .= " AND alm.estatus IN ('DISPONIBLE PARA SOPORTE', 'EN REVISIÓN SOPORTE') ";
-}
-
 /**
  * 4. CONTEO DE REGISTROS
  */
@@ -74,8 +67,7 @@ $sql = "SELECT t.id_ticket, c.nombre_cliente, e.modelo, t.no_serie, t.tipo_falla
                t.garantia_valida, t.estatus, t.fecha_inicial, d.estatus_pago, t.tipo_llamada, 
                d.accion, d.fecha_inicio_acc, d.fecha_fin_acc, d.costo_total,
                uc.nombre AS creador_nom, uc.apellidos AS creador_ape,
-               ue.nombre AS editor_nom, ue.apellidos AS editor_ape,
-               alm.estatus AS almacen_estatus, alm.id AS almacen_id
+               ue.nombre AS editor_nom, ue.apellidos AS editor_ape
         $queryBase 
         $where 
         ORDER BY t.id_ticket DESC 
@@ -108,9 +100,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         "creador"          => $creadorCompleto, 
         "editor"           => $editorCompleto,  
         "f_ini_acc"        => $row['fecha_inicio_acc'],
-        "f_fin_acc"        => $row['fecha_fin_acc'],
-        "almacen_estatus"  => $row['almacen_estatus'] ?: '',
-        "almacen_id"       => $row['almacen_id'] ?: 0
+        "f_fin_acc"        => $row['fecha_fin_acc']
     ];
 }
 

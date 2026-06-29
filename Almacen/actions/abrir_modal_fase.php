@@ -2,13 +2,15 @@
 /**
  * ARCHIVO: Almacen/actions/abrir_modal_fase.php
  * DESCRIPCIÓN: Renderiza dinámicamente el formulario interno del modal según la fase actual de la máquina.
+ * CONTROL LOGÍSTICO: Secuencia lineal con redirección comercial de Comodato a Pagada.
+ * @project Almacén Técnico DEMEX
+ * @version 5.6 - Flujo Restringido por Integridad Referencial
  */
 
 require_once '../../config/db.php';
 
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
-// Respaldo de seguridad en caso de discrepancias en la cabecera HTTP del servidor local
 if ($id <= 0 && isset($_REQUEST['id'])) {
     $id = intval($_REQUEST['id']);
 }
@@ -55,13 +57,25 @@ switch ($estatus_actual) {
         $nombre_campo_fecha = 'fecha_reingreso_almacen';
         break;
     case 'REINGRESO A ALMACÉN':
+        $siguiente_estatus = 'DISPONIBLE PARA VENTA';
+        $label_fecha = 'Fecha de reingreso y disponibilidad para asignación comercial';
+        $nombre_campo_fecha = 'fecha_reingreso_almacen';
+        break;
     case 'DISPONIBLE PARA VENTA':
+        $siguiente_estatus = 'PAGADA / POR ENTREGAR';
+        $label_fecha = 'Fecha de facturación, liquidación o apartado comercial';
+        $nombre_campo_fecha = 'fecha_entrega_cliente';
+        break;
     case 'COMODATO':
+        // REGLA NUEVA: El comodato no se va directo a entregada; primero pasa a Pagada para forzar la captura del cliente
+        $siguiente_estatus = 'PAGADA / POR ENTREGAR';
+        $label_fecha = 'Fecha en que el Comodato se convierte en Venta o Cierre Definitivo';
+        $nombre_campo_fecha = 'fecha_entrega_cliente';
+        break;
     case 'PAGADA / POR ENTREGAR':
     case 'CAMBIO':
-        $siguiente_estatus = 'ENTREGADA';
-        $label_fecha = 'Fecha de Entrega final (Salida del almacén)';
-        $nombre_campo_fecha = 'fecha_entrega_cliente';
+        // El modal de fases se congela porque estas dos salidas se despachan exclusivamente con el botón verde
+        $siguiente_estatus = '';
         break;
     case 'ENTREGADA':
         $siguiente_estatus = '';
@@ -75,10 +89,14 @@ switch ($estatus_actual) {
         <div class="bg-light p-3 mb-3 rounded-4 border-start border-danger border-4 small shadow-sm">
             <span class="d-block text-secondary text-uppercase fw-bold" style="font-size: 10px;">Equipo Seleccionado</span>
             <div class="fw-bold text-dark fs-6 mt-1">Serie: <?= htmlspecialchars($equipo['no_serie']) ?></div>
-            <div class="text-muted" style="font-size: 11px;">Contenedor: <?= htmlspecialchars($equipo['contenedor']) ?> | Estatus Actual: <span class="badge bg-secondary p-1" style="font-size: 9px;"><?= $estatus_actual ?></span></div>
+            <div class="text-muted" style="font-size: 11px;">Contenedor: <?= htmlspecialchars($equipo['contenedor']) ?> | Estatus Actual: <span class="badge bg-secondary p-1" style="font-size: 9px"><?= $estatus_actual ?></span></div>
         </div>
 
-        <?php if (empty($siguiente_estatus)): ?>
+        <?php if (empty($siguiente_estatus) && ($estatus_actual === 'PAGADA / POR ENTREGAR' || $estatus_actual === 'CAMBIO')): ?>
+            <div class="alert alert-info border-0 rounded-4 text-center p-3 mb-0" style="background-color: #f0f7ff;">
+                <span class="fw-bold text-dark small">Esta máquina requiere asignación de cliente y activación de póliza de garantía. Cierra este cuadro y utiliza el botón verde de "Entregar" en la tabla principal.</span>
+            </div>
+        <?php elseif (empty($siguiente_estatus)): ?>
             <div class="alert alert-success border-0 rounded-4 text-center p-3 mb-0" style="background-color: #f4fbf7;">
                 <span class="fw-bold text-dark small">Esta máquina ya se encuentra en su fase final (ENTREGADA). No requiere más firmas logísticas.</span>
             </div>
@@ -91,13 +109,14 @@ switch ($estatus_actual) {
                 <label class="form-label small fw-bold text-secondary text-uppercase" style="font-size: 11px;">Nuevo Estatus del Equipo</label>
                 <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
                     <select class="form-select border-0 bg-transparent fw-bold text-dark p-1" name="nuevo_estatus" id="nuevo_estatus" style="font-size: 14px;">
-                        <option value="<?= $siguiente_estatus ?>" selected>Pasar a: <?= $siguiente_estatus ?></option>
-                        
                         <?php if ($estatus_actual === 'REINGRESO A ALMACÉN'): ?>
-                            <option value="DISPONIBLE PARA VENTA">DISPONIBLE PARA VENTA</option>
-                            <option value="COMODATO">COMODATO</option>
-                            <option value="PAGADA / POR ENTREGAR">PAGADA / POR ENTREGAR</option>
-                            <option value="CAMBIO">CAMBIO</option>
+                            <option value="DISPONIBLE PARA VENTA" selected>Pasar a: DISPONIBLE PARA VENTA</option>
+                        <?php elseif ($estatus_actual === 'DISPONIBLE PARA VENTA'): ?>
+                            <option value="PAGADA / POR ENTREGAR" selected>Pasar a: PAGADA / POR ENTREGAR</option>
+                            <option value="COMODATO">Pasar a: COMODATO</option>
+                            <option value="CAMBIO">Pasar a: CAMBIO</option>
+                        <?php else: ?>
+                            <option value="<?= $siguiente_estatus ?>" selected>Pasar a: <?= $siguiente_estatus ?></option>
                         <?php endif; ?>
                     </select>
                 </div>
@@ -127,20 +146,11 @@ switch ($estatus_actual) {
 <script>
 document.getElementById('formCambiarFase')?.addEventListener('submit', function(e) {
     e.preventDefault();
-    
     const formData = new FormData(this);
 
-    Swal.fire({
-        title: 'Actualizando fase...',
-        text: 'Guardando marca de tiempo logística.',
-        allowOutsideClick: false,
-        didOpen: () => { Swal.showLoading(); }
-    });
+    Swal.fire({ title: 'Actualizando fase...', text: 'Guardando marca de tiempo logística.', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
-    fetch('actions/actualizar_fase.php', {
-        method: 'POST',
-        body: formData
-    })
+    fetch('actions/actualizar_fase.php', { method: 'POST', body: formData })
     .then(response => response.json())
     .then(data => {
         Swal.close();
@@ -148,9 +158,7 @@ document.getElementById('formCambiarFase')?.addEventListener('submit', function(
             const modalEl = document.getElementById('modalActualizarFase');
             const modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) modalInstance.hide();
-            
             Swal.fire({ icon: 'success', title: 'Actualizado', text: data.message, timer: 1500, showConfirmButton: false });
-            
             table.ajax.reload(null, false);
             actualizarKPIs();
         } else {
