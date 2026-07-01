@@ -5,7 +5,7 @@
  * Calcula dinámicamente badges de estatus, lógica de pago (N/A) y visualización de costos.
  * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 1.5
+ * @version 1.6 - Teléfono del cliente agregado
  */
 require_once '../../config/db.php';
 
@@ -76,6 +76,7 @@ try {
             
             <table class="table table-sm table-borderless small">
                 <tr><td class="text-muted fw-bold" width="40%">Cliente:</td><td class="fw-bold"><?= htmlspecialchars($data['nombre_cliente']) ?></td></tr>
+                <tr><td class="text-muted fw-bold">Teléfono:</td><td class="fw-bold text-dark"><i class="bi bi-telephone text-muted me-1"></i><?= htmlspecialchars($data['telefono'] ?: 'Sin Registro') ?></td></tr>
                 <tr><td class="text-muted fw-bold">Equipo/Modelo:</td><td><?= $data['modelo'] ?: 'S/M' ?></td></tr>
                 <tr><td class="text-muted fw-bold">Número de Serie:</td><td class="text-danger fw-bold"><?= $data['no_serie'] ?: 'N/A' ?></td></tr>
                 <tr><td class="text-muted fw-bold">Tipo de Llamada:</td><td><?= $data['tipo_llamada'] ?></td></tr>
