@@ -19,7 +19,7 @@ include '../includes/header.php';
 
 <div class="row mb-4 align-items-center animate__animated animate__fadeIn">
     <div class="col-md-6">
-        <h1 class="fw-bold text-danger mb-0 text-uppercase"><i class="bi bi-boxes me-2"></i>Laboratorio de Lotes</h1>
+        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-boxes me-2"></i>Laboratorio de Lotes</h1>
         <p class="text-muted small mb-0">Revisión técnica, calibración mecánica e inspección de maquinaria nueva de importación.</p>
     </div>
     <div class="col-md-6 text-md-end mt-3 mt-md-0">

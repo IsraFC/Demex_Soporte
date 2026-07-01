@@ -24,7 +24,7 @@ include '../includes/header.php';
 
 <div class="row mb-4 align-items-center">
     <div class="col-md-5">
-        <h1 class="fw-bold text-danger mb-0 text-uppercase"><i class="bi bi-warehouse me-2"></i>Inventario de Lotes</h1>
+        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-boxes me-2"></i>Inventario de Lotes</h1>
         <p class="text-muted small mb-2">Control de flujo de importación, preparación de maquinaria nueva y tiempos de stock.</p>
         <a href="registro_lote.php" class="btn btn-danger btn-sm rounded-pill px-3 shadow-sm fw-bold" style="background-color: #dc3545; font-size: 12px;">
             REGISTRAR INGRESO
