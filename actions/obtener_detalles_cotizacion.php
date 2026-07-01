@@ -2,12 +2,13 @@
 /**
  * ARCHIVO: actions/obtener_detalles_cotizacion.php
  * DESCRIPCIÓN: Retorna la estructura HTML detallada de una cotización para el modal dinámico.
+ * MODIFICACIÓN: Adaptado para soportar tanto Leads Nuevos (Formularios) como Clientes Recurrentes (Cartera/Soporte).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.6 (Rutas de Conexión Corregidas)
+ * @version 1.7 (Unificación de Orígenes de Datos Comercial)
  */
 
-// CORREGIDO: Subir dos niveles para encontrar correctamente la configuración de la BD
+// Subir dos niveles para encontrar correctamente la configuración de la BD
 require_once '../config/db.php';
 
 $id_cotizacion = isset($_GET['id_cotizacion']) ? intval($_GET['id_cotizacion']) : 0;
@@ -18,12 +19,15 @@ if ($id_cotizacion <= 0) {
 }
 
 try {
-    // Consulta limpia vinculando cotizaciones, maquinaria, prospectos y formularios
-    $sql = "SELECT c.*, m.modelo AS maquina_modelo, f.nombre, f.apellidos, f.correo, f.telefono
+    // Consulta unificada usando LEFT JOINs para no perder registros si id_prospecto es NULL
+    $sql = "SELECT c.*, m.modelo AS maquina_modelo,
+                   f.nombre AS lead_nombre, f.apellidos AS lead_apellidos, f.correo AS lead_correo, f.telefono AS lead_telefono,
+                   cl.nombre_cliente, cl.apellidos_cliente, cl.correo AS cliente_correo, cl.telefono AS cliente_telefono
             FROM cotizacion c
             INNER JOIN maquinaria m ON c.id_maquina = m.id_maquina
-            INNER JOIN prospectos p ON c.id_prospecto = p.id_prospecto
-            INNER JOIN formulario f ON p.id_formulario = f.id_formulario
+            LEFT JOIN prospectos p ON c.id_prospecto = p.id_prospecto
+            LEFT JOIN formulario f ON p.id_formulario = f.id_formulario
+            LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
             WHERE c.id_cotizacion = ? LIMIT 1";
             
     $stmt = $pdo->prepare($sql);
@@ -33,6 +37,23 @@ try {
     if (!$cot) {
         echo '<div class="alert alert-warning m-2"><i class="bi bi-exclamation-triangle-fill me-2"></i>No se encontraron los datos de la cotización nº #' . $id_cotizacion . '</div>';
         exit();
+    }
+
+    // Mapeo Inteligente de Datos según el origen (Si es Recompra o Lead Nuevo)
+    $es_recompra = !empty($cot['id_cliente']);
+    
+    $nombre_completo = $es_recompra 
+        ? $cot['nombre_cliente'] . ' ' . ($cot['apellidos_cliente'] ?? '')
+        : $cot['lead_nombre'] . ' ' . $cot['lead_apellidos'];
+        
+    $correo_display   = $es_recompra ? $cot['cliente_correo'] : $cot['lead_correo'];
+    $telefono_display = $es_recompra ? $cot['cliente_telefono'] : $cot['lead_telefono'];
+
+    // Tratamiento de notas empaquetadas en Base64 corporativo
+    $notas_limpias = $cot['notes'];
+    if (strpos($cot['notes'], '|||') !== false) {
+        $partes_notas = explode('|||', $cot['notes']);
+        $notas_limpias = trim($partes_notas[0]); // Extraemos solo el mensaje escrito por el asesor
     }
 
     // Cálculos financieros para el desglose económico de la tabla
@@ -64,7 +85,7 @@ try {
                 <table class="table table-sm table-borderless small">
                     <tr>
                         <td class="text-muted fw-bold" width="40%">Cliente:</td>
-                        <td class="fw-bold"><?= htmlspecialchars($cot['nombre'] . ' ' . $cot['apellidos']) ?></td>
+                        <td class="fw-bold"><?= htmlspecialchars($nombre_completo) ?></td>
                     </tr>
                     <tr>
                         <td class="text-muted fw-bold">RFC Receptor:</td>
@@ -72,15 +93,18 @@ try {
                     </tr>
                     <tr>
                         <td class="text-muted fw-bold">Canal / Tipo:</td>
-                        <td><?= htmlspecialchars($cot['tipo_cliente']) ?></td>
+                        <td>
+                            <?= htmlspecialchars($cot['tipo_cliente']) ?> 
+                            <span class="badge bg-light text-muted border ms-1" style="font-size: 0.6rem;"><?= $es_recompra ? 'RECOMPRA' : 'LEAD NUEVO' ?></span>
+                        </td>
                     </tr>
                     <tr>
                         <td class="text-muted fw-bold">Correo:</td>
-                        <td><?= htmlspecialchars($cot['correo']) ?></td>
+                        <td><?= htmlspecialchars($correo_display ?: 'Sin correo registrado') ?></td>
                     </tr>
                     <tr>
                         <td class="text-muted fw-bold">Teléfono:</td>
-                        <td><?= htmlspecialchars($cot['telefono']) ?></td>
+                        <td><?= htmlspecialchars($telefono_display) ?></td>
                     </tr>
                     <tr>
                         <td class="text-muted fw-bold">Ubicación Entrega:</td>
@@ -102,7 +126,7 @@ try {
                 <div class="bg-white p-3 border rounded shadow-sm">
                     <div class="d-flex justify-content-between mb-1 small">
                         <span class="text-muted">Equipo de Interés:</span>
-                        <span class="badge bg-danger-sutil text-danger fw-bold"><?= htmlspecialchars($cot['maquina_modelo']) ?></span>
+                        <span class="badge bg-success-subtle text-success fw-bold"><?= htmlspecialchars($cot['maquina_modelo']) ?></span>
                     </div>
                     <div class="d-flex justify-content-between mb-1 small">
                         <span class="text-muted">Cantidad Solicitada:</span>
@@ -141,16 +165,16 @@ try {
                         </div>
                         <div class="text-end">
                             <small class="text-muted d-block fw-bold" style="font-size: 0.65rem;">TOTAL NETO</small>
-                            <span class="h4 fw-bold text-danger mb-0">$<?= number_format($total_general, 2) ?></span>
+                            <span class="h4 fw-bold text-success mb-0">$<?= number_format($total_general, 2) ?></span>
                         </div>
                     </div>
                 </div>
 
-                <?php if (!empty($cot['notes'])): ?>
+                <?php if (!empty($notas_limpias)): ?>
                 <div class="col-12 mt-3">
                     <div class="p-2 bg-light border rounded">
                         <small class="text-muted d-block fw-bold mb-1" style="font-size: 0.65rem;"><i class="bi bi-journal-text"></i> NOTAS INTERNAS DE LA OPERACIÓN</small>
-                        <p class="mb-0 small text-secondary italic">"<?= htmlspecialchars($cot['notes']) ?>"</p>
+                        <p class="mb-0 small text-secondary italic">"<?= htmlspecialchars($notas_limpias) ?>"</p>
                     </div>
                 </div>
                 <?php endif; ?>

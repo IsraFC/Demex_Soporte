@@ -2,20 +2,14 @@
 /**
  * ARCHIVO: index.php
  * DESCRIPCIÓN: Panel de Control Principal (Dashboard) con Server-side Processing.
- * Centraliza la visualización de tickets mediante un motor de filtrado remoto.
- * Mantiene lógica de indicadores (KPI) y sistema de alarmas de urgencia.
- * * @author Israel Fernández Carrera
+ * Centraliza la visualización de tickets mediante un motor de filtrado remoto puro.
  * @project Soporte Técnico DEMEX
- * @version 2.0 (Optimizado)
+ * @version 3.0 - Purificado (Independiente de Importaciones de Almacén)
  */
 
 require_once '../config/db.php';
 $page_title = "Panel de Control - Soporte";
 
-/**
- * CONSULTAS DE INDICADORES (KPIs):
- * Estas se mantienen porque alimentan las tarjetas superiores al cargar la página.
- */
 $total = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte")->fetchColumn();
 $pendientes = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte WHERE estatus = 'Abierto'")->fetchColumn();
 
@@ -24,9 +18,7 @@ JOIN Tickets_Soporte t ON d.id_ticket = t.id_ticket
 WHERE d.estatus_pago = 'Pendiente' AND t.estatus = 'Abierto'";
 $por_cobrar = $pdo->query($sql_cobro)->fetchColumn() ?: 0;
 
-$criticos = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte 
-                         WHERE estatus = 'Abierto' 
-                         AND DATEDIFF(CURDATE(), fecha_inicial) >= 14")->fetchColumn();
+$criticos = $pdo->query("SELECT COUNT(*) FROM Tickets_Soporte WHERE estatus = 'Abierto' AND DATEDIFF(CURDATE(), fecha_inicial) >= 14")->fetchColumn();
 
 $modulo_actual = 'soporte';
 include '../includes/header.php';
@@ -159,7 +151,7 @@ include '../includes/header.php';
                 </tr>
             </thead>
             <tbody>
-                </tbody>
+            </tbody>
         </table>
     </div>
 </div>
@@ -187,9 +179,6 @@ include '../includes/header.php';
 <?php include '../includes/footer.php'; ?>
 
 <script>
-    /**
-     * AJAX: Recupera el desglose técnico y financiero del ticket.
-     */
     function abrirModalVisualizar(id) {
         $('#modalVisualizar').appendTo("body").modal('show');
         $('#contenidoTicket').html('<div class="text-center p-5"><div class="spinner-border text-danger"></div></div>');
@@ -203,9 +192,6 @@ include '../includes/header.php';
         });
     }
 
-    /**
-     * CONTROL DE FLUJO: Actualiza el estatus del ticket con recarga AJAX.
-     */
     function cambiarEstatus(id, nuevoEstatus) {
         const colorEstatus = { 'Abierto': '#ffc107', 'Cerrado': '#198754', 'Cancelado': '#6c757d' };
 
@@ -228,8 +214,6 @@ include '../includes/header.php';
                     success: function(response) {
                         if (response.success) {
                             Swal.fire({ title: '¡Hecho!', icon: 'success', timer: 1000, showConfirmButton: false });
-                            // Al ser Server-side, simplemente recargamos los datos del servidor
-                            // 'false' mantiene la posición de la página actual
                             table.ajax.reload(null, false); 
                         }
                     }
@@ -238,9 +222,6 @@ include '../includes/header.php';
         });
     }
 
-    /**
-     * FUNCIÓN DEL BOTÓN EXCEL (Respaldo y Limpieza)
-     */
     function confirmarRespaldo() {
         Swal.fire({
             title: '¿Generar Respaldo y Limpiar?',
@@ -260,10 +241,6 @@ include '../includes/header.php';
         });
     }
 
-    /**
-     * CONFIGURACIÓN DATATABLES SERVER-SIDE (VERSIÓN 2.0 BLINDADA)
-     * @author Israel Fernández Carrera
-     */
     var table;
     $(document).ready(function() {
         if ($('#tablaTickets').length) {
@@ -274,20 +251,16 @@ include '../includes/header.php';
                     "url": "actions/obtener_tickets_datatable.php",
                     "type": "POST",
                     "data": function(d) {
-                        // INTEGRAMOS TODOS TUS FILTROS AL ENVÍO DEL SERVIDOR
                         d.filterTipo   = $('#filterTipo').val();
                         d.filterFalla  = $('#filterFalla').val();
                         d.filterAccion = $('#filterAccion').val();
                         d.fechaDesde   = $('#fechaDesde').val();
                         d.fechaHasta   = $('#fechaHasta').val();
-                        
-                        // Captura de Switches (Boleanos enviados como 1 o 0)
                         d.soloPendientes = $('#checkSoloPendientes').is(':checked') ? 1 : 0;
                         d.soloGarantia   = $('#checkGarantia').is(':checked') ? 1 : 0;
                         d.soloDeuda      = $('#checkSoloDeuda').is(':checked') ? 1 : 0;
                         
-                        // Captura de Alarma de Urgentes (Basado en la clase del botón)
-                        d.soloUrgentes   = $('#btnFiltrarCriticos').hasClass('btn-dark') ? 1 : 0;
+                        d.soloUrgentes = $('#btnFiltrarCriticos').length && $('#btnFiltrarCriticos').hasClass('btn-dark') ? 1 : 0;
                     }
                 },
                 "columns": [
@@ -314,14 +287,9 @@ include '../includes/header.php';
                     { 
                         "data": "estatus_pago",
                         "render": function(data) {
-                            let color = 'text-success fw-bold'; // Por defecto verde (Pagado)
-                            
-                            if (data === 'Pendiente') {
-                                color = 'text-danger fw-bold';
-                            } else if (data === 'NO APLICA' || data === 'N/A') {
-                                color = 'text-muted fw-normal'; // Si no aplica, gris y letra normal
-                            }
-                            
+                            let color = 'text-success fw-bold';
+                            if (data === 'Pendiente') { color = 'text-danger fw-bold'; } 
+                            else if (data === 'NO APLICA' || data === 'N/A') { color = 'text-muted fw-normal'; }
                             return `<span class="small ${color}">${data}</span>`;
                         }
                     },
@@ -334,23 +302,16 @@ include '../includes/header.php';
                     },
                     { "data": "fecha_inicial" },
                     { 
-                        "data": null, // Usamos null para poder evaluar de forma simultánea 'creador' y 'editor'
+                        "data": null,
                         "render": function(data, type, row) {
-                            // 1. Pintamos de golpe la insignia neumórfica premium del Creador Original
-                            let html = `<span class="badge bg-dark bg-opacity-10 text-dark border border-secondary border-opacity-25" style="font-size: 0.7rem; font-weight: 500; padding: 0.35rem 0.6rem; border-radius: 6px;">
-                                            <i class="bi bi-person-fill text-muted me-1"></i>${row.creador}
-                                        </span>`;
-                            
-                            // 2. Si el ticket fue editado por alguien diferente al creador, añadimos la traza de auditoría abajo
+                            let html = `<span class="badge bg-dark bg-opacity-10 text-dark border border-secondary border-opacity-25" style="font-size: 0.7rem; font-weight: 500; padding: 0.35rem 0.6rem; border-radius: 6px;"><i class="bi bi-person-fill text-muted me-1"></i>${row.creador}</span>`;
                             if (row.editor && row.editor !== row.creador) {
-                                html += `<br><small class="text-muted d-block" style="font-size: 0.6rem; margin-top: 4px;">
-                                            <i class="bi bi-pencil-square text-secondary me-1"></i>Edición: ${row.editor}
-                                        </small>`;
+                                html += `<br><small class="text-muted d-block" style="font-size: 0.6rem; margin-top: 4px;"><i class="bi bi-pencil-square text-secondary me-1"></i>Edición: ${row.editor}</small>`;
                             }
                             return html;
                         }
                     },
-                    { 
+                    {
                         "data": null,
                         "orderable": false,
                         "className": "text-center",
@@ -358,8 +319,8 @@ include '../includes/header.php';
                             let btns = `<button type="button" class="btn btn-outline-info border-0" onclick="abrirModalVisualizar(${row.id_ticket})" title="Ver detalles"><i class="bi bi-eye-fill"></i></button>`;
                             if (row.estatus === 'Abierto') {
                                 btns += `<a href="editar_ticket.php?id_ticket=${row.id_ticket}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square"></i></a>
-                                        <button type="button" class="btn btn-outline-success border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cerrado')" title="Cerrar"><i class="bi bi-lock-fill"></i></button>
-                                        <button type="button" class="btn btn-outline-secondary border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cancelado')" title="Cancelar"><i class="bi bi-x-circle-fill"></i></button>`;
+                                         <button type="button" class="btn btn-outline-success border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cerrado')" title="Cerrar"><i class="bi bi-lock-fill"></i></button>
+                                         <button type="button" class="btn btn-outline-secondary border-0" onclick="cambiarEstatus(${row.id_ticket}, 'Cancelado')" title="Cancelar"><i class="bi bi-x-circle-fill"></i></button>`;
                             }
                             return `<div class="btn-group btn-group-sm">${btns}</div>`;
                         }
@@ -368,32 +329,16 @@ include '../includes/header.php';
                         "data": null,
                         "className": "text-center",
                         "render": function(data, type, row) {
-                            const iconMap = {
-                                'Envio base': 'bi bi-truck',
-                                'Envio técnico': 'bi bi-tools',
-                                'Envio refacciones': 'bi bi-box-seam',
-                                'Envio técnico y refacciones': 'bi bi-tools'
-                            };
-                            
+                            const iconMap = { 'Envio base': 'bi bi-truck', 'Envio técnico': 'bi bi-tools', 'Envio refacciones': 'bi bi-box-seam', 'Envio técnico y refacciones': 'bi bi-tools' };
                             let iconClass = iconMap[row.accion_realizada] || 'bi bi-question-circle';
-                            let bgClass = 'bg-secondary text-white';
-                            let suffix = '';
-
+                            let bgClass = 'bg-secondary text-white'; let suffix = '';
                             if (iconMap[row.accion_realizada]) {
-                                if (!row.f_ini_acc) { 
-                                    bgClass = 'bg-warning text-dark'; suffix = ' (Pendiente)'; 
-                                } else if (row.f_ini_acc && !row.f_fin_acc) { 
-                                    bgClass = 'bg-primary text-white'; suffix = ' (Iniciado)'; 
-                                } else { 
-                                    bgClass = 'bg-success text-white'; suffix = ' (Finalizado)'; 
-                                }
+                                if (!row.f_ini_acc) { bgClass = 'bg-warning text-dark'; suffix = ' (Pendiente)'; } 
+                                else if (row.f_ini_acc && !row.f_fin_acc) { bgClass = 'bg-primary text-white'; suffix = ' (Iniciado)'; } 
+                                else { bgClass = 'bg-success text-white'; suffix = ' (Finalizado)'; }
                             }
-
                             let extraIcon = (row.accion_realizada === 'Envio técnico y refacciones') ? '<i class="bi bi-box-seam ms-1"></i>' : '';
-
-                            return `<span class="badge ${bgClass} rounded-pill px-3 py-2 badge-envio" style="font-size: 0.65rem;" title="${row.accion_realizada}${suffix}">
-                                    <i class="${iconClass}"></i>${extraIcon}
-                                    </span>`;
+                            return `<span class="badge ${bgClass} rounded-pill px-3 py-2 badge-envio" style="font-size: 0.65rem;" title="${row.accion_realizada}${suffix}"><i class="${iconClass}"></i>${extraIcon}</span>`;
                         }
                     }
                 ],
@@ -411,39 +356,28 @@ include '../includes/header.php';
                 "pageLength": 13,
                 "order": [[0, "desc"]],
                 "createdRow": function(row, data, dataIndex) {
-                    // Si el backend envía que el estatus de pago es 'NO APLICA'
                     if (data.estatus_pago === 'NO APLICA' || data.estatus_pago === 'N/A') {
                         $(row).addClass('bg-light text-muted opacity-75 text-decoration-none');
-                        $(row).css('background-color', '#f8f9fa'); // Asegura un gris claro limpio
+                        $(row).css('background-color', '#f8f9fa');
                     }
                 }
             });
 
-            // 1. EVENTOS DE RECARGA (REDAW) AL CAMBIAR FILTROS
             $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
+            $('#filterTipo, #filterFalla, #filterAccion, #fechaDesde, #fechaHasta').on('change', function() { table.draw(); });
+            $('#checkSoloPendientes, #checkGarantia, #checkSoloDeuda').on('change', function() { table.draw(); });
 
-            $('#filterTipo, #filterFalla, #filterAccion, #fechaDesde, #fechaHasta').on('change', function() {
-                table.draw(); 
-            });
-
-            $('#checkSoloPendientes, #checkGarantia, #checkSoloDeuda').on('change', function() {
-                table.draw();
-            });
-
-            // 2. LÓGICA DE BOTÓN URGENTES
             $('#btnFiltrarCriticos').on('click', function() {
                 const btn = $(this);
                 btn.toggleClass('btn-danger btn-dark');
                 const activo = btn.hasClass('btn-dark');
                 btn.html(activo ? '<i class="bi bi-arrow-counterclockwise me-1"></i> Quitar Filtro' : '<i class="bi bi-funnel-fill me-1"></i> Ver Urgentes');
-                table.draw(); // Esto dispara el AJAX enviando soloUrgentes = 1
+                table.draw();
             });
 
-            // 3. BLOQUEO DE CALENDARIOS (UI)
             $('#fechaDesde').on('change', function() { $('#fechaHasta').attr('min', $(this).val()); });
             $('#fechaHasta').on('change', function() { $('#fechaDesde').attr('max', $(this).val()); });
 
-            // 4. TOOLTIPS
             var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
         }

@@ -4,7 +4,6 @@
  * @package Portal_Demex
  * @brief Sub-módulo modular para renderizar el menú de soporte en el sidebar.
  */
-// INDICAMOS A PHP QUE JALE LAS VARIABLES GLOBALES DEL HEADER
 global $link_prefix_soporte, $pagina_actual_php, $en_soporte; ?>
 <div class="seccion-herramientas mx-3">
     <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Soporte</span>
@@ -12,6 +11,11 @@ global $link_prefix_soporte, $pagina_actual_php, $en_soporte; ?>
 
 <a href="<?= $link_prefix_soporte ?>index.php" class="sidebar-link <?= ($pagina_actual_php === 'index.php' && $en_soporte) ? 'active-page no-anim' : '' ?>">
     <div class="sidebar-icon"><i class="bi bi-house-door"></i></div> <span>Inicio</span>
+</a>
+
+<!-- NUEVA PESTAÑA: Panel especializado para el control de calidad de importaciones en frío -->
+<a href="<?= $link_prefix_soporte ?>revision_importaciones.php" class="sidebar-link <?= ($pagina_actual_php === 'revision_importaciones.php' && $en_soporte) ? 'active-page no-anim' : '' ?>">
+    <div class="sidebar-icon"><i class="bi bi-boxes"></i></div> <span>Laboratorio de Lotes</span>
 </a>
 
 <a href="<?= $link_prefix_soporte ?>tickets_usuario.php" class="sidebar-link <?= ($pagina_actual_php === 'tickets_usuario.php' && $en_soporte) ? 'active-page no-anim' : '' ?>">
