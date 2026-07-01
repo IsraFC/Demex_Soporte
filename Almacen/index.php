@@ -1,19 +1,20 @@
 <?php
 /**
  * ARCHIVO: index.php
- * DESCRIPCIÓN: Panel de Control Principal de Almacén con Server-side Processing.
- * Realiza el seguimiento completo del ciclo de vida de la maquinaria nueva de importación.
+ * DESCRIPCIÓN: Panel de Control Principal de Almacén con Server-side Processing y Chat Flotante Fijo.
  * @project Almacén Técnico DEMEX
- * @version 5.1 (Validación de Fases y Disparador de Entrega Comercial Inteligente)
+ * @version 5.7 - Adaptado para Carga de Fotos Binarias LONGBLOB (Base64)
  */
 
 require_once '../config/db.php';
 $page_title = "Panel de Control - Almacén";
 
-/**
- * CONSULTAS DE INDICADORES (KPIs):
- * Carga inicial de tarjetas informativas superiores basadas en el inventario de stock.
- */
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$id_usuario_actual = intval($_SESSION['id_usuario'] ?? 0);
+
 $total_equipos  = $pdo->query("SELECT COUNT(*) FROM almacen_inventario")->fetchColumn();
 $sin_revisar    = $pdo->query("SELECT COUNT(*) FROM almacen_inventario WHERE estatus = 'SIN REVISAR'")->fetchColumn();
 $kpi_en_almacen = $pdo->query("SELECT COUNT(*) FROM almacen_inventario WHERE estatus = 'EN REVISIÓN ALMACÉN'")->fetchColumn();
@@ -21,6 +22,64 @@ $kpi_en_soporte = $pdo->query("SELECT COUNT(*) FROM almacen_inventario WHERE est
 
 include '../includes/header.php';
 ?>
+
+<style>
+    .widget-chat-flotante {
+        position: fixed !important;
+        bottom: 25px !important;
+        right: 25px !important;
+        width: 360px !important;
+        height: 500px !important;
+        background-color: #ffffff !important;
+        border-radius: 16px !important;
+        box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2) !important;
+        z-index: 9999 !important;
+        display: none; 
+        border: 1px solid rgba(0,0,0,0.08) !important;
+        overflow: hidden !important;
+    }
+    .widget-chat-header {
+        background-color: #dc3545;
+        color: #ffffff;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .widget-chat-body {
+        height: calc(100% - 115px) !important;
+        overflow-y: auto !important;
+        background-color: #f8f9fa !important;
+        padding: 12px !important;
+    }
+    .msg-bubble {
+        max-width: 80%;
+        padding: 8px 12px;
+        border-radius: 14px;
+        margin-bottom: 8px;
+        font-size: 12.5px;
+        line-height: 1.4;
+        position: relative;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .msg-received {
+        background-color: #ffffff;
+        color: #212529;
+        border-top-left-radius: 0px;
+    }
+    .msg-sent {
+        background-color: #fff5f5;
+        color: #212529;
+        border-top-right-radius: 0px;
+        border: 1px solid rgba(220, 53, 69, 0.1);
+    }
+    .chat-avatar {
+        width: 28px;
+        height: 28px;
+        object-fit: cover;
+        border-radius: 50%;
+    }
+</style>
 
 <div class="row mb-4 align-items-center">
     <div class="col-md-5">
@@ -61,26 +120,32 @@ include '../includes/header.php';
             </div>
         </div>
         <div class="col-md-3">
-            <select id="filterEstatus" class="form-select border-0 bg-light fw-bold text-muted shadow-sm" style="font-size: 14px;">
-                <option value="">Todos los Estatus</option>
-                <option value="SIN REVISAR">SIN REVISAR</option>
-                <option value="EN REVISIÓN ALMACÉN">EN REVISIÓN ALMACÉN</option>
-                <option value="DISPONIBLE PARA SOPORTE">DISPONIBLE PARA SOPORTE</option>
-                <option value="EN REVISIÓN SOPORTE">EN REVISIÓN SOPORTE</option>
-                <option value="REINGRESO A ALMACÉN">REINGRESO A ALMACÉN</option>
-                <option value="DISPONIBLE PARA VENTA">DISPONIBLE PARA VENTA</option>
-                <option value="COMODATO">COMODATO</option>
-                <option value="PAGADA / POR ENTREGAR">PAGADA / POR ENTREGAR</option>
-                <option value="CAMBIO">CAMBIO</option>
-                <option value="ENTREGADA">ENTREGADA</option>
-            </select>
+            <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
+                <span class="input-group-text border-0 bg-transparent"><i class="bi bi-funnel-fill text-danger"></i></span>
+                <select id="filterEstatus" class="form-control bg-transparent border-0 small fw-bold text-muted shadow-none" style="cursor: pointer; font-size: 14px;">
+                    <option value="">Todos los Estatus</option>
+                    <option value="SIN REVISAR">SIN REVISAR</option>
+                    <option value="EN REVISIÓN ALMACÉN">EN REVISIÓN ALMACÉN</option>
+                    <option value="DISPONIBLE PARA SOPORTE">DISPONIBLE PARA SOPORTE</option>
+                    <option value="EN REVISIÓN SOPORTE">EN REVISIÓN SOPORTE</option>
+                    <option value="REINGRESO A ALMACÉN">REINGRESO A ALMACÉN</option>
+                    <option value="DISPONIBLE PARA VENTA">DISPONIBLE PARA VENTA</option>
+                    <option value="COMODATO">COMODATO</option>
+                    <option value="PAGADA / POR ENTREGAR">PAGADA / POR ENTREGAR</option>
+                    <option value="CAMBIO">CAMBIO</option>
+                    <option value="ENTREGADA">ENTREGADA</option>
+                </select>
+            </div>
         </div>
         <div class="col-md-2">
-            <select id="filterTipo" class="form-select border-0 bg-light fw-bold text-muted shadow-sm" style="font-size: 14px;">
-                <option value="">Todos los Tipos</option>
-                <option value="ORIGINAL">ORIGINAL</option>
-                <option value="DEMO">DEMO</option>
-            </select>
+            <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
+                <span class="input-group-text border-0 bg-transparent"><i class="bi bi-tag text-danger"></i></span>
+                <select id="filterTipo" class="form-control bg-transparent border-0 small fw-bold text-muted shadow-none" style="cursor: pointer; font-size: 14px;">
+                    <option value="">Todos los Tipos</option>
+                    <option value="ORIGINAL">ORIGINAL</option>
+                    <option value="DEMO">DEMO</option>
+                </select>
+            </div>
         </div>
         <div class="col-md-4 d-flex align-items-center gap-2">
             <span class="small fw-bold text-muted text-uppercase style-range" style="font-size: 11px;">Rango:</span>
@@ -101,16 +166,36 @@ include '../includes/header.php';
                     <th>Tipo</th>
                     <th>Estatus</th>
                     <th>Ingreso</th>
-                    <th title="Días antes de que el almacén empiece ajustes" data-bs-toggle="tooltip" class="text-center">Espera Caja</th>
-                    <th title="Días que le tomó al almacén la revisión inicial" data-bs-toggle="tooltip" class="text-center">Ajustes Alm.</th>
-                    <th title="Días en soporte técnico" data-bs-toggle="tooltip" class="text-center">En Laboratorio</th>
-                    <th title="Días totales en inventario" data-bs-toggle="tooltip" class="text-center">Total Gral</th>
+                    <th class="text-center">Espera Caja</th>
+                    <th class="text-center">Ajustes Alm.</th>
+                    <th class="text-center">En Laboratorio</th>
+                    <th class="text-center">Total Gral</th>
+                    <th class="text-center">Comentarios</th>
                     <th class="text-center">Acción</th>
                 </tr>
             </thead>
-            <tbody class="small fw-semibold text-dark">
-            </tbody>
+            <tbody class="small fw-semibold text-dark"></tbody>
         </table>
+    </div>
+</div>
+
+<div id="recuadroFlotanteChat" class="widget-chat-flotante animate__animated animate__fadeInUp">
+    <div class="widget-chat-header shadow-sm">
+        <div>
+            <h6 class="fw-bold mb-0" style="font-size: 0.85rem;"><i class="bi bi-chat-left-text-fill me-1.5"></i> Notas de Lote</h6>
+            <small id="chatSubtitulo" class="text-white-50 fw-bold" style="font-size: 10px;"></small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" onclick="cerrarChatFlotante()"></button>
+    </div>
+    <div id="cuerpoChat" class="widget-chat-body"></div>
+    <div class="p-2 bg-white border-top shadow-sm">
+        <form id="formEnviarComentario" autocomplete="off">
+            <input type="hidden" id="chatIdInventario">
+            <div class="input-group border rounded-pill px-2.5 py-0.5 bg-light shadow-sm">
+                <input type="text" id="inputMensaje" class="form-control bg-transparent border-0 small py-1" placeholder="Escribe un comentario..." required>
+                <button class="btn bg-transparent border-0 text-danger p-0 px-2" type="submit"><i class="bi bi-send-fill fs-6"></i></button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -146,6 +231,9 @@ include '../includes/header.php';
 
 <script>
     var table;
+    var fuenteEventosChat = null; 
+    var ultimoIdComentario = 0;
+    var usuarioActualId = <?= $id_usuario_actual ?>;
 
     function actualizarKPIs() {
         $.ajax({
@@ -163,7 +251,25 @@ include '../includes/header.php';
         });
     }
 
+    // CORRECCIÓN: Mapea directamente el Base64 generado en la propiedad 'foto_src'
+    function renderizarGloboMensaje(msg) {
+        const esPropio = (parseInt(msg.id_usuario, 10) === usuarioActualId);
+        const claseMensaje = esPropio ? 'msg-sent ms-auto' : 'msg-received';
+        
+        return `
+            <div class="d-flex align-items-start gap-1.5 mb-2.5 ${esPropio ? 'flex-row-reverse' : ''}">
+                <img src="${msg.foto_src}" class="chat-avatar shadow-sm border" onerror="this.src='../../img/default-avatar.png'">
+                <div class="msg-bubble ${claseMensaje}">
+                    <small class="d-block fw-bold ${esPropio ? 'text-danger' : 'text-primary'}" style="font-size: 10px;">${msg.nombre_completo}</small>
+                    <span class="d-block mt-0.5" style="word-break: break-word;">${msg.comentario}</span>
+                    <small class="d-block text-end text-muted mt-0.5" style="font-size: 8px; font-weight: 500;">${msg.fecha_formateada}</small>
+                </div>
+            </div>`;
+    }
+
     $(document).ready(function() {
+        $('#recuadroFlotanteChat').appendTo("body");
+
         if ($('#tablaAlmacen').length) {
             table = $('#tablaAlmacen').DataTable({
                 "processing": true,
@@ -206,41 +312,34 @@ include '../includes/header.php';
                         "orderable": false,
                         "className": "text-center",
                         "render": function(data, type, row) {
+                            return `<button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3 shadow-sm fw-bold" onclick="abrirChatFlotante(${row.id}, '${row.no_serie}')" style="font-size: 11px;">
+                                        <i class="bi bi-chat-dots-fill me-1"></i> Notas
+                                    </button>`;
+                        }
+                    },
+                    {
+                        "data": null,
+                        "orderable": false,
+                        "className": "text-center",
+                        "render": function(data, type, row) {
                             if (row.estatus === 'DISPONIBLE PARA SOPORTE' || row.estatus === 'EN REVISIÓN SOPORTE') {
-                                return `<button type="button" class="btn btn-outline-secondary border-0 opacity-50" title="Retenido por área de Soporte Técnico" onclick="Swal.fire({icon:'warning', title:'Fase Bloqueada', text:'El equipo físico está bajo el resguardo y diagnóstico del laboratorio de Soporte.'})">
+                                return `<button type="button" class="btn btn-outline-secondary border-0 opacity-50" onclick="Swal.fire({icon:'warning', title:'Fase Bloqueada', text:'El equipo físico está bajo el resguardo y diagnóstico del laboratorio de Soporte.'})">
                                             <i class="bi bi-lock-fill fs-5 text-muted"></i>
                                         </button>`;
                             }
-
-                            // CORRECCIÓN COMERCIAL: El botón de asignación obligatoria se activa para Ventas consolidadas o Cambios por defecto de fábrica
                             if (row.estatus === 'PAGADA / POR ENTREGAR' || row.estatus === 'CAMBIO') {
                                 return `<button type="button" class="btn btn-success btn-xs rounded-pill px-2 fw-bold" onclick="abrirModalAsignacion(${row.id})" style="font-size: 11px;">
                                             <i class="bi bi-person-plus-fill me-1"></i> Entregar
                                         </button>`;
                             }
-                            
                             if (row.estatus === 'ENTREGADA') {
-                                return `<button type="button" class="btn btn-outline-success border-0 opacity-75" title="Flujo de Stock Finalizado" disabled>
-                                            <i class="bi bi-check-all fs-5"></i>
-                                        </button>`;
+                                return `<button type="button" class="btn btn-outline-success border-0 opacity-75" disabled><i class="bi bi-check-all fs-5"></i></button>`;
                             }
-                            
-                            return `<button type="button" class="btn btn-outline-danger border-0" onclick="abrirModalFase(${row.id})" title="Avanzar de Fase u Obtener Bitácora">
-                                        <i class="bi bi-arrow-right-circle-fill fs-5"></i>
-                                    </button>`;
+                            return `<button type="button" class="btn btn-outline-danger border-0" onclick="abrirModalFase(${row.id})"><i class="bi bi-arrow-right-circle-fill fs-5"></i></button>`;
                         }
                     }
                 ],
-                "language": {
-                    "sProcessing":     "Procesando...",
-                    "sLengthMenu":     "Mostrar _MENU_ registros",
-                    "sZeroRecords":    "No se encontraron resultados",
-                    "sInfo":           "Mostrando _START_ al _END_ de _TOTAL_",
-                    "sInfoEmpty":      "Mostrando 0 al 0 de 0",
-                    "sInfoFiltered":   "(filtrado de _MAX_ registros)",
-                    "sSearch":         "Buscar:",
-                    "oPaginate": { "sFirst": "Primero", "sLast": "Último", "sNext": "Sig", "sPrevious": "Ant" }
-                },
+                "language": { "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json" },
                 "dom": 'rtip',
                 "pageLength": 13,
                 "order": [[5, "desc"]]
@@ -248,23 +347,96 @@ include '../includes/header.php';
 
             $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
             $('#filterEstatus, #filterTipo, #fechaDesde, #fechaHasta').on('change', function() { table.draw(); });
-            
-            $('#fechaDesde').on('change', function() { $('#fechaHasta').attr('min', $(this).val()); });
-            $('#fechaHasta').on('change', function() { $('#fechaDesde').attr('max', $(this).val()); });
-            
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
         }
+
+        $('#formEnviarComentario').on('submit', function(e) {
+            e.preventDefault();
+            const txt = $('#inputMensaje').val().trim();
+            if(!txt) return;
+
+            $.ajax({
+                url: 'actions/guardar_comentario.php',
+                method: 'POST',
+                data: {
+                    id_inventario: $('#chatIdInventario').val(),
+                    comentario: txt
+                },
+                dataType: 'json',
+                success: function(res) {
+                    if(res.success) {
+                        $('#inputMensaje').val('');
+                    }
+                }
+            });
+        });
     });
+
+    function abrirChatFlotante(id, serie) {
+        if (fuenteEventosChat) { fuenteEventosChat.close(); fuenteEventosChat = null; }
+
+        $('#chatIdInventario').val(id);
+        $('#chatSubtitulo').text('Serie: ' + serie);
+        $('#cuerpoChat').html('<div class="text-center p-4"><div class="spinner-border spinner-border-sm text-danger" role="status"></div></div>');
+        ultimoIdComentario = 0;
+
+        $('#recuadroFlotanteChat').show();
+
+        // PASO 1: Descargar el historial síncronamente desde las acciones locales
+        $.ajax({
+            url: 'actions/obtener_historial_comentarios.php',
+            method: 'GET',
+            data: { id: id },
+            dataType: 'json',
+            success: function(res) {
+                $('#cuerpoChat').html('');
+                
+                if (res.success && res.comentarios.length > 0) {
+                    res.comentarios.forEach(function(msg) {
+                        $('#cuerpoChat').append(renderizarGloboMensaje(msg));
+                    });
+                    ultimoIdComentario = res.ultimo_id;
+                } else if (!res.success) {
+                    // Muestra el mensaje de error técnico exacto capturado en el catch de PHP si algo falla
+                    $('#cuerpoChat').html('<div class="text-center text-muted small p-3">Error al cargar notas: ' + (res.error || '') + '</div>');
+                } else {
+                    $('#cuerpoChat').html('<div class="text-center text-muted small p-3" id="msgSinNotas">Sin notas en este lote.</div>');
+                }
+
+                $('#cuerpoChat').animate({ scrollTop: $('#cuerpoChat')[0].scrollHeight }, 10);
+
+                // PASO 2: Abrir el stream SSE apuntando al último ID conocido
+                fuenteEventosChat = new EventSource(`actions/stream_comentarios.php?id=${id}&last_id=${ultimoIdComentario}`);
+
+                fuenteEventosChat.onmessage = function(event) {
+                    const msg = JSON.parse(event.data);
+                    
+                    if($('#msgSinNotas').length) { $('#msgSinNotas').remove(); }
+
+                    $('#cuerpoChat').append(renderizarGloboMensaje(msg));
+                    $('#cuerpoChat').animate({ scrollTop: $('#cuerpoChat')[0].scrollHeight }, 150);
+                    
+                    ultimoIdComentario = msg.id_comentario;
+                };
+            },
+            error: function() {
+                $('#cuerpoChat').html('<div class="text-center text-muted small p-3">Error de red o comunicación.</div>');
+            }
+        });
+    }
+
+    function cerrarChatFlotante() {
+        $('#recuadroFlotanteChat').hide();
+        if (fuenteEventosChat) {
+            fuenteEventosChat.close();
+            fuenteEventosChat = null;
+        }
+    }
 
     function abrirModalFase(id) {
         var idLimpio = parseInt(id, 10);
-        if (isNaN(idLimpio) || idLimpio <= 0) {
-            return;
-        }
+        if (isNaN(idLimpio) || idLimpio <= 0) return;
         $('#modalActualizarFase').appendTo("body").modal('show');
         $('#contenidoFase').html('<div class="text-center p-5"><div class="spinner-border text-danger" role="status"></div></div>');
-        
         $.ajax({
             url: 'actions/abrir_modal_fase.php?id=' + idLimpio,
             method: 'GET',
@@ -274,12 +446,9 @@ include '../includes/header.php';
 
     function abrirModalAsignacion(id) {
         var idLimpio = parseInt(id, 10);
-        if (isNaN(idLimpio) || idLimpio <= 0) {
-            return;
-        }
+        if (isNaN(idLimpio) || idLimpio <= 0) return;
         $('#modalAsignarCliente').appendTo("body").modal('show');
         $('#contenidoAsignacion').html('<div class="text-center p-5"><div class="spinner-border text-success" role="status"></div></div>');
-        
         $.ajax({
             url: 'actions/abrir_modal_entrega.php?id=' + idLimpio,
             method: 'GET',
