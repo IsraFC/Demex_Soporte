@@ -131,13 +131,15 @@ if ($en_subcarpeta) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DEMEX | <?= htmlspecialchars($page_title ?? 'Panel de Control') ?></title>
 
+    <link rel="icon" type="image/png" href="../img/demex_icon.png">
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
     
-    <link rel="stylesheet" href="/desarrollo_mexicano/css/estilos.css">
+    <link rel="stylesheet" href="/css/estilos.css">
 
     <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
