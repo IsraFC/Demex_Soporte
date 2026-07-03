@@ -108,10 +108,6 @@ include '../includes/header.php';
             <input type="text" class="form-control ctrl-lead" id="lead_nombre" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Ej. Sergio Mauricio" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
         </div>
         <div class="col-12 col-md-4">
-            <label class="form-label fw-semibold small text-dark">Apellidos <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ctrl-lead" id="lead_apellidos" value="<?= htmlspecialchars($cliente_apellidos) ?>" placeholder="Ej. Campos Carranza" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
-        </div>
-        <div class="col-12 col-md-4">
             <label class="form-label fw-semibold small text-dark">Canal de Origen <span class="text-danger">*</span></label>
             <?php if ($id_prospecto > 0 || $id_cliente_recompra > 0): ?>
                 <input type="text" class="form-control" value="<?= htmlspecialchars($canal_origen) ?>" readonly>

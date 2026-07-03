@@ -23,7 +23,7 @@ include '../includes/header.php';
 
 <div class="row mb-4 align-items-center animate__animated animate__fadeIn">
     <div class="col-12">
-        <h1 class="fw-bold text-danger mb-0 text-uppercase"><i class="bi bi-graph-up-arrow me-2"></i>Tiempos de Permanencia</h1>
+        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Tiempos de Permanencia</h1>
         <p class="text-muted small mb-0">Métricas analíticas basadas en los promedios reales de desfase logístico dentro de la empresa.</p>
     </div>
 </div>
