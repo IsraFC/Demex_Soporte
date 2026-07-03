@@ -99,7 +99,7 @@ include '../includes/header.php';
 </div>
 
 <div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded">
-    <h5 class="fw-bold text-dark mb-4"><i class="bi bi-calculator text-danger me-2"></i> Re-configuración de Conceptos</h5>
+    <h5 class="fw-bold text-dark mb-4"><i class="bi bi-calculator text-danger me-2"></i> Datos de la Cotización</h5>
     
     <form action="../actions/procesar_edicion_cotizacion.php" method="POST" id="formCotizacion">
         <input type="hidden" name="id_cotizacion" value="<?= $cotizacion['id_cotizacion'] ?>">

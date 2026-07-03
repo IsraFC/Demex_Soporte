@@ -4,7 +4,7 @@
  * DESCRIPCIÓN: Componente backend encargado de consultar y renderizar el historial de adquisiciones comerciales.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 2.0 (Filtro Exclusivo de Historial de Facturación de Ventas)
+ * @version 2.1 (Integración de Visor de Vista Rápida para Cotizaciones Anidadas)
  */
 
 require_once '../config/db.php';
@@ -68,11 +68,18 @@ try {
                     <td class="text-end fw-bold text-dark">$<?= number_format($subtotal_renglon, 2, '.', ',') ?></td>
                     <td class="small text-muted" style="max-width: 220px; white-space: normal; font-size: 0.75rem;">
                         <?php if(!empty($c['id_cotizacion_origen'])): ?>
-                            <span class="badge bg-danger bg-opacity-10 text-danger mb-1"><i class="bi bi-file-earmark-check me-1"></i>Cotización #<?= $c['id_cotizacion_origen'] ?></span>
+                            <!-- MODIFICADO: Botón interactivo asíncrono para abrir el modal sobre modal -->
+                            <button type="button" 
+                                    onclick="verVistaRapidaCotizacion(<?= $c['id_cotizacion_origen'] ?>)" 
+                                    class="badge bg-danger bg-opacity-10 text-danger border-0 mb-1 py-1 px-2 d-inline-flex align-items-center gap-1" 
+                                    style="cursor: pointer; font-weight: 600;"
+                                    title="Click para ver desglose de la cotización">
+                                <i class="bi bi-file-earmark-check"></i> Cotización #<?= $c['id_cotizacion_origen'] ?>
+                            </button>
                         <?php else: ?>
                             <span class="badge bg-secondary bg-opacity-10 text-secondary mb-1"><i class="bi bi-box-seam me-1"></i>Base Histórica</span>
                         <?php endif; ?>
-                        <div class="lh-sm"><?= htmlspecialchars($c['observaciones_venta'] ?? '') ?></div>
+                        <div class="lh-sm mt-1"><?= htmlspecialchars($c['observaciones_venta'] ?? '') ?></div>
                     </td>
                 </tr>
                 <?php endforeach; ?>

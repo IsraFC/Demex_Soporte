@@ -207,6 +207,21 @@ include '../includes/header.php';
     </div>
 </div>
 
+<!-- MODAL SECUNDARIO MODIFICADO: Cambiamos modal-md por modal-lg para mayor estética horizontal -->
+<div class="modal fade" id="modalVistaRapidaCotizacion" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-lg modal-dialog-centered"> <!-- AQUÍ SE HACE EL CAMBIO -->
+        <div class="modal-content shadow-lg border-0" style="border-radius: 12px;">
+            <div class="modal-header bg-danger text-white" style="border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-text-fill me-2"></i> Vista Previa de Cotización</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" id="cuerpoModalVistaRapida">
+                <!-- Se cargará dinámicamente mediante AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php include '../includes/footer.php'; ?>
 
 <script>
@@ -240,6 +255,42 @@ $(document).ready(function() {
     $('#btnFiltrarFrecuentes').on('change', function() {
         table.draw();
     });
+});
+
+// Añade esta función al final de tu sección de scripts (fuera del $(document).ready)
+
+function verVistaRapidaCotizacion(idCotizacion) {
+    // Inicializamos el esqueleto de carga asíncrona
+    $('#cuerpoModalVistaRapida').html(`
+        <div class="text-center py-4">
+            <div class="spinner-border text-danger" role="status"><span class="visually-hidden">Cargando...</span></div>
+            <p class="text-muted small mt-2">Accediendo al servidor central DEMEX...</p>
+        </div>
+    `);
+    
+    // Levantamos el modal secundario encima del primero
+    $('#modalVistaRapidaCotizacion').appendTo("body").modal('show');
+    
+    // Petición AJAX al controlador existente de desgloses de cotización
+    $.ajax({
+        url: '../actions/obtener_detalles_cotizacion.php',
+        method: 'GET',
+        data: { id_cotizacion: idCotizacion },
+        success: function(response) {
+            $('#cuerpoModalVistaRapida').html(response);
+        },
+        error: function() {
+            $('#cuerpoModalVistaRapida').html('<div class="alert alert-danger m-0"><i class="bi bi-exclamation-octagon-fill me-2"></i> Error al recuperar el desglose.</div>');
+        }
+    });
+}
+
+// FIX DE SCROLL PARA MODALES ANIDADOS: 
+// Cuando se cierre la vista previa, asegura que el modal de historial siga teniendo scroll funcional
+$(document).on('hidden.bs.modal', '#modalVistaRapidaCotizacion', function () {
+    if ($('#modalHistorialCliente').is(':visible')) {
+        $('body').addClass('modal-open');
+    }
 });
 
 function verHistorialCliente(idCliente) {
