@@ -112,6 +112,7 @@ try {
                                         if ($rol_item === 'Administrador') $badgeColor = 'bg-danger';
                                         if ($rol_item === 'Soporte') $badgeColor = 'bg-info text-dark';
                                         if ($rol_item === 'Ventas') $badgeColor = 'bg-warning text-dark';
+                                        if( $rol_item === 'Almacen') $badgeColor = 'bg-primary';
                                         if ($rol_item === 'Cliente') $badgeColor = 'bg-success';
                                     ?>
                                         <span class="badge <?= $badgeColor ?> px-2 py-1 rounded-pill text-uppercase me-1" style="font-size: 9px; letter-spacing: 0.5px;">

@@ -131,6 +131,7 @@ if ($en_subcarpeta) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DEMEX | <?= htmlspecialchars($page_title ?? 'Panel de Control') ?></title>
 
+    <link rel="icon" type="image/png" href="img/demex_icon.png">
     <link rel="icon" type="image/png" href="../img/demex_icon.png">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
