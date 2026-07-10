@@ -12,17 +12,17 @@ global $link_prefix_ventas, $pagina_actual_php, $en_ventas;
 </div>
 
 <a href="<?= $link_prefix_ventas ?>leads_crm.php" class="sidebar-link <?= ($pagina_actual_php === 'leads_crm.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
-    <div class="sidebar-icon"><i class="bi bi-funnel"></i></div> <span>Bandeja de Leads</span>
+    <div class="sidebar-icon"><i class="bi bi-funnel"></i></div> <span>Prospectos</span>
 </a>
 <a href="<?= $link_prefix_ventas ?>cotizaciones.php" class="sidebar-link <?= ($pagina_actual_php === 'cotizaciones.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
-    <div class="sidebar-icon"><i class="bi bi-file-earmark-pdf"></i></div> <span>Generar Cotización</span>
+    <div class="sidebar-icon"><i class="bi bi-file-earmark-pdf"></i></div> <span>Cotizar Máquinas</span>
 </a>
 <!-- NUEVA OPCIÓN: Integrada con la estructura nativa del sidebar-link -->
 <a href="<?= $link_prefix_ventas ?>recompras_crm.php" class="sidebar-link <?= ($pagina_actual_php === 'recompras_crm.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
-    <div class="sidebar-icon"><i class="bi bi-arrow-repeat"></i></div> <span>CRM Recompras</span>
+    <div class="sidebar-icon"><i class="bi bi-arrow-repeat"></i></div> <span>Recompras</span>
 </a>
 <a href="<?= $link_prefix_ventas ?>clientes.php" class="sidebar-link <?= ($pagina_actual_php === 'clientes.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
-    <div class="sidebar-icon"><i class="bi bi-people-fill"></i></div> <span>Catálogo de Clientes</span>
+    <div class="sidebar-icon"><i class="bi bi-people-fill"></i></div> <span>Clientes</span>
 </a>
 
 <div class="seccion-herramientas pt-3 mt-2 mx-3">
