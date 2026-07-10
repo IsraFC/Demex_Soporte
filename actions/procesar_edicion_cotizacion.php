@@ -3,10 +3,10 @@
  * ARCHIVO: actions/procesar_edicion_cotizacion.php
  * DESCRIPCIÓN: Procesador de Base de Datos para el UPDATE unificado.
  * Actualiza la cotización, empaqueta los datos bancarios editados y sincroniza
- * los cambios de datos ya sea en la tabla 'formulario' o en la redirección dinámica.
+ * los cambios de datos en la tabla 'formulario' de forma unificada sin separar apellidos.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.4 (Soporte Unificado para Edición de Leads y Recompras)
+ * @version 6.5 (Unificación de Razón Social / Nombre Completo y Precio Base Editable)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -70,7 +70,7 @@ try {
     // Iniciamos la transacción para asegurar la consistencia transaccional
     $pdo->beginTransaction();
 
-    // 2. Recálculo financiero en Backend
+    // 2. Recálculo financiero en Backend basado en el precio base enviado (que puede ser modificado manual)
     $monto_descuento_unitario = $precio_base_origen * ($descuento_porcentaje / 100);
     $precio_pactado_unitario  = $precio_base_origen - $monto_descuento_unitario;
 
@@ -138,38 +138,18 @@ try {
         $id_formulario = $prospecto_actual ? $prospecto_actual['id_formulario'] : null;
 
         if ($id_formulario) {
-            $partes_nombre = explode(' ', $cliente_razon);
-            $total_palabras = count($partes_nombre);
-
-            $nuevo_nombre = '';
-            $nuevos_apellidos = '';
-
-            if ($total_palabras == 1) {
-                $nuevo_nombre = $partes_nombre[0];
-                $nuevos_apellidos = '';
-            } elseif ($total_palabras == 2) {
-                $nuevo_nombre = $partes_nombre[0];
-                $nuevos_apellidos = $partes_nombre[1];
-            } elseif ($total_palabras == 3) {
-                $nuevo_nombre = $partes_nombre[0];
-                $nuevos_apellidos = $partes_nombre[1] . ' ' . $partes_nombre[2];
-            } else {
-                $nuevo_nombre = $partes_nombre[0] . ' ' . $partes_nombre[1];
-                $nuevos_apellidos = implode(' ', array_slice($partes_nombre, 2));
-            }
-
+            // MODIFICADO: Se removió por completo la separación por palabras de apellidos.
+            // Ahora la Razón Social / Nombre Completo entero se almacena directo en la columna 'nombre'.
             $sql_update_form = "UPDATE formulario 
                                 SET nombre = :nuevo_nombre, 
-                                    apellidos = :nuevos_apellidos, 
                                     maquina_interes = :maquina_interes
                                 WHERE id_formulario = :id_formulario";
             
             $stmt2 = $pdo->prepare($sql_update_form);
             $stmt2->execute([
-                ':nuevo_nombre'   => $nuevo_nombre,
-                ':nuevos_apellidos'=> $nuevos_apellidos,
-                ':maquina_interes'=> $modelo_texto,
-                ':id_formulario'  => $id_formulario
+                ':nuevo_nombre'    => $cliente_razon,
+                ':maquina_interes' => $modelo_texto,
+                ':id_formulario'   => $id_formulario
             ]);
         }
 
@@ -194,7 +174,6 @@ try {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    // Si ocurre un error, determinamos a dónde regresar basándonos en los datos rescatados
     $view_error = (isset($view_destino)) ? $view_destino : "leads_crm.php";
     header("Location: ../Ventas/" . $view_error . "?msg=error&desc=" . urlencode($e->getMessage()));
     exit();

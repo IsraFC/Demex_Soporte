@@ -6,7 +6,7 @@
  * MODIFICACIÓN: Integración nativa de flujos para Clientes Recurrentes (Recompras).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 5.1 (Corregido flujo de entrada reactivo para Cartera de Clientes)
+ * @version 6.1 (Remoción visual del contenedor Paso 1 - Datos del Cliente)
  */
 
 $page_title = "Generador de Cotizaciones | CRM Ventas";
@@ -43,7 +43,6 @@ $id_prospecto = isset($_GET['id_prospecto']) ? intval($_GET['id_prospecto']) : 0
 $id_cliente_recompra = isset($_GET['cliente_recompra']) ? intval($_GET['cliente_recompra']) : 0;
 
 $cliente_nombre = "";
-$cliente_apellidos = "";
 $cliente_correo = "";
 $cliente_telefono = "";
 $cliente_region = "Puebla";
@@ -52,7 +51,9 @@ $maquina_interes = "";
 $canal_origen = "";
 
 if ($id_prospecto > 0) {
-    $sql_lead = "SELECT f.* FROM prospectos p 
+    // Apellidos removidos de la consulta SQL por unificación de Razón Social
+    $sql_lead = "SELECT f.nombre, f.correo, f.telefono, f.estado_region, f.pais, f.maquina_interes, f.canal_origen 
+                 FROM prospectos p 
                  INNER JOIN formulario f ON p.id_formulario = f.id_formulario 
                  WHERE p.id_prospecto = :id_prospecto LIMIT 1";
     $stmt_lead = $pdo->prepare($sql_lead);
@@ -61,7 +62,6 @@ if ($id_prospecto > 0) {
     
     if ($lead_data) {
         $cliente_nombre = $lead_data['nombre'];
-        $cliente_apellidos = $lead_data['apellidos'];
         $cliente_correo = $lead_data['correo'];
         $cliente_telefono = $lead_data['telefono'];
         $cliente_region = $lead_data['estado_region'];
@@ -79,11 +79,10 @@ elseif ($id_cliente_recompra > 0) {
 
     if ($client_data) {
         $cliente_nombre    = $client_data['nombre_cliente'];
-        $cliente_apellidos = $client_data['apellidos_cliente'] ?? '';
         $cliente_correo    = $client_data['correo'] ?? '';
         $cliente_telefono  = $client_data['telefono'] ?? '';
         $cliente_region    = $client_data['ubicacion'] ?? 'Puebla';
-        $cliente_pais      = $client_data['pais'] ?? 'México'; // Corregido: Mapeo explícito de país
+        $cliente_pais      = $client_data['pais'] ?? 'México'; 
         $canal_origen      = 'Cliente Frecuente'; 
     }
 }
@@ -98,68 +97,8 @@ include '../includes/header.php';
     </div>
 </div>
 
-<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded" id="cardPasoCliente">
-    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-person-badge-fill text-danger me-2"></i> Paso 1: Datos de Contacto del Cliente</h5>
-    <p class="text-muted small">Registra los datos de contacto para mapearlos correctamente en el panel de control del CRM.</p>
-    
-    <div class="row g-3">
-        <div class="col-12 col-md-4">
-            <label class="form-label fw-semibold small text-dark">Nombre(s) <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ctrl-lead" id="lead_nombre" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Ej. Sergio Mauricio" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
-        </div>
-        <div class="col-12 col-md-4">
-            <label class="form-label fw-semibold small text-dark">Canal de Origen <span class="text-danger">*</span></label>
-            <?php if ($id_prospecto > 0 || $id_cliente_recompra > 0): ?>
-                <input type="text" class="form-control" value="<?= htmlspecialchars($canal_origen) ?>" readonly>
-            <?php else: ?>
-                <select class="form-select ctrl-lead" id="lead_canal" required>
-                    <option value="WhatsApp" selected>WhatsApp</option>
-                    <option value="Facebook">Facebook</option>
-                    <option value="YouTube">YouTube</option>
-                    <option value="Página Web">Página Web</option>
-                    <option value="Llamada Telefónica">Llamada Telefónica</option>
-                    <option value="Recomendación">Recomendación</option>
-                </select>
-            <?php endif; ?>
-        </div>
-        <div class="col-12 col-md-3">
-            <label class="form-label fw-semibold small text-dark">Teléfono Directo <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ctrl-lead" id="lead_telefono" value="<?= htmlspecialchars($cliente_telefono) ?>" placeholder="10 dígitos" maxlength="15" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?> required>
-        </div>
-        <div class="col-12 col-md-3">
-            <label class="form-label fw-semibold small text-dark">Correo Electrónico</label>
-            <input type="email" class="form-control ctrl-lead" id="lead_correo" value="<?= htmlspecialchars($cliente_correo) ?>" placeholder="cliente@correo.com" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?>>
-        </div>
-        <div class="col-12 col-md-3">
-            <label class="form-label fw-semibold small text-dark">Estado / Región</label>
-            <input type="text" class="form-control ctrl-lead" id="lead_region" value="<?= htmlspecialchars($cliente_region) ?>" placeholder="Ej. Puebla" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?>>
-        </div>
-        <div class="col-12 col-md-3">
-            <label class="form-label fw-semibold small text-dark">País</label>
-            <input type="text" class="form-control ctrl-lead" id="lead_pais" value="<?= htmlspecialchars($cliente_pais) ?>" placeholder="Ej. México" <?= ($id_prospecto > 0 || $id_cliente_recompra > 0) ? 'readonly' : '' ?>>
-        </div>
-        
-        <?php if ($id_prospecto <= 0 && $id_cliente_recompra <= 0): ?>
-        <div class="col-12 col-md-6 mt-2">
-            <label class="form-label fw-semibold small text-dark">Equipo de Interés Inicial <span class="text-danger">*</span></label>
-            <select class="form-select ctrl-lead" id="lead_maquina" required>
-                <option value="" selected disabled>Selecciona la máquina consultada...</option>
-                <?php foreach ($maquinas_reales as $maquina): ?>
-                    <option value="<?= htmlspecialchars($maquina) ?>"><?= htmlspecialchars($maquina) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div class="col-12 text-end border-top pt-3 mt-3">
-            <button type="button" class="btn btn-danger px-4 fw-bold small" id="btnCrearLeadManual" style="border-radius: 6px;">
-                Validar y Continuar a Cotización
-            </button>
-        </div>
-        <?php endif; ?>
-    </div>
-</div>
-
-<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded <?= ($id_prospecto <= 0 && $id_cliente_recompra <= 0) ? 'opacity-50' : '' ?>" id="cardSeccionCotizacion" style="<?= ($id_prospecto <= 0 && $id_cliente_recompra <= 0) ? 'pointer-events: none;' : '' ?>">
-    <h5 class="fw-bold text-dark mb-4"><i class="bi bi-calculator text-danger me-2"></i> Paso 2: Detalles y Precios de la Cotización</h5>
+<div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded" id="cardSeccionCotizacion">
+    <h5 class="fw-bold text-dark mb-4"><i class="bi bi-calculator text-danger me-2"></i> Configuración Comercial de la Cotización</h5>
     
     <form action="../actions/procesar_cotizacion.php" method="POST" id="formCotizacion">
         <input type="hidden" name="id_prospecto" id="sec_id_prospecto" value="<?= $id_prospecto ?>">
@@ -168,7 +107,7 @@ include '../includes/header.php';
         <div class="row g-3 mb-3">
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold text-dark small">Cliente / Razón Social <span class="text-danger">*</span></label>
-                <input type="text" class="form-control fw-bold bg-light" id="txt_cliente_fiscal" name="cliente" value="<?= htmlspecialchars($cliente_nombre . ' ' . $cliente_apellidos) ?>" placeholder="Se auto-rellenará..." readonly required>
+                <input type="text" class="form-control fw-bold bg-light" id="txt_cliente_fiscal" name="cliente" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Se auto-rellenará..." readonly required>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold text-dark small">RFC Receptor</label>
@@ -218,10 +157,10 @@ include '../includes/header.php';
 
         <div class="row g-3 mb-4 border-top pt-3">
             <div class="col-12 col-md-4">
-                <label class="form-label fw-semibold text-dark small">Precio Base de Lista ($ MXN)</label>
+                <label class="form-label fw-semibold text-dark small">Precio Base de Lista ($ MXN) <span class="text-danger">*</span></label>
                 <div class="input-group">
                     <span class="input-group-text bg-white text-muted">$</span>
-                    <input type="number" class="form-control fw-bold" id="precio_base_origen" name="precio_base_origen" readonly style="background-color: #f8f9fa;" step="0.01" required>
+                    <input type="number" class="form-control fw-bold text-dark" id="precio_base_origen" name="precio_base_origen" step="0.01" required>
                 </div>
             </div>
             <div class="col-12 col-md-4">
@@ -370,14 +309,13 @@ const especificacionesMaquinas = {
     'DEMEX 1020': "HELADO DURO (PRODUCCIÓN CADA 8-10 MIN. TODO EL DÍA)\n• Dimensiones: 70 x 60 x 149 CM | Peso Neto: 200 KG\n• Fabricada en Acero Inoxidable | Batidor de Acero Inoxidable\n• Potencia Energética: 5.1 KW/HR | Corriente de Entrada: Bifásica 220V/60HZ\n• Componentes: Cilindros de 20 Litros | Motor de 2.0 HP | Micromotor 220V/60Hz 1400 RPM 120 Watts\n• Características: Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático.\n• Refrigeración: Compresores Panasonic 2.3 HP x 2 (R410A) | Condensadores: 2 (1 x Compresor) | Condensación: Aire.\n• Requisito: Se recomienda conectar ampliamente a una pastilla (Brake) de 30 Amperes Bifásica."
 };
 
-function calcularFlujoComercial() {
+function calcularFlujoComercial(triggeredByManualInput = false) {
     const modeloTexto = $('#maquina_select').val();
     const tipoCliente = $('#tipo_cliente').val();
     const pctDesc = parseFloat($('#descuento_porcentaje').val()) || 0;
     const flete = parseFloat($('#costo_envio').val()) || 0;
     const cantidad = parseInt($('#cantidad').val()) || 1;
 
-    // MODIFICADO: Si no hay máquina seleccionada aún (caso Recompra Inicial), limpiar campos de totales y salir elegantemente sin romper JS
     if (!modeloTexto || !matrizPrecios[modeloTexto]) {
         $('#precio_base_origen').val('');
         $('#especificion_cotizada').val('');
@@ -387,10 +325,12 @@ function calcularFlujoComercial() {
         return;
     }
 
-    const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
-    
-    const precioBaseOriginalSinIva = precioConIvaLista / 1.16;
-    $('#precio_base_origen').off('change input').val(precioBaseOriginalSinIva.toFixed(2));
+    let precioBaseOriginalSinIva = parseFloat($('#precio_base_origen').val());
+    if (!triggeredByManualInput || isNaN(precioBaseOriginalSinIva)) {
+        const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
+        precioBaseOriginalSinIva = precioConIvaLista / 1.16;
+        $('#precio_base_origen').val(precioBaseOriginalSinIva.toFixed(2));
+    }
 
     $('#especificion_cotizada').val(especificacionesMaquinas[modeloTexto] || "");
 
@@ -431,69 +371,18 @@ function calcularFlujoComercial() {
 }
 
 $(document).ready(function() {
-    // NUEVO: Asegurar que si es una recompra de cliente directo, el Paso 2 esté completamente desbloqueado y visible desde el inicio
-    const idClienteRecompra = parseInt("<?= $id_cliente_recompra ?>") || 0;
-    if (idClienteRecompra > 0) {
-        $('#cardSeccionCotizacion').removeClass('opacity-50').css('pointer-events', 'auto');
-    }
-
     $('#maquina_select, #tipo_cliente').on('change', function() {
-        calcularFlujoComercial();
+        calcularFlujoComercial(false);
     });
     
     $('#descuento_porcentaje, #costo_envio, #cantidad').on('input', function() {
-        calcularFlujoComercial();
+        calcularFlujoComercial(false);
+    });
+
+    $('#precio_base_origen').on('input', function() {
+        calcularFlujoComercial(true);
     });
     
-    calcularFlujoComercial();
-
-    $('#btnCrearLeadManual').on('click', function() {
-        const nombre = $('#lead_nombre').val().trim();
-        const apellidos = $('#lead_apellidos').val().trim();
-        const canal = $('#lead_canal').val();
-        const telefono = $('#lead_telefono').val().trim();
-        const correo = $('#lead_correo').val().trim();
-        const region = $('#lead_region').val().trim();
-        const pais = $('#lead_pais').val().trim();
-        const maquinaSeleccionada = $('#lead_maquina').val();
-
-        if (nombre === '' || apellidos === '' || telefono === '' || !maquinaSeleccionada) {
-            Swal.fire({ title: 'Campos Obligatorios', text: 'Por favor, llena el nombre, apellidos, teléfono y equipo de interés.', icon: 'warning' });
-            return;
-        }
-
-        $.ajax({
-            url: '../actions/crear_lead_manual.php',
-            method: 'POST',
-            data: {
-                nombre: nombre,
-                apellidos: apellidos,
-                canal_origen: canal,
-                telefono: telefono,
-                correo: correo,
-                estado_region: region,
-                pais: pais,
-                maquina_interes: maquinaSeleccionada
-            },
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    Swal.fire({ title: '¡Lead Registrado!', text: 'Expediente comercial creado. Configura los costos de la cotización.', icon: 'success', timer: 1500, showConfirmButton: false });
-                    
-                    $('#sec_id_prospecto').val(response.id_prospecto);
-                    $('#txt_cliente_fiscal').val(nombre + ' ' + apellidos);
-                    $('#maquina_select').val(maquinaSeleccionada).trigger('change');
-                    $('#cardSeccionCotizacion').removeClass('opacity-50').css('pointer-events', 'auto');
-                    $('.ctrl-lead').attr('readonly', true).attr('disabled', true);
-                    $('#btnCrearLeadManual').hide();
-                } else {
-                    Swal.fire({ title: 'Error', text: response.message, icon: 'error' });
-                }
-            },
-            error: function() {
-                Swal.fire({ title: 'Error de Servidor', text: 'No se pudo registrar el expediente comercial de forma manual.', icon: 'error' });
-            }
-        });
-    });
+    calcularFlujoComercial(false);
 });
 </script>

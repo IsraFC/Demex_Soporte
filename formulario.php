@@ -54,13 +54,9 @@
                     <form action="actions/procesar_lead.php" method="POST" id="formLead">
                         
                         <div class="row g-3 mb-3">
-                            <div class="col-12 col-md-6">
-                                <label for="nombre" class="form-label fw-semibold text-dark mb-2">Nombre(s) <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Ej. Juan" required>
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label for="apellidos" class="form-label fw-semibold text-dark mb-2">Apellidos <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="apellidos" name="apellidos" placeholder="Ej. Pérez López" required>
+                            <div class="col-12">
+                                <label for="nombre" class="form-label fw-semibold text-dark mb-2">Nombre Completo o Razón Social <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Ej. Juan Pérez López o Distribuidora del Norte SA" required>
                             </div>
                         </div>
 
@@ -83,10 +79,10 @@
                             </div>
                             
                             <div class="col-12 col-md-6">
-                                <label for="correo" class="form-label fw-semibold text-dark mb-2">Correo Electrónico <span class="text-danger">*</span></label>
+                                <label for="correo" class="form-label fw-semibold text-dark mb-2">Correo Electrónico</label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-envelope"></i></span>
-                                    <input type="email" class="form-control border-start-0" id="correo" name="correo" placeholder="ejemplo@correo.com" required>
+                                    <input type="email" class="form-control border-start-0" id="correo" name="correo" placeholder="ejemplo@correo.com (Opcional)">
                                 </div>
                             </div>
                         </div>

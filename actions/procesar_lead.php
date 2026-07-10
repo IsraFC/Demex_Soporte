@@ -7,15 +7,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Recolección y limpieza de datos
     $nombre = trim($_POST['nombre']);
-    $apellidos = trim($_POST['apellidos']);
     $telefono = trim($_POST['telefono']);
-    $correo = trim($_POST['correo']);
+    $correo = isset($_POST['correo']) ? trim($_POST['correo']) : '';
     $pais = isset($_POST['pais']) ? trim($_POST['pais']) : 'México';
     $estado_region = trim($_POST['estado_region']);
     $maquina_interes = trim($_POST['maquina_interes']);
     $canal_origen = trim($_POST['canal_origen']); 
 
-    if (empty($nombre) || empty($apellidos) || empty($telefono) || empty($correo) || empty($estado_region) || empty($maquina_interes)) {
+    // Correo removido de la validación empty() por ser opcional
+    if (empty($nombre) || empty($telefono) || empty($estado_region) || empty($maquina_interes)) {
         die("Error: Todos los campos obligatorios deben estar llenos.");
     }
 
@@ -23,16 +23,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pdo->beginTransaction();
 
     try {
-        // SQL para tabla formulario
-        $sqlFormulario = "INSERT INTO formulario (nombre, apellidos, telefono, correo, pais, estado_region, maquina_interes, canal_origen, fecha_registro) 
-                          VALUES (:nombre, :apellidos, :telefono, :correo, :pais, :estado_region, :maquina_interes, :canal_origen, NOW())";
+        // SQL para tabla formulario (Columna apellidos eliminada)
+        $sqlFormulario = "INSERT INTO formulario (nombre, telefono, correo, pais, estado_region, maquina_interes, canal_origen, fecha_registro) 
+                          VALUES (:nombre, :telefono, :correo, :pais, :estado_region, :maquina_interes, :canal_origen, NOW())";
         
         $stmtForm = $pdo->prepare($sqlFormulario);
         $stmtForm->execute([
             ':nombre'          => $nombre,
-            ':apellidos'       => $apellidos,
             ':telefono'        => $telefono,
-            ':correo'          => $correo,
+            ':correo'          => !empty($correo) ? $correo : null, // Guarda NULL si viene vacío
             ':pais'            => $pais,
             ':estado_region'   => $estado_region,
             ':maquina_interes' => $maquina_interes,
@@ -136,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <h3 class="fw-bold text-dark mb-2">¡Solicitud Recibida!</h3>
                 <p class="text-muted small mb-0">
-                    Tu interés por el equipo <strong style="color: var(--primary-color);"><?php echo htmlspecialchars($maquina_interes); ?></strong> ha sido registrado en nuestro CRM.
+                    Tu interest por el equipo <strong style="color: var(--primary-color);"><?php echo htmlspecialchars($maquina_interes); ?></strong> ha sido registrado en nuestro CRM.
                 </p>
                 <p class="text-muted small mt-2">Un asesor se pondrá en contacto contigo a la brevedad.</p>
                 
@@ -162,10 +161,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         bar.style.width = '100%';
                     }, 600);
 
-                    // Redirección automática tras 3.2 segundos
+                    // Redirección automática tras 3.2 segundos de animación completada
                     setTimeout(() => {
                         window.location.href = '../formulario.php';
-                    }, 6200);
+                    }, 3800);
                 });
             </script>
             </body>

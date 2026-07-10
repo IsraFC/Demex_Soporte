@@ -6,7 +6,7 @@
  * ORDENAMIENTO: Clasificación por Prioridad Estricta de Semáforo (Urgente > Atención > En Curso).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.3 (Pipeline de Recompras Exclusivo de Ventas)
+ * @version 6.6 (Renderizado Dinámico de Perfil Comercial en la celda Cliente/Canal)
  */
 
 $page_title = "Pipeline de Recompras | CRM Ventas";
@@ -89,7 +89,7 @@ include '../includes/header.php';
             <thead class="table-light">
                 <tr class="text-uppercase small fw-bold text-muted">
                     <th>Fecha Emisión</th>
-                    <th>Cliente / Canal</th>
+                    <th>Cliente / Tipo</th>
                     <th>Contacto Directo</th>
                     <th>Ubicación</th>
                     <th>Equipo Cotizado</th>
@@ -101,7 +101,8 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                $sql = "SELECT cot.*, c.nombre_cliente, c.apellidos_cliente, c.correo, c.telefono, c.ubicacion, m.modelo AS maquina_nombre,
+                // MODIFICADO: Se añade 'c.tipo_cliente' a la selección para dinamizar el catálogo
+                $sql = "SELECT cot.*, c.nombre_cliente, c.correo, c.telefono, c.ubicacion, c.tipo_cliente, m.modelo AS maquina_nombre,
                                DATEDIFF(CURDATE(), cot.fecha_emision) AS dias_transcurridos
                         FROM cotizacion cot
                         INNER JOIN clientes c ON cot.id_cliente = c.id_cliente
@@ -119,7 +120,7 @@ include '../includes/header.php';
                 
                 $stmt = $pdo->query($sql);
                 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)):
-                    $nombre_completo = $row['nombre_cliente'] . ' ' . ($row['apellidos_cliente'] ?? '');
+                    $nombre_completo = $row['nombre_cliente'];
                     $estatus_real_cotizacion = $row['status_cotizacion'];
                     if ($row['estatus_seguimiento'] === 'En Seguimiento' && intval($row['dias_transcurridos']) > 30) {
                         $estatus_real_cotizacion = 'Vencida';
@@ -133,7 +134,8 @@ include '../includes/header.php';
                     <td class="small fw-semibold text-secondary"><?= date('d/m/Y', strtotime($row['fecha_emision'])) ?></td>
                     <td>
                         <div class="fw-bold text-dark lh-sm"><?= htmlspecialchars($nombre_completo) ?></div>
-                        <span class="badge mt-1 text-uppercase text-muted border bg-white" style="font-size: 0.65rem; letter-spacing: 0.5px; font-weight: 500; padding: 0.2rem 0.4rem; border-radius: 4px;">Cliente Frecuente</span>
+                        <!-- MODIFICADO: Ahora imprime de forma dinámica el tipo_cliente de la base de datos (Distribuidor o Público General) -->
+                        <span class="badge mt-1 text-uppercase text-muted border bg-white" style="font-size: 0.65rem; letter-spacing: 0.5px; font-weight: 500; padding: 0.2rem 0.4rem; border-radius: 4px;"><?= htmlspecialchars($row['tipo_cliente'] ?? 'Publico General') ?></span>
                     </td>
                     <td>
                         <?php if(!empty($row['correo'])): ?>
@@ -232,6 +234,32 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('msg') === 'success') {
+        Swal.fire({
+            title: '¡Cambios Guardados!',
+            text: 'La cotización de recompra y el expediente del cliente se actualizaron exitosamente.',
+            icon: 'success',
+            confirmButtonColor: '#198754',
+            confirmButtonText: 'Entendido',
+            showClass: { popup: 'animate__animated animate__fadeInDown' },
+            hideClass: { popup: 'animate__animated animate__fadeOutUp' }
+        }).then(() => {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        });
+    } else if (urlParams.get('msg') === 'error') {
+        const descError = urlParams.get('desc') || 'No se pudo procesar la actualización del documento.';
+        Swal.fire({
+            title: 'Error de Edición',
+            text: decodeURIComponent(descError),
+            icon: 'error',
+            confirmButtonColor: '#dc3545',
+            confirmButtonText: 'Revisar'
+        }).then(() => {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        });
+    }
+
     function calcularSemaforosComerciales() {
         const ahora = Date.now();
         let countEnCurso = 0, countAtencion = 0, countUrgentes = 0;
@@ -297,7 +325,7 @@ $(document).ready(function() {
                 fila.removeClass('table-danger-sutil').addClass('table-warning-sutil').attr('data-urgente', '0').attr('data-atencion', '1').attr('data-encurso', '0');
                 countAtencion++;
             } else {
-                $(this).html('<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
+                $(this).html('<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 3.5s !important;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
                 fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
                 countEnCurso++;
             }
@@ -316,7 +344,6 @@ $(document).ready(function() {
 
     $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
     $('#filterEquipo').on('change', function() { table.column(4).search(this.value).draw(); });
-    $('#filterEstatusComercial').on('change', function() { table.column(5).search(this.value).draw(); });
     
     $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
         var row = $(table.row(dataIndex).node());
@@ -368,14 +395,15 @@ function cerrarOperacionRecompra(idCotizacion, clienteEscaped, maquinaEscaped, c
 }
 
 function verDetallesCotizacion(idCotizacion) {
-    $('#cuerpoModalCotizacion').html(`<div class="text-center py-4"><div class="spinner-border text-danger" role="status"></div><p class="text-muted small mt-2">Consultando expediente...</p></div>`);
+    $_cuerpo = $('#cuerpoModalCotizacion');
+    $_cuerpo.html(`<div class="text-center py-4"><div class="spinner-border text-danger" role="status"></div><p class="text-muted small mt-2">Consultando expediente...</p></div>`);
     $('#modalDetallesCotizacion').appendTo("body").modal('show');
     $.ajax({
         url: '../actions/obtener_detalles_cotizacion.php',
         method: 'GET',
         data: { id_cotizacion: idCotizacion },
-        success: function(response) { $('#cuerpoModalCotizacion').html(response); },
-        error: function() { $('#cuerpoModalCotizacion').html('<div class="alert alert-danger m-0">Error al conectar con el servidor comercial.</div>'); }
+        success: function(response) { $_cuerpo.html(response); },
+        error: function() { $_cuerpo.html('<div class="alert alert-danger m-0">Error al conectar con el servidor comercial.</div>'); }
     });
 }
 </script>

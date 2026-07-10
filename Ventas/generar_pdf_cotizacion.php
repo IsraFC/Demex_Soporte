@@ -5,7 +5,7 @@
  * Integra el panel superior con el diseño y la paleta roja oficial del sistema de DEMEX (.btn-danger).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 7.7 (Integración de Datos Bancarios Corporativos)
+ * @version 8.0 (Redirección Dinámica Inteligente: Historial de Compras o Leads CRM)
  */
 
 $page_title = "Propuesta Comercial Generada | CRM Ventas";
@@ -20,12 +20,13 @@ if ($id_cotizacion === 0) {
 }
 
 // Jalamos los datos mediante JOIN estricto usando las relaciones reales de tu SQL
+// Modificado: Se removieron los campos de apellidos para ajustarse a la estructura limpia
 $sql = "SELECT c.*, 
                m.modelo AS maquina_nombre,
-               CONCAT(f.nombre, ' ', f.apellidos) AS cliente_nombre,
+               f.nombre AS cliente_nombre,
                f.telefono AS cliente_telefono,
                f.correo AS cliente_correo,
-               CONCAT(u.nombre, ' ', u.apellidos) AS asesor_nombre
+               u.nombre AS asesor_nombre
         FROM cotizacion c
         INNER JOIN maquinaria m ON c.id_maquina = m.id_maquina
         INNER JOIN usuarios u ON c.id_usuario = u.id_usuario
@@ -40,6 +41,12 @@ $cotizacion = $stmt->fetch();
 if (!$cotizacion) {
     echo "<h3>Error: La cotización no existe en el sistema o los IDs relacionales fallaron.</h3>";
     exit();
+}
+
+// NUEVO: Definición dinámica del botón de regreso según el origen del documento
+$url_regresar = "leads_crm.php"; 
+if (!empty($cotizacion['id_cliente']) && intval($cotizacion['id_cliente']) > 0) {
+    $url_regresar = "historial_compras.php?id_cliente=" . intval($cotizacion['id_cliente']);
 }
 
 // RECÁLCULO DINÁMICO EXACTO EN PHP
@@ -113,8 +120,9 @@ include '../includes/header.php';
                 <span class="crm-text-header text-dark">Vista previa del documento</span>
             </div>
             <div class="d-flex gap-2">
-                <a href="leads_crm.php" class="btn btn-secondary shadow-sm px-3 d-inline-flex align-items-center fw-semibold">
-                    <i class="bi bi-arrow-left me-1"></i> Regresar a CRM
+                <!-- MODIFICADO: Atributo href dinámico basado en el origen de la consulta (Leads o Cartera de Clientes) -->
+                <a href="<?= $url_regresar ?>" class="btn btn-secondary shadow-sm px-3 d-inline-flex align-items-center fw-semibold">
+                    <i class="bi bi-arrow-left me-1"></i> Regresar
                 </a>
                 <button onclick="window.print();" class="btn btn-danger shadow-sm px-4 d-inline-flex align-items-center fw-semibold">
                     <i class="bi bi-printer-fill me-2"></i> Imprimir PDF
@@ -133,7 +141,8 @@ include '../includes/header.php';
                 <p class="text-muted small m-0" style="font-size: 0.82rem; line-height: 1.4;">
                     RFC: DEM160408QF8 | Tel. 2228892629<br>
                     San Andrés Cholula, Puebla, México<br>
-                    Atendido por: <span class="fw-semibold text-dark"><?= htmlspecialchars($cotizacion['asesor_nombre']) ?></span>
+                    <!-- Mantiene el Nombre fijo corporativo de la encargada -->
+                    Atendido por: <span class="fw-semibold text-dark">Nadia Torres Fernández</span>
                 </p>
             </div>
             <div class="col-5 text-end">
@@ -203,7 +212,7 @@ include '../includes/header.php';
             </div>
         </div>
 
-<div class="row align-items-start mt-2">
+        <div class="row align-items-start mt-2">
             <div class="col-7" style="font-size: 0.72rem; color: #555; line-height: 1.4;">
                 
                 <?php
@@ -225,7 +234,7 @@ include '../includes/header.php';
                 }
                 ?>
 
-                <div class="fw-bold text-uppercase text-secondary mb-1" style="letter-spacing: 0.3px;">Condiciones Comerciales y de Garantía:</div>
+                <div class="fw-bold text-uppercase text-secondary mb-1" style="letter-spacing: 0.3px;">Condiciones Comercial y de Garantía:</div>
                 <div class="p-2 border rounded bg-light mb-2 text-muted">
                     <ul class="mb-0 ps-3">
                         <?= implode('', array_map(function($linea) { return "<li>" . htmlspecialchars(trim($linea)) . "</li>"; }, explode("\n", $bancos['condicion']))) ?>
