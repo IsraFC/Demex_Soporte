@@ -5,7 +5,7 @@
  * MODIFICACIÓN: Soportado para editar tanto prospectos del embudo como recompras del catálogo de clientes.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 5.4 (Unificación de Flujo de Edición Comercial)
+ * @version 5.5 (Unificación de Nombre/Razón Social y Precio Base Editable)
  */
 
 $page_title = "Editar Cotización | CRM Ventas";
@@ -18,10 +18,10 @@ if ($id_cotizacion === 0) {
     exit();
 }
 
-// 1. CONSULTA DE RECUPERACIÓN UNIFICADA: Buscamos en formularios (leads) y también en clientes (cartera)
+// 1. CONSULTA DE RECUPERACIÓN UNIFICADA: Buscamos en formularios (leads) y también en clientes (cartera) - Apellidos removidos
 $sql = "SELECT c.*, m.modelo AS maquina_nombre, 
-               CONCAT(f.nombre, ' ', f.apellidos) AS lead_cliente_nombre,
-               CONCAT(cl.nombre_cliente, ' ', cl.apellidos_cliente) AS cartera_cliente_nombre
+               f.nombre AS lead_cliente_nombre,
+               cl.nombre_cliente AS cartera_cliente_nombre
         FROM cotizacion c
         INNER JOIN maquinaria m ON c.id_maquina = m.id_maquina
         LEFT JOIN prospectos p ON c.id_prospecto = p.id_prospecto
@@ -81,7 +81,6 @@ $precio_base_guardado = floatval($cotizacion['precio_base_origen']);
 $precio_pactado_guardado = floatval($cotizacion['precio_pactado']);
 $descuento_porcentaje_inicial = 0;
 if ($precio_base_guardado > 0) {
-    // Calculamos el precio oficial sin IVA para poder realizar la comparación real contra el pactado unitario
     $precio_oficial_con_iva = ($cotizacion['tipo_cliente'] === 'Publico General') ? $catalogo_precios[$cotizacion['maquina_nombre']]['publico'] : $catalogo_precios[$cotizacion['maquina_nombre']]['distribuidor'];
     $precio_base_sin_iva = $precio_oficial_con_iva / 1.16;
     $descuento_porcentaje_inicial = round((($precio_base_sin_iva - $precio_pactado_guardado) / $precio_base_sin_iva) * 100);
@@ -156,10 +155,10 @@ include '../includes/header.php';
 
         <div class="row g-3 mb-4 border-top pt-3">
             <div class="col-12 col-md-4">
-                <label class="form-label fw-semibold text-dark small">Precio Base de Lista ($ MXN)</label>
+                <label class="form-label fw-semibold text-dark small">Precio Base de Lista ($ MXN) <span class="text-danger">*</span></label>
                 <div class="input-group">
                     <span class="input-group-text bg-white text-muted">$</span>
-                    <input type="number" class="form-control fw-bold" id="precio_base_origen" name="precio_base_origen" readonly style="background-color: #f8f9fa;" step="0.01" value="" required>
+                    <input type="number" class="form-control fw-bold text-dark" id="precio_base_origen" name="precio_base_origen" step="0.01" required>
                 </div>
             </div>
             <div class="col-12 col-md-4">
@@ -309,8 +308,7 @@ const especificacionesMaquinas = {
     'DEMEX 1020': "HELADO DURO (PRODUCCIÓN CADA 8-10 MIN. TODO EL DÍA)\n• Dimensiones: 70 x 60 x 149 CM | Peso Neto: 200 KG\n• Fabricada en Acero Inoxidable | Batidor de Acero Inoxidable\n• Potencia Energética: 5.1 KW/HR | Corriente de Entrada: Bifásica 220V/60HZ\n• Componentes: Cilindros de 20 Litros | Motor de 2.0 HP | Micromotor 220V/60Hz 1400 RPM 120 Watts\n• Características: Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático.\n• Refrigeración: Compresores Panasonic 2.3 HP x 2 (R410A) | Condensadores: 2 (1 x Compresor) | Condensación: Aire.\n• Requisito: Se recomienda conectar ampliamente a una pastilla (Brake) de 30 Amperes Bifásica."
 };
 
-function calcularFlujoComercial() {
-    const idMaquina = $('#id_maquina_select').val();
+function calcularFlujoComercial(triggeredByManualInput = false) {
     const modeloTexto = $('#id_maquina_select').find('option:selected').data('model-name');
     const tipoCliente = $('#tipo_cliente').val();
     const pctDesc = parseFloat($('#descuento_porcentaje').val()) || 0;
@@ -319,14 +317,13 @@ function calcularFlujoComercial() {
 
     if (!modeloTexto || !matrizPrecios[modeloTexto]) return;
 
-    // 1. Extraemos el precio oficial CON IVA del catálogo estático
-    const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
-    
-    // Mantenemos el input de arriba mostrando el precio redondo oficial con IVA para comodidad de la vendedora
-    $('#precio_base_origen').val(precioConIvaLista.toFixed(2));
-
-    // 2. Por detrás (en background), hacemos el desglose matemático entre 1.16 para las etiquetas de abajo
-    const precioBaseOriginalSinIva = precioConIvaLista / 1.16;
+    // MODIFICADO: Lógica de Precio Base Dinámico y Editable
+    let precioBaseOriginalSinIva = parseFloat($('#precio_base_origen').val());
+    if (!triggeredByManualInput || isNaN(precioBaseOriginalSinIva)) {
+        const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
+        precioBaseOriginalSinIva = precioConIvaLista / 1.16;
+        $('#precio_base_origen').val(precioBaseOriginalSinIva.toFixed(2));
+    }
 
     const montoDescuentoUnitario = precioBaseOriginalSinIva * (pctDesc / 100);
     const precioPactadoUnitario = precioBaseOriginalSinIva - montoDescuentoUnitario;
@@ -338,7 +335,6 @@ function calcularFlujoComercial() {
 
     const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-    // 3. Inyectamos los valores desglosados en las etiquetas de abajo
     $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginalSinIva));
     $('#lbl_descuento_monto').text('-' + formatoMXN.format(montoDescuentoUnitario * cantidad));
     $('#lbl_flete_monto').text(formatoMXN.format(flete));
@@ -367,25 +363,35 @@ function calcularFlujoComercial() {
 }
 
 $(document).ready(function() {
+    // Escucha inicial para precargar los datos guardados de la BD
+    const precioInicialBD = parseFloat("<?= $precio_base_guardado ?>") || 0;
+    if (precioInicialBD > 0) {
+        $('#precio_base_origen').val(precioInicialBD.toFixed(2));
+    }
+
     $('#id_maquina_select').on('change', function() {
         const modeloNombre = $(this).find('option:selected').data('model-name');
         if(especificacionesMaquinas[modeloNombre]) {
             $('#especificion_cotizada').val(especificacionesMaquinas[modeloNombre]);
         }
-        calcularFlujoComercial();
+        calcularFlujoComercial(false);
     });
 
     $('#tipo_cliente').on('change', function() {
-        calcularFlujoComercial();
+        calcularFlujoComercial(false);
     });
     
     $('#descuento_porcentaje, #costo_envio, #cantidad').on('input', function() {
-        calcularFlujoComercial();
+        calcularFlujoComercial(false);
+    });
+
+    // NUEVO: Escucha cambios directos sobre el precio base escrito a mano
+    $('#precio_base_origen').on('input', function() {
+        calcularFlujoComercial(true);
     });
     
-    // Pequeño retardo controlado para renderizar los KPIs en caliente al entrar
     setTimeout(function() {
-        calcularFlujoComercial();
+        calcularFlujoComercial(precioInicialBD > 0);
     }, 150);
 });
 </script>

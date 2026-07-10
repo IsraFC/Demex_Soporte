@@ -4,7 +4,7 @@
  * DESCRIPCIÓN: Procesador asíncrono para actualizar el estatus comercial y migrar el prospecto ganado a cartera de clientes.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 3.0 (Mutación de Lead a Cartera Activa)
+ * @version 3.1 (Unificación de Nombre/Razón Social y Eliminación de Apellidos en Clientes)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -49,8 +49,9 @@ try {
     // 2. Si es 'Venta Cerrada', ejecutamos de forma automatizada la mutación de lead a cliente
     if ($status_comercial === 'Venta Cerrada') {
         
-        // Jalamos la última cotización activa de este prospecto para jalar los costos acordados y el modelo
-        $sql_cot = "SELECT c.*, f.nombre, f.apellidos, f.telefono, f.correo, f.estado_region
+        // Jalamos la última cotización activa de este prospecto para obtener los costos acordados y el modelo
+        // Modificado: Se removió la columna apellidos de la consulta
+        $sql_cot = "SELECT c.*, f.nombre, f.telefono, f.correo, f.estado_region
                     FROM cotizacion c
                     INNER JOIN prospectos p ON c.id_prospecto = p.id_prospecto
                     INNER JOIN formulario f ON p.id_formulario = f.id_formulario
@@ -62,8 +63,7 @@ try {
         $datos_venta = $stmt_cot->fetch(PDO::FETCH_ASSOC);
 
         if ($datos_venta) {
-            $nombre_cliente    = $datos_venta['nombre'];
-            $apellidos_cliente = $datos_venta['apellidos'];
+            $nombre_cliente    = $datos_venta['nombre']; // Ahora actúa como Nombre Completo / Razón Social
             $telefono          = $datos_venta['telefono'];
             $correo            = $datos_venta['correo'];
             $ubicacion         = $datos_venta['estado_region'];
@@ -75,18 +75,18 @@ try {
             $tipo_cliente      = $datos_venta['tipo_cliente'];
             $rfc_receptor      = $datos_venta['rfc_receptor'];
 
-            // 3. Verificamos si este cliente ya existe en el catálogo unificado para no duplicar identidades
-            $sql_check = "SELECT id_cliente FROM clientes WHERE nombre_cliente = ? AND apellidos_cliente = ? LIMIT 1";
+            // 3. Verificamos si este cliente ya existe en el catálogo unificado usando solo la Razón Social / Nombre Único
+            $sql_check = "SELECT id_cliente FROM clientes WHERE nombre_cliente = ? LIMIT 1";
             $stmt_check = $pdo->prepare($sql_check);
-            $stmt_check->execute([$nombre_cliente, $apellidos_cliente]);
+            $stmt_check->execute([$nombre_cliente]);
             $id_cliente = $stmt_check->fetchColumn();
 
             if (!$id_cliente) {
-                // Inserción en catálogo unificado
-                $sql_ins_cli = "INSERT INTO clientes (nombre_cliente, apellidos_cliente, telefono, correo, rfc_receptor, ubicacion, id_prospecto_origen, tipo_cliente, fecha_registro) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                // Inserción en catálogo unificado (Columna apellidos_cliente removida de la estructura)
+                $sql_ins_cli = "INSERT INTO clientes (nombre_cliente, telefono, correo, rfc_receptor, ubicacion, id_prospecto_origen, tipo_cliente, fecha_registro) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
                 $stmt_ins = $pdo->prepare($sql_ins_cli);
-                $stmt_ins->execute([$nombre_cliente, $apellidos_cliente, $telefono, $correo, $rfc_receptor, $ubicacion, $id_prospecto, $tipo_cliente]);
+                $stmt_ins->execute([$nombre_cliente, $telefono, !empty($correo) ? $correo : null, $rfc_receptor, $ubicacion, $id_prospecto, $tipo_cliente]);
                 $id_cliente = $pdo->lastInsertId();
             }
 

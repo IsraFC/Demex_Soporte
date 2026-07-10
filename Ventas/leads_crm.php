@@ -6,7 +6,7 @@
  * ORDENAMIENTO: Clasificación por Prioridad Estricta de Semáforo (Urgente > Atención > En Curso > Al día).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.1 (Cierre Comercial con Captura de Datos para Cartera)
+ * @version 6.2 (Unificación de Nombre Completo / Razón Social)
  */
 
 $page_title = "Panel de Seguimiento | CRM Ventas";
@@ -144,11 +144,11 @@ include '../includes/header.php';
                     data-encurso="0"> 
                     <td class="small fw-semibold text-secondary"><?= date('d/m/Y g:i A', strtotime($lead['fecha_registro'])) ?></td>
                     <td>
-                        <div class="fw-bold text-dark lh-sm"><?= htmlspecialchars($lead['nombre'] . ' ' . $lead['apellidos']) ?></div>
+                        <div class="fw-bold text-dark lh-sm"><?= htmlspecialchars($lead['nombre']) ?></div>
                         <span class="badge mt-1 text-uppercase text-muted border bg-white" style="font-size: 0.65rem; letter-spacing: 0.5px; font-weight: 500; padding: 0.2rem 0.4rem; border-radius: 4px;"><?= htmlspecialchars($lead['canal_origen']) ?></span>
                     </td>
                     <td>
-                        <div class="small text-dark"><i class="bi bi-envelope me-1 text-muted"></i><?= htmlspecialchars($lead['correo']) ?></div>
+                        <div class="small text-dark"><i class="bi bi-envelope me-1 text-muted"></i><?= htmlspecialchars($lead['correo'] ?? 'Sin Correo') ?></div>
                         <div class="small mt-1">
                             <a href="https://wa.me/52<?= $lead['telefono'] ?>" target="_blank" class="text-success text-decoration-none fw-semibold d-inline-flex align-items-center">
                                 <i class="bi bi-whatsapp me-1 fs-6"></i><?= htmlspecialchars($lead['telefono']) ?>

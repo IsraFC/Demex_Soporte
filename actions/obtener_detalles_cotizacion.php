@@ -5,7 +5,7 @@
  * MODIFICACIÓN: Adaptado para soportar tanto Leads Nuevos (Formularios) como Clientes Recurrentes (Cartera/Soporte).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.7 (Unificación de Orígenes de Datos Comercial)
+ * @version 2.0 (Nombre de Asesor Fijo Estándar y Apertura de PDF en la misma ventana)
  */
 
 // Subir dos niveles para encontrar correctamente la configuración de la BD
@@ -19,10 +19,10 @@ if ($id_cotizacion <= 0) {
 }
 
 try {
-    // Consulta unificada usando LEFT JOINs para no perder registros si id_prospecto es NULL
+    // Consulta unificada modificada: se remueven columnas de apellidos por unificación de nombre
     $sql = "SELECT c.*, m.modelo AS maquina_modelo,
-                   f.nombre AS lead_nombre, f.apellidos AS lead_apellidos, f.correo AS lead_correo, f.telefono AS lead_telefono,
-                   cl.nombre_cliente, cl.apellidos_cliente, cl.correo AS cliente_correo, cl.telefono AS cliente_telefono
+                   f.nombre AS lead_nombre, f.correo AS lead_correo, f.telefono AS lead_telefono,
+                   cl.nombre_cliente, cl.correo AS cliente_correo, cl.telefono AS cliente_telefono
             FROM cotizacion c
             INNER JOIN maquinaria m ON c.id_maquina = m.id_maquina
             LEFT JOIN prospectos p ON c.id_prospecto = p.id_prospecto
@@ -42,9 +42,7 @@ try {
     // Mapeo Inteligente de Datos según el origen (Si es Recompra o Lead Nuevo)
     $es_recompra = !empty($cot['id_cliente']);
     
-    $nombre_completo = $es_recompra 
-        ? $cot['nombre_cliente'] . ' ' . ($cot['apellidos_cliente'] ?? '')
-        : $cot['lead_nombre'] . ' ' . $cot['lead_apellidos'];
+    $nombre_completo = $es_recompra ? $cot['nombre_cliente'] : $cot['lead_nombre'];
         
     $correo_display   = $es_recompra ? $cot['cliente_correo'] : $cot['lead_correo'];
     $telefono_display = $es_recompra ? $cot['cliente_telefono'] : $cot['lead_telefono'];
@@ -109,6 +107,10 @@ try {
                     <tr>
                         <td class="text-muted fw-bold">Ubicación Entrega:</td>
                         <td class="small text-secondary"><?= htmlspecialchars($cot['direccion_entrega'] ?: 'Recoge en Planta / Sucursal') ?></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted fw-bold">Asesor Asignado:</td>
+                        <td class="fw-semibold text-dark">Nadia Torres Fernández</td>
                     </tr>
                 </table>
 
@@ -178,6 +180,14 @@ try {
                     </div>
                 </div>
                 <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="row mt-4 pt-2 border-top">
+            <div class="col-12 text-end">
+                <a href="generar_pdf_cotizacion.php?id_cotizacion=<?= $cot['id_cotizacion'] ?>" class="btn btn-danger px-4 fw-bold shadow-sm d-inline-flex align-items-center" style="border-radius: 8px; font-size: 0.88rem;">
+                    <i class="bi bi-file-earmark-pdf-fill me-2"></i> Visualizar PDF
+                </a>
             </div>
         </div>
     </div>
