@@ -6,7 +6,7 @@
  * ORDENAMIENTO: Clasificación por Prioridad Estricta de Semáforo (Urgente > Atención > En Curso > Al día).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 7.0 (Semáforo Comercial basado en Fecha de Recordatorio y Vencimiento Planificado)
+ * @version 7.1 (Corrección estricta de invocación a modal de cierre comercial)
  */
 
 $page_title = "Panel de Seguimiento | CRM Ventas";
@@ -111,7 +111,6 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                // MODIFICADO: Se añade c.fecha_recordatorio y c.fecha_vencimiento a la selección SQL
                 $sql = "SELECT f.*, p.id_prospecto, p.status_comercial, p.fecha_ultimo_contacto,
                                c.id_cotizacion, c.status_cotizacion, c.fecha_emision AS cotizacion_fecha,
                                c.fecha_vencimiento, c.fecha_recordatorio
@@ -173,7 +172,6 @@ include '../includes/header.php';
                         data-status-cotiz="<?= htmlspecialchars($estatus_real_cotizacion ?? '') ?>">
                     </td>
 
-                    <!-- MODIFICADO DATA ATTRIBUTES: Pasamos las variables cronológicas para cálculo reactivo en JS -->
                     <td class="text-center col-semaforo" 
                         data-status-venta="<?= $lead['status_comercial'] ?>"
                         data-status-cotizacion="<?= htmlspecialchars($estatus_real_cotizacion ?? '') ?>"
@@ -197,8 +195,8 @@ include '../includes/header.php';
 <div class="modal fade" id="modalLiberarVenta" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content shadow border-0" style="border-radius: 16px;">
-            <div class="modal-header bg-success text-white" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
-                <h5 class="modal-title fw-bold"><i class="bi bi-check-circle-fill me-2"></i> Formulario de Cierre de Venta</h5>
+            <div class="modal-header bg-danger text-white" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
+                <h5 class="modal-title fw-bold"><i class="bi bi-check-circle-fill me-2"></i> Desgloce de cierre de Venta</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="formConfirmarVenta">
@@ -218,7 +216,7 @@ include '../includes/header.php';
                 </div>
                 <div class="modal-footer bg-light border-0 px-4 py-3" style="border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;">
                     <button type="button" class="btn btn-secondary px-3 fw-bold small" data-bs-dismiss="modal">Regresar</button>
-                    <button type="submit" class="btn btn-success px-4 fw-bold small"><i class="bi bi-send-check me-1"></i> Liberar y Pasar a Clientes</button>
+                    <button type="submit" class="btn btn-danger px-4 fw-bold small"><i class="bi bi-send-check me-1"></i> Liberar y Pasar a Clientes</button>
                 </div>
             </form>
         </div>
@@ -276,12 +274,10 @@ $(document).ready(function() {
     const hoyStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     let leadsPendientesHoy = [];
 
-    // Escaneamos las filas cargadas para ver cuáles tienen recordatorio agendado para hoy
     $('.row-lead-item').each(function() {
         const fechaRec = $(this).find('.col-semaforo').data('fecha-recordatorio');
         const statusVenta = $(this).find('.col-semaforo').data('status-venta');
         
-        // Si tiene recordatorio hoy y sigue en seguimiento activo
         if (fechaRec === hoyStr && statusVenta === 'Cotizado') {
             const nombreLead = $(this).find('.fw-bold.text-dark').text().trim();
             const equipo = $(this).attr('data-equipo');
@@ -289,7 +285,6 @@ $(document).ready(function() {
         }
     });
 
-    // Si hay prospectos agendados para hoy, los notificamos proactivamente en la esquina superior derecha
     if (leadsPendientesHoy.length > 0) {
         Swal.fire({
             title: `<i class="bi bi-bell-fill text-danger animate__animated animate__swing animate__infinite" style="display:inline-block;"></i> Tienes ${leadsPendientesHoy.length} seguimiento(s) hoy`,
@@ -300,17 +295,17 @@ $(document).ready(function() {
             icon: 'info',
             confirmButtonColor: '#c72f3e',
             confirmButtonText: 'Continuar',
-            backdrop: false, // No bloquea el fondo para dejar trabajar a la vendedora
-            position: 'top-end', // Esquina superior derecha limpia
+            backdrop: false,
+            position: 'top-end',
             toast: false,
             showCloseButton: true,
             customClass: { popup: 'shadow-lg border-start border-4 border-danger' }
         });
     }
-    // =========================================================
 
-    function calcularSemaforosComerciales() {
+function calcularSemaforosComerciales() {
         let countEnCurso = 0, countAtencion = 0, countUrgentes = 0;
+        const ahora = new Date().getTime(); // Corrección para la variable de tiempo
 
         $('.col-semaforo').each(function() {
             const statusVenta = $(this).data('status-venta');
@@ -324,7 +319,8 @@ $(document).ready(function() {
             const contenedorCotizBadge = fila.find('.col-cotizacion-badge');
             
             const idProspecto = contenedorAcciones.data('id-prospecto');
-            const idCotizacion = contenedorAcciones.data('id-cotizacion');
+            // BLINDAJE: Si no hay cotización, forzamos que sea 0 o vacío de forma segura
+            const idCotizacion = contenedorAcciones.data('id-cotizacion') || '0';
 
             let statusBadgeHtml = '';
             if (statusVenta === 'Venta Cerrada') {
@@ -351,14 +347,16 @@ $(document).ready(function() {
             }
             if (contenedorCotizBadge.html() !== cotizBadgeHtml) contenedorCotizBadge.html(cotizBadgeHtml);
 
+            // === BLINDAJE CRÍTICO AQUÍ: Manejo de botones sin romper el HTML ===
             let botonesHtml = '';
             if (statusVenta === 'Venta Cerrada') {
                 botonesHtml = `<button type="button" onclick="verDetallesCotizacion(${idCotizacion})" class="btn btn-outline-info border-0" title="Visualizar Detalle Cotización"><i class="bi bi-eye-fill fs-5"></i></button>`;
-            } else if (statusVenta === 'Cotizado') {
+            } else if (statusVenta === 'Cotizado' && idCotizacion !== '0' && idCotizacion !== 0) {
                 botonesHtml = `<button type="button" onclick="verDetallesCotizacion(${idCotizacion})" class="btn btn-outline-info border-0" title="Visualizar Detalle Cotización"><i class="bi bi-eye-fill fs-5"></i></button>
                                <a href="editar_cotizacion.php?id_cotizacion=${idCotizacion}" class="btn btn-outline-warning border-0" title="Editar Cotización"><i class="bi bi-pencil-square fs-5"></i></a>
-                               <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperacionComercial(${idProspecto})" title="Cerrar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>`;
+                               <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperationComercial(${idProspecto})" title="Cerrar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>`;
             } else {
+                // Si está consultado o por alguna razón no tiene cotización, siempre le damos el botón de crear
                 botonesHtml = `<a href="cotizaciones.php?id_prospecto=${idProspecto}" class="btn btn-outline-danger border-0" title="Generar Cotización"><i class="bi bi-file-earmark-plus-fill fs-5"></i></a>`;
             }
             if (contenedorAcciones.html() !== botonesHtml) contenedorAcciones.html(botonesHtml);
@@ -369,29 +367,30 @@ $(document).ready(function() {
                 return;
             }
 
-            if (statusVenta === 'Consultado') {
+            if (statusVenta === 'Consultado' || !tieneCotizacion || tieneCotizacion === '0') {
                 const fechaConsulta = new Date(fechaConsultaStr);
                 const diasInactivo = Math.floor((ahora - fechaConsulta.getTime()) / (1000 * 60 * 60 * 24));
                 if (diasInactivo > 5) {
-                    $(this).html('<span class="badge bg-danger animate__animated animate__headShake animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 3.5s !important;"><i class="bi bi-fire me-1"></i> Urgente</span>');
+                    $(this).html('<span class="badge bg-danger text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-fire me-1"></i> Urgente</span>');
                     fila.removeClass('table-warning-sutil').addClass('table-danger-sutil').attr('data-urgente', '1').attr('data-atencion', '0').attr('data-encurso', '0');
                     countUrgentes++;
                 } else {
-                    $(this).html('<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 3.5s !important;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
+                    $(this).html('<span class="badge bg-primary text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
                     fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
                     countEnCurso++;
                 }
             } else if (statusVenta === 'Cotizado') {
+                const hoyStr = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
                 if (statusCotiz === 'Vencida' || (fechaRecordatorioStr && fechaRecordatorioStr < hoyStr)) {
-                    $(this).html('<span class="badge bg-danger animate__animated animate__headShake animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 6.5s !important;"><i class="bi bi-fire me-1"></i> Urgente</span>');
+                    $(this).html('<span class="badge bg-danger text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-fire me-1"></i> Urgente</span>');
                     fila.removeClass('table-warning-sutil').addClass('table-danger-sutil').attr('data-urgente', '1').attr('data-atencion', '0').attr('data-encurso', '0');
                     countUrgentes++;
                 } else if (fechaRecordatorioStr === hoyStr) {
-                    $(this).html('<span class="badge bg-warning text-dark animate__animated animate__flash animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 4.5s !important;"><i class="bi bi-exclamation-triangle-fill me-1"></i> Atención</span>');
+                    $(this).html('<span class="badge bg-warning text-dark px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-exclamation-triangle-fill me-1"></i> Atención</span>');
                     fila.removeClass('table-danger-sutil').addClass('table-warning-sutil').attr('data-urgente', '0').attr('data-atencion', '1').attr('data-encurso', '0');
                     countAtencion++;
                 } else {
-                    $(this).html('<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 3.5s !important;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
+                    $(this).html('<span class="badge bg-primary text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
                     fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
                     countEnCurso++;
                 }
@@ -433,6 +432,8 @@ $(document).ready(function() {
         e.preventDefault();
         const idProspecto = $('#liberar_id_prospecto').val();
         const fechaCompra = $('#liberar_fecha_compra').val();
+        
+        // CORREGIDO: Cambiado a #liberar_observaciones para que haga match estricto con el id del textarea
         const observaciones = $('#liberar_observaciones').val();
 
         $.ajax({
@@ -472,7 +473,9 @@ function cerrarOperationComercial(idProspecto) {
     $('#formConfirmarVenta')[0].reset();
     $('#liberar_id_prospecto').val(idProspecto);
     $('#liberar_fecha_compra').val(new Date().toISOString().split('T')[0]);
-    $('#modalLiberarVenta').modal('show');
+    
+    // CORREGIDO: Empujamos el modal al body antes de mostrarlo para que el fondo opaco no tape la pantalla
+    $('#modalLiberarVenta').appendTo("body").modal('show');
 }
 
 function verDetallesCotizacion(idCotizacion) {
