@@ -85,7 +85,7 @@ include '../includes/header.php';
 
         <div class="col-auto">
             <a href="registrar_cliente.php" class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm py-2">
-                <i class="bi bi-person-plus-fill me-1"></i> Registrar Cliente Manual
+                <i class="bi bi-person-plus-fill me-1"></i> Registrar Cliente
             </a>
         </div>
     </div>
