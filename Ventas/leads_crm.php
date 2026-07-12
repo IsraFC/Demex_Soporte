@@ -6,7 +6,7 @@
  * ORDENAMIENTO: Clasificación por Prioridad Estricta de Semáforo (Urgente > Atención > En Curso > Al día).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.2 (Unificación de Nombre Completo / Razón Social)
+ * @version 7.0 (Semáforo Comercial basado en Fecha de Recordatorio y Vencimiento Planificado)
  */
 
 $page_title = "Panel de Seguimiento | CRM Ventas";
@@ -111,20 +111,21 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
+                // MODIFICADO: Se añade c.fecha_recordatorio y c.fecha_vencimiento a la selección SQL
                 $sql = "SELECT f.*, p.id_prospecto, p.status_comercial, p.fecha_ultimo_contacto,
                                c.id_cotizacion, c.status_cotizacion, c.fecha_emision AS cotizacion_fecha,
-                               DATEDIFF(CURDATE(), c.fecha_emision) AS dias_transcurridos
+                               c.fecha_vencimiento, c.fecha_recordatorio
                         FROM formulario f
                         INNER JOIN prospectos p ON f.id_formulario = p.id_formulario
                         LEFT JOIN cotizacion c ON p.id_prospecto = c.id_prospecto
                         ORDER BY 
                             CASE 
-                                WHEN p.status_comercial = 'Consultado' AND DATEDIFF(CURDATE(), p.fecha_ultimo_contacto) > 5 THEN 1
-                                WHEN p.status_comercial = 'Cotizado' AND (c.status_cotizacion = 'Vencida' OR DATEDIFF(CURDATE(), c.fecha_emision) > 30) THEN 1
-                                WHEN p.status_comercial = 'Cotizado' AND DATEDIFF(CURDATE(), c.fecha_emision) <= 30 THEN 2
-                                WHEN p.status_comercial = 'Cotizado' AND c.id_cotizacion IS NOT NULL AND c.fecha_emision IS NULL THEN 2
-                                WHEN p.status_comercial = 'Consultado' AND DATEDIFF(CURDATE(), p.fecha_ultimo_contacto) <= 5 THEN 3
                                 WHEN p.status_comercial = 'Venta Cerrada' THEN 4
+                                WHEN p.status_comercial = 'Consultado' AND DATEDIFF(CURDATE(), p.fecha_ultimo_contacto) > 5 THEN 1
+                                WHEN p.status_comercial = 'Cotizado' AND (c.status_cotizacion = 'Vencida' OR c.fecha_recordatorio < CURDATE()) THEN 1
+                                WHEN p.status_comercial = 'Cotizado' AND c.fecha_recordatorio = CURDATE() THEN 2
+                                WHEN p.status_comercial = 'Cotizado' AND c.fecha_recordatorio > CURDATE() THEN 3
+                                WHEN p.status_comercial = 'Consultado' AND DATEDIFF(CURDATE(), p.fecha_ultimo_contacto) <= 5 THEN 3
                                 ELSE 5
                             END ASC, 
                             f.fecha_registro DESC";
@@ -132,9 +133,6 @@ include '../includes/header.php';
                 $stmt = $pdo->query($sql);
                 while ($lead = $stmt->fetch()):
                     $estatus_real_cotizacion = $lead['status_cotizacion'];
-                    if (!empty($lead['cotizacion_fecha']) && intval($lead['dias_transcurridos']) > 30) {
-                        $estatus_real_cotizacion = 'Vencida';
-                    }
                 ?>
                 <tr class="row-lead-item" 
                     data-origen="<?= htmlspecialchars($lead['canal_origen']) ?>" 
@@ -142,7 +140,12 @@ include '../includes/header.php';
                     data-urgente="0"
                     data-atencion="0"
                     data-encurso="0"> 
-                    <td class="small fw-semibold text-secondary"><?= date('d/m/Y g:i A', strtotime($lead['fecha_registro'])) ?></td>
+                    <td class="small fw-semibold text-secondary">
+                        <?= date('d/m/Y g:i A', strtotime($lead['fecha_registro'])) ?>
+                        <?php if(!empty($lead['fecha_vencimiento'])): ?>
+                            <br><small class="text-muted" style="font-size:0.7rem;">Vence: <?= date('d/m/Y', strtotime($lead['fecha_vencimiento'])) ?></small>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <div class="fw-bold text-dark lh-sm"><?= htmlspecialchars($lead['nombre']) ?></div>
                         <span class="badge mt-1 text-uppercase text-muted border bg-white" style="font-size: 0.65rem; letter-spacing: 0.5px; font-weight: 500; padding: 0.2rem 0.4rem; border-radius: 4px;"><?= htmlspecialchars($lead['canal_origen']) ?></span>
@@ -170,11 +173,12 @@ include '../includes/header.php';
                         data-status-cotiz="<?= htmlspecialchars($estatus_real_cotizacion ?? '') ?>">
                     </td>
 
+                    <!-- MODIFICADO DATA ATTRIBUTES: Pasamos las variables cronológicas para cálculo reactivo en JS -->
                     <td class="text-center col-semaforo" 
                         data-status-venta="<?= $lead['status_comercial'] ?>"
                         data-status-cotizacion="<?= htmlspecialchars($estatus_real_cotizacion ?? '') ?>"
                         data-fecha-consulta="<?= $lead['fecha_ultimo_contacto'] ?>"
-                        data-fecha-cotizacion="<?= htmlspecialchars($lead['cotizacion_fecha'] ?? '') ?>">
+                        data-fecha-recordatorio="<?= htmlspecialchars($lead['fecha_recordatorio'] ?? '') ?>">
                     </td>
                     <td class="text-center">
                         <div class="btn-group btn-group-sm col-acciones-comerciales" 
@@ -230,7 +234,7 @@ include '../includes/header.php';
             </div>
             <div class="modal-body p-4" id="cuerpoModalCotizacion">
                 <div class="text-center py-4">
-                    <div class="spinner-border text-danger" role="status"></div>
+                    <div class="spinner-border text-danger" role="status"><span class="visually-hidden">Cargando...</span></div>
                 </div>
             </div>
         </div>
@@ -241,7 +245,6 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
-    
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('msg') === 'success') {
         Swal.fire({
@@ -268,18 +271,52 @@ $(document).ready(function() {
         });
     }
 
-    function calcularSemaforosComerciales() {
-        const ahora = Date.now();
+    // === MOTOR DE ALERTAS PROACTIVAS DE RECORDATORIOS (LEADS) ===
+    const d = new Date();
+    const hoyStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    let leadsPendientesHoy = [];
+
+    // Escaneamos las filas cargadas para ver cuáles tienen recordatorio agendado para hoy
+    $('.row-lead-item').each(function() {
+        const fechaRec = $(this).find('.col-semaforo').data('fecha-recordatorio');
+        const statusVenta = $(this).find('.col-semaforo').data('status-venta');
         
-        let countEnCurso = 0;
-        let countAtencion = 0;
-        let countUrgentes = 0;
+        // Si tiene recordatorio hoy y sigue en seguimiento activo
+        if (fechaRec === hoyStr && statusVenta === 'Cotizado') {
+            const nombreLead = $(this).find('.fw-bold.text-dark').text().trim();
+            const equipo = $(this).attr('data-equipo');
+            leadsPendientesHoy.push(`• <strong>${nombreLead}</strong> (${equipo})`);
+        }
+    });
+
+    // Si hay prospectos agendados para hoy, los notificamos proactivamente en la esquina superior derecha
+    if (leadsPendientesHoy.length > 0) {
+        Swal.fire({
+            title: `<i class="bi bi-bell-fill text-danger animate__animated animate__swing animate__infinite" style="display:inline-block;"></i> Tienes ${leadsPendientesHoy.length} seguimiento(s) hoy`,
+            html: `<div class="text-start mt-2 small text-muted">Debes dar seguimiento hoy a los siguientes prospectos a clientes:</div>
+                   <div class="text-start mt-3 p-3 bg-light rounded border border-dark" style="max-height: 200px; overflow-y: auto; font-size: 0.9rem; line-height: 1.5;">
+                     ${leadsPendientesHoy.join('<br>')}
+                   </div>`,
+            icon: 'info',
+            confirmButtonColor: '#c72f3e',
+            confirmButtonText: 'Continuar',
+            backdrop: false, // No bloquea el fondo para dejar trabajar a la vendedora
+            position: 'top-end', // Esquina superior derecha limpia
+            toast: false,
+            showCloseButton: true,
+            customClass: { popup: 'shadow-lg border-start border-4 border-danger' }
+        });
+    }
+    // =========================================================
+
+    function calcularSemaforosComerciales() {
+        let countEnCurso = 0, countAtencion = 0, countUrgentes = 0;
 
         $('.col-semaforo').each(function() {
             const statusVenta = $(this).data('status-venta');
             const statusCotiz = $(this).data('status-cotizacion');
             const fechaConsultaStr = $(this).data('fecha-consulta');
-            const fechaCotizStr = $(this).data('fecha-cotizacion');
+            const fechaRecordatorioStr = $(this).data('fecha-recordatorio');
             
             const fila = $(this).closest('tr');
             const contenedorAcciones = fila.find('.col-acciones-comerciales');
@@ -297,9 +334,7 @@ $(document).ready(function() {
             } else {
                 statusBadgeHtml = '<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;">Consultado</span>';
             }
-            if (contenedorStatusBadge.html() !== statusBadgeHtml) {
-                contenedorStatusBadge.html(statusBadgeHtml);
-            }
+            if (contenedorStatusBadge.html() !== statusBadgeHtml) contenedorStatusBadge.html(statusBadgeHtml);
 
             const tieneCotizacion = contenedorCotizBadge.data('tiene-cotizacion');
             const valorStatusCotiz = contenedorCotizBadge.data('status-cotiz');
@@ -314,10 +349,7 @@ $(document).ready(function() {
             } else {
                 cotizBadgeHtml = '<span class="text-muted small"><em>Sin Emitir</em></span>';
             }
-
-            if (contenedorCotizBadge.html() !== cotizBadgeHtml) {
-                contenedorCotizBadge.html(cotizBadgeHtml);
-            }
+            if (contenedorCotizBadge.html() !== cotizBadgeHtml) contenedorCotizBadge.html(cotizBadgeHtml);
 
             let botonesHtml = '';
             if (statusVenta === 'Venta Cerrada') {
@@ -329,9 +361,7 @@ $(document).ready(function() {
             } else {
                 botonesHtml = `<a href="cotizaciones.php?id_prospecto=${idProspecto}" class="btn btn-outline-danger border-0" title="Generar Cotización"><i class="bi bi-file-earmark-plus-fill fs-5"></i></a>`;
             }
-            if (contenedorAcciones.html() !== botonesHtml) {
-                contenedorAcciones.html(botonesHtml);
-            }
+            if (contenedorAcciones.html() !== botonesHtml) contenedorAcciones.html(botonesHtml);
 
             if (statusVenta === 'Venta Cerrada') {
                 $(this).html('<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;"><i class="bi bi-check-circle-fill me-1"></i> Al día</span>');
@@ -351,26 +381,19 @@ $(document).ready(function() {
                     fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
                     countEnCurso++;
                 }
-            }
-
-            if (statusVenta === 'Cotizado') {
-                if (!fechaCotizStr || idCotizacion === '0') {
-                    $(this).html('<span class="badge bg-warning text-dark animate__animated animate__flash animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 4.5s !important;"><i class="bi bi-exclamation-triangle-fill me-1"></i> Atención</span>');
-                    fila.removeClass('table-danger-sutil').addClass('table-warning-sutil').attr('data-urgente', '0').attr('data-atencion', '1').attr('data-encurso', '0');
-                    countAtencion++;
-                    return;
-                }
-                const fechaCotizacion = new Date(fechaCotizStr);
-                const diasCotizado = Math.floor((ahora - fechaCotizacion.getTime()) / (1000 * 60 * 60 * 24));
-                
-                if (diasCotizado <= 30 && statusCotiz !== 'Vencida') {
-                    $(this).html('<span class="badge bg-warning text-dark animate__animated animate__flash animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 6.5s !important;"><i class="bi bi-exclamation-triangle-fill me-1"></i> Atención</span>');
-                    fila.removeClass('table-danger-sutil').addClass('table-warning-sutil').attr('data-urgente', '0').attr('data-atencion', '1').attr('data-encurso', '0');
-                    countAtencion++;
-                } else {
+            } else if (statusVenta === 'Cotizado') {
+                if (statusCotiz === 'Vencida' || (fechaRecordatorioStr && fechaRecordatorioStr < hoyStr)) {
                     $(this).html('<span class="badge bg-danger animate__animated animate__headShake animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 6.5s !important;"><i class="bi bi-fire me-1"></i> Urgente</span>');
                     fila.removeClass('table-warning-sutil').addClass('table-danger-sutil').attr('data-urgente', '1').attr('data-atencion', '0').attr('data-encurso', '0');
                     countUrgentes++;
+                } else if (fechaRecordatorioStr === hoyStr) {
+                    $(this).html('<span class="badge bg-warning text-dark animate__animated animate__flash animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 4.5s !important;"><i class="bi bi-exclamation-triangle-fill me-1"></i> Atención</span>');
+                    fila.removeClass('table-danger-sutil').addClass('table-warning-sutil').attr('data-urgente', '0').attr('data-atencion', '1').attr('data-encurso', '0');
+                    countAtencion++;
+                } else {
+                    $(this).html('<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem; animation-duration: 3.5s !important;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
+                    fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
+                    countEnCurso++;
                 }
             }
         });
@@ -395,25 +418,19 @@ $(document).ready(function() {
     
     $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
         var row = $(table.row(dataIndex).node());
-        
         var cumpleUrgente = !$('#btnFiltrarCriticos').is(':checked') || row.attr('data-urgente') === '1';
         var cumplePendiente = !$('#btnFiltrarPendientes').is(':checked') || row.attr('data-atencion') === '1';
         var cumpleEnCurso = !$('#btnFiltrarEnCurso').is(':checked') || row.attr('data-encurso') === '1';
-        
         return cumpleUrgente && cumplePendiente && cumpleEnCurso;
     });
 
-    $('#btnFiltrarCriticos').on('change', function() { table.draw(); });
-    $('#btnFiltrarPendientes').on('change', function() { table.draw(); });
-    $('#btnFiltrarEnCurso').on('change', function() { table.draw(); });
+    $('#btnFiltrarCriticos, #btnFiltrarPendientes, #btnFiltrarEnCurso').on('change', function() { table.draw(); });
 
     calcularSemaforosComerciales();
-    setInterval(calcularSemaforosComerciales, 500); 
+    setInterval(calcularSemaforosComerciales, 1000); 
 
-    // MODIFICADO: Captura de envío del formulario asíncrono para liberar la venta
     $('#formConfirmarVenta').on('submit', function(e) {
         e.preventDefault();
-        
         const idProspecto = $('#liberar_id_prospecto').val();
         const fechaCompra = $('#liberar_fecha_compra').val();
         const observaciones = $('#liberar_observaciones').val();
@@ -451,36 +468,28 @@ $(document).ready(function() {
     });
 });
 
-// MODIFICADO: Muestra el modal interactivo en lugar de disparar la petición directa
-function cerrarOperacionComercial(idProspecto) {
+function cerrarOperationComercial(idProspecto) {
     $('#formConfirmarVenta')[0].reset();
     $('#liberar_id_prospecto').val(idProspecto);
-    // Inyectamos la fecha actual en formato HTML de entrada
     $('#liberar_fecha_compra').val(new Date().toISOString().split('T')[0]);
-    
-    $('#modalLiberarVenta').appendTo("body").modal('show');
+    $('#modalLiberarVenta').modal('show');
 }
 
 function verDetallesCotizacion(idCotizacion) {
-    $('#cuerpoModalCotizacion').html(`
+    $_cuerpo = $('#cuerpoModalCotizacion');
+    $_cuerpo.html(`
         <div class="text-center py-4">
             <div class="spinner-border text-danger" role="status"><span class="visually-hidden">Cargando...</span></div>
             <p class="text-muted small mt-2">Consultando servidor corporativo DEMEX central...</p>
         </div>
     `);
-    
     $('#modalDetallesCotizacion').appendTo("body").modal('show');
-    
     $.ajax({
         url: '../actions/obtener_detalles_cotizacion.php',
         method: 'GET',
         data: { id_cotizacion: idCotizacion },
-        success: function(response) {
-            $('#cuerpoModalCotizacion').html(response);
-        },
-        error: function() {
-            $('#cuerpoModalCotizacion').html('<div class="alert alert-danger m-0"><i class="bi bi-exclamation-octagon-fill me-2"></i> Error de comunicación con el servidor central de ventas.</div>');
-        }
+        success: function(response) { $_cuerpo.html(response); },
+        error: function() { $_cuerpo.html('<div class="alert alert-danger m-0"><i class="bi bi-exclamation-octagon-fill me-2"></i> Error de comunicación con el servidor central de ventas.</div>'); }
     });
 }
 </script>

@@ -110,7 +110,7 @@ try {
                     </tr>
                     <tr>
                         <td class="text-muted fw-bold">Asesor Asignado:</td>
-                        <td class="fw-semibold text-dark">Nadia Torres Fernández</td>
+                        <td class="fw-semibold text-dark">Nadia Fernández</td>
                     </tr>
                 </table>
 
