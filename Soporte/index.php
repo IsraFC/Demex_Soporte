@@ -6,7 +6,6 @@
  * @project Soporte Técnico DEMEX
  * @version 3.0 - Purificado (Independiente de Importaciones de Almacén)
  */
-
 require_once '../config/db.php';
 $page_title = "Panel de Control - Soporte";
 

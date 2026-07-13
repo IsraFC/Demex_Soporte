@@ -3,11 +3,10 @@
  * db.php - Gestión de conexión a la base de datos demex_soporte
  * Utiliza el driver PDO para mayor seguridad y flexibilidad.
  */
-
-$host = 'localhost';
-$db   = 'portal_demex';
-$user = 'root';
-$pass = ''; 
+$host    = 'localhost';
+$db      = 'portal_demex';
+$user    = 'root';
+$pass    = ''; 
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
@@ -21,12 +20,10 @@ $options = [
 try {
      $pdo = new PDO($dsn, $user, $pass, $options);
 
-     // EJECUCIÓN AUTOMÁTICA Y SILENCIOSA DEL RESPALDO
-     // Corre justo aquí porque ya garantizamos que $pdo se conectó con éxito.
-     require_once __DIR__ . '/backup.php';
-     if (function_exists('ejecutarRespaldoSilencioso')) {
-         ejecutarRespaldoSilencioso($pdo);
-     }
+    require_once __DIR__ . '/backup.php';
+    if (function_exists('ejecutarRespaldoSilencioso')) {
+        ejecutarRespaldoSilencioso($pdo);
+    }
 
 } catch (\PDOException $e) {
      $error_msg = $e->getMessage();

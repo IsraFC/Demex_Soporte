@@ -1,0 +1,41 @@
+name: Despliegue Automático en Hetzner (Staging Pruebas)
+
+on:
+  push:
+    branches:
+      - develop
+      - 'feature/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Descargar el código desde GitHub
+      uses: actions/checkout@v3
+
+    - name: Instalar cliente SSH y Sshpass
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y sshpass rsync
+
+    - name: Sincronizar archivos hacia Hetzner vía Rsync (Entorno Staging)
+      run: |
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete \
+          -e "ssh -o StrictHostKeyChecking=no" \
+          --exclude='.git/' \
+          --exclude='.github/' \
+          --exclude='.gitignore' \
+          --exclude='.vscode/' \
+          --exclude='Thumbs.db' \
+          --exclude='desktop.ini' \
+          --exclude='.DS_Store' \
+          --exclude='*.log' \
+          --exclude='Soporte/backups/' \
+          --exclude='backups/' \
+          --exclude='config/ultimo_respaldo.txt' \
+          --exclude='crear_admin.php' \
+          --exclude='config/mail_config.php' \
+          --exclude='config/db.php' \
+          --exclude='config/backup.php' \
+          ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/html/staging/
