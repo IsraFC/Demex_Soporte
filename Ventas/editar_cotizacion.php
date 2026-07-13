@@ -5,7 +5,7 @@
  * MODIFICACIÓN: Soportado para editar tanto prospectos del embudo como recompras del catálogo de clientes.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 5.4 (Unificación de Flujo de Edición Comercial)
+ * @version 7.1 (Dirección de Entrega Opcional Abierta en Modificaciones)
  */
 
 $page_title = "Editar Cotización | CRM Ventas";
@@ -18,10 +18,11 @@ if ($id_cotizacion === 0) {
     exit();
 }
 
-// 1. CONSULTA DE RECUPERACIÓN UNIFICADA: Buscamos en formularios (leads) y también en clientes (cartera)
+// 1. CONSULTA DE RECUPERACIÓN UNIFICADA: Buscamos en formularios (leads) y también en clientes (cartera) - Apellidos removidos
+// MODIFICADO SQL: Se añade c.fecha_recordatorio a la consulta
 $sql = "SELECT c.*, m.modelo AS maquina_nombre, 
-               CONCAT(f.nombre, ' ', f.apellidos) AS lead_cliente_nombre,
-               CONCAT(cl.nombre_cliente, ' ', cl.apellidos_cliente) AS cartera_cliente_nombre
+               f.nombre AS lead_cliente_nombre,
+               cl.nombre_cliente AS cartera_cliente_nombre
         FROM cotizacion c
         INNER JOIN maquinaria m ON c.id_maquina = m.id_maquina
         LEFT JOIN prospectos p ON c.id_prospecto = p.id_prospecto
@@ -50,6 +51,7 @@ $bancos = [
     'b1_nom'    => "BANORTE", 'b1_cta' => "0434571284", 'b1_clabe' => "072 650 00434571284 8",
     'b2_nom'    => "BANAMEX", 'b2_cta' => "7213722", 'b2_clabe' => "002 650 70107213722 1", 'b2_suc' => "7010"
 ];
+$estado_iva_guardado = 1; // Por defecto incluye IVA si no viene en el JSON
 
 if (strpos($cotizacion['notes'], '|||') !== false) {
     $partes_notas = explode('|||', $cotizacion['notes']);
@@ -57,6 +59,9 @@ if (strpos($cotizacion['notes'], '|||') !== false) {
     $json_desencriptado = json_decode(base64_decode($partes_notas[1]), true);
     if ($json_desencriptado) {
         $bancos = $json_desencriptado;
+        if (isset($json_desencriptado['incluye_iva'])) {
+            $estado_iva_guardado = intval($json_desencriptado['incluye_iva']);
+        }
     }
 }
 
@@ -76,16 +81,17 @@ $catalogo_precios = [
     'DEMEX 1020'  => ['publico' => 150000.00, 'distribuidor' => 130000.00]
 ];
 
-// Re-calculamos el porcentaje de descuento guardado para precargarlo correctamente en la UI
+// Re-calculamos el porcentaje de descuento guardado de manera limpia y real
 $precio_base_guardado = floatval($cotizacion['precio_base_origen']);
 $precio_pactado_guardado = floatval($cotizacion['precio_pactado']);
 $descuento_porcentaje_inicial = 0;
-if ($precio_base_guardado > 0) {
-    // Calculamos el precio oficial sin IVA para poder realizar la comparación real contra el pactado unitario
-    $precio_oficial_con_iva = ($cotizacion['tipo_cliente'] === 'Publico General') ? $catalogo_precios[$cotizacion['maquina_nombre']]['publico'] : $catalogo_precios[$cotizacion['maquina_nombre']]['distribuidor'];
-    $precio_base_sin_iva = $precio_oficial_con_iva / 1.16;
-    $descuento_porcentaje_inicial = round((($precio_base_sin_iva - $precio_pactado_guardado) / $precio_base_sin_iva) * 100);
+if ($precio_base_guardado > 0 && $precio_pactado_guardado > 0) {
+    $descuento_porcentaje_inicial = round((($precio_base_guardado - $precio_pactado_guardado) / $precio_base_guardado) * 100);
+    if ($descuento_porcentaje_inicial < 0) $descuento_porcentaje_inicial = 0;
 }
+
+// Variables de tiempo para límites de la UI
+$fecha_hoy = date('Y-m-d');
 
 $modulo_actual = 'ventas';
 include '../includes/header.php';
@@ -103,6 +109,7 @@ include '../includes/header.php';
     
     <form action="../actions/procesar_edicion_cotizacion.php" method="POST" id="formCotizacion">
         <input type="hidden" name="id_cotizacion" value="<?= $cotizacion['id_cotizacion'] ?>">
+        <input type="hidden" name="incluye_iva" id="incluye_iva" value="<?= $estado_iva_guardado ?>">
 
         <div class="row g-3 mb-3">
             <div class="col-12 col-md-4">
@@ -121,8 +128,9 @@ include '../includes/header.php';
 
         <div class="row g-3 mb-3 border-top pt-3">
             <div class="col-12 col-md-6">
-                <label class="form-label fw-semibold text-dark small">Dirección de Entrega<span class="text-danger">*</span></label>
-                <textarea class="form-control" name="direccion_entrega" rows="2" placeholder="Dirección completa de entrega" required><?= htmlspecialchars($cotizacion['direccion_entrega']) ?></textarea>
+                <!-- MODIFICADO: Removido el asterisco (*) y el atributo required -->
+                <label class="form-label fw-semibold text-dark small">Dirección de Entrega</label>
+                <textarea class="form-control" name="direccion_entrega" rows="2" placeholder="Dirección completa de entrega (Opcional)"><?= htmlspecialchars($cotizacion['direccion_entrega']) ?></textarea>
             </div>
             <div class="col-12 col-md-3">
                 <label class="form-label fw-semibold text-dark small">Cantidad</label>
@@ -154,12 +162,12 @@ include '../includes/header.php';
             </div>
         </div>
 
-        <div class="row g-3 mb-4 border-top pt-3">
+        <div class="row g-3 mb-3 border-top pt-3">
             <div class="col-12 col-md-4">
-                <label class="form-label fw-semibold text-dark small">Precio Base de Lista ($ MXN)</label>
+                <label class="form-label fw-semibold text-dark small">Precio Base de Lista ($ MXN) <span class="text-danger">*</span></label>
                 <div class="input-group">
                     <span class="input-group-text bg-white text-muted">$</span>
-                    <input type="number" class="form-control fw-bold" id="precio_base_origen" name="precio_base_origen" readonly style="background-color: #f8f9fa;" step="0.01" value="" required>
+                    <input type="number" class="form-control fw-bold text-dark" id="precio_base_origen" name="precio_base_origen" step="0.01" required value="<?= $precio_base_guardado ?>">
                 </div>
             </div>
             <div class="col-12 col-md-4">
@@ -175,6 +183,19 @@ include '../includes/header.php';
                     <span class="input-group-text bg-white text-muted">$</span>
                     <input type="number" class="form-control" id="costo_envio" name="costo_envio" min="0" step="0.01" value="<?= $cotizacion['costo_envio'] ?>">
                 </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4 border-top pt-3 bg-light p-2 rounded border">
+            <div class="col-12 col-md-6">
+                <label for="fecha_vencimiento" class="form-label fw-bold text-dark small"><i class="bi bi-calendar-x text-danger me-1"></i> Fecha de Vencimiento de Promoción <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento" value="<?= htmlspecialchars($cotizacion['fecha_vencimiento']) ?>" min="<?= $fecha_hoy ?>" required>
+                <small class="text-muted" style="font-size: 0.75rem;">Modifica el límite de vigencia comercial del documento PDF.</small>
+            </div>
+            <div class="col-12 col-md-6">
+                <label for="fecha_recordatorio" class="form-label fw-bold text-dark small"><i class="bi bi-bell-fill text-warning me-1"></i> Modificar Recordatorio (Semáforo) <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="fecha_recordatorio" name="fecha_recordatorio" value="<?= htmlspecialchars($cotizacion['fecha_recordatorio'] ?? $fecha_hoy) ?>" min="<?= $fecha_hoy ?>" required>
+                <small class="text-muted" style="font-size: 0.75rem;">La fecha exacta en la que el sistema activará las alertas comerciales en el dashboard.</small>
             </div>
         </div>
 
@@ -272,8 +293,11 @@ include '../includes/header.php';
                         <span>Precio Pactado Subtotal:</span>
                         <span id="lbl_subtotal">$0.00</span>
                     </div>
-                    <div class="d-flex justify-content-between mb-2 text-muted small">
-                        <span>IVA Traslado (16%):</span>
+                    <div class="d-flex justify-content-between mb-2 text-muted small align-items-center">
+                        <div class="form-check form-switch p-0 m-0 d-flex align-items-center gap-2">
+                            <input class="form-check-input ms-0" type="checkbox" id="toggle_iva" <?= ($estado_iva_guardado === 1) ? 'checked' : '' ?> style="cursor:pointer;">
+                            <label class="form-check-label text-muted" for="toggle_iva" style="cursor:pointer; font-size: 0.85rem;">IVA Traslado (16%):</label>
+                        </div>
                         <span id="lbl_iva">$0.00</span>
                     </div>
                     <div class="d-flex justify-content-between fs-5 fw-bold text-success border-top pt-2">
@@ -309,36 +333,37 @@ const especificacionesMaquinas = {
     'DEMEX 1020': "HELADO DURO (PRODUCCIÓN CADA 8-10 MIN. TODO EL DÍA)\n• Dimensiones: 70 x 60 x 149 CM | Peso Neto: 200 KG\n• Fabricada en Acero Inoxidable | Batidor de Acero Inoxidable\n• Potencia Energética: 5.1 KW/HR | Corriente de Entrada: Bifásica 220V/60HZ\n• Componentes: Cilindros de 20 Litros | Motor de 2.0 HP | Micromotor 220V/60Hz 1400 RPM 120 Watts\n• Características: Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático.\n• Refrigeración: Compresores Panasonic 2.3 HP x 2 (R410A) | Condensadores: 2 (1 x Compresor) | Condensación: Aire.\n• Requisito: Se recomienda conectar ampliamente a una pastilla (Brake) de 30 Amperes Bifásica."
 };
 
-function calcularFlujoComercial() {
-    const idMaquina = $('#id_maquina_select').val();
+function calcularFlujoComercial(triggeredByManualInput = false) {
     const modeloTexto = $('#id_maquina_select').find('option:selected').data('model-name');
     const tipoCliente = $('#tipo_cliente').val();
     const pctDesc = parseFloat($('#descuento_porcentaje').val()) || 0;
     const flete = parseFloat($('#costo_envio').val()) || 0;
     const cantidad = parseInt($('#cantidad').val()) || 1;
+    const conIva = $('#toggle_iva').is(':checked'); // Switch de IVA
 
     if (!modeloTexto || !matrizPrecios[modeloTexto]) return;
 
-    // 1. Extraemos el precio oficial CON IVA del catálogo estático
-    const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
+    let precioBaseOriginalSinIva = parseFloat($('#precio_base_origen').val());
     
-    // Mantenemos el input de arriba mostrando el precio redondo oficial con IVA para comodidad de la vendedora
-    $('#precio_base_origen').val(precioConIvaLista.toFixed(2));
-
-    // 2. Por detrás (en background), hacemos el desglose matemático entre 1.16 para las etiquetas de abajo
-    const precioBaseOriginalSinIva = precioConIvaLista / 1.16;
+    if (!triggeredByManualInput || isNaN(precioBaseOriginalSinIva) || precioBaseOriginalSinIva <= 0) {
+        const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
+        precioBaseOriginalSinIva = precioConIvaLista / 1.16;
+        $('#precio_base_origen').val(precioBaseOriginalSinIva.toFixed(2));
+    }
 
     const montoDescuentoUnitario = precioBaseOriginalSinIva * (pctDesc / 100);
     const precioPactadoUnitario = precioBaseOriginalSinIva - montoDescuentoUnitario;
     
     const subtotalPartidaBruta = precioPactadoUnitario * cantidad;
     const baseConFlete = subtotalPartidaBruta + flete;
-    const ivaCalculado = baseConFlete * 0.16;
+    
+    const ivaCalculado = conIva ? (baseConFlete * 0.16) : 0;
     const totalNeto = baseConFlete + ivaCalculado;
+
+    $('#incluye_iva').val(conIva ? "1" : "0");
 
     const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-    // 3. Inyectamos los valores desglosados en las etiquetas de abajo
     $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginalSinIva));
     $('#lbl_descuento_monto').text('-' + formatoMXN.format(montoDescuentoUnitario * cantidad));
     $('#lbl_flete_monto').text(formatoMXN.format(flete));
@@ -367,25 +392,41 @@ function calcularFlujoComercial() {
 }
 
 $(document).ready(function() {
+    const precioInicialBD = parseFloat("<?= $precio_base_guardado ?>") || 0;
+    if (precioInicialBD > 0) {
+        $('#precio_base_origen').val(precioInicialBD.toFixed(2));
+    }
+
     $('#id_maquina_select').on('change', function() {
         const modeloNombre = $(this).find('option:selected').data('model-name');
         if(especificacionesMaquinas[modeloNombre]) {
             $('#especificion_cotizada').val(especificacionesMaquinas[modeloNombre]);
         }
-        calcularFlujoComercial();
+        calcularFlujoComercial(false);
     });
 
     $('#tipo_cliente').on('change', function() {
-        calcularFlujoComercial();
+        calcularFlujoComercial(false);
     });
     
     $('#descuento_porcentaje, #costo_envio, #cantidad').on('input', function() {
-        calcularFlujoComercial();
+        calcularFlujoComercial(true);
+    });
+
+    $('#precio_base_origen').on('input', function() {
+        calcularFlujoComercial(true);
+    });
+
+    $('#toggle_iva').on('change', function() {
+        calcularFlujoComercial(true);
+    });
+
+    $('#fecha_vencimiento').on('change', function() {
+        $('#fecha_recordatorio').attr('max', this.value);
     });
     
-    // Pequeño retardo controlado para renderizar los KPIs en caliente al entrar
     setTimeout(function() {
-        calcularFlujoComercial();
+        calcularFlujoComercial(precioInicialBD > 0);
     }, 150);
 });
 </script>

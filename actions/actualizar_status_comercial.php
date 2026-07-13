@@ -4,7 +4,7 @@
  * DESCRIPCIÓN: Procesador asíncrono para actualizar el estatus comercial y migrar el prospecto ganado a cartera de clientes.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 3.0 (Mutación de Lead a Cartera Activa)
+ * @version 3.2 (Blindaje Automático de RFC Receptor Genérico en Migración a Cartera)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -49,8 +49,8 @@ try {
     // 2. Si es 'Venta Cerrada', ejecutamos de forma automatizada la mutación de lead a cliente
     if ($status_comercial === 'Venta Cerrada') {
         
-        // Jalamos la última cotización activa de este prospecto para jalar los costos acordados y el modelo
-        $sql_cot = "SELECT c.*, f.nombre, f.apellidos, f.telefono, f.correo, f.estado_region
+        // Jalamos la última cotización activa de este prospecto para obtener los costos acordados y el modelo
+        $sql_cot = "SELECT c.*, f.nombre, f.telefono, f.correo, f.estado_region
                     FROM cotizacion c
                     INNER JOIN prospectos p ON c.id_prospecto = p.id_prospecto
                     INNER JOIN formulario f ON p.id_formulario = f.id_formulario
@@ -62,8 +62,7 @@ try {
         $datos_venta = $stmt_cot->fetch(PDO::FETCH_ASSOC);
 
         if ($datos_venta) {
-            $nombre_cliente    = $datos_venta['nombre'];
-            $apellidos_cliente = $datos_venta['apellidos'];
+            $nombre_cliente    = $datos_venta['nombre']; // Actúa como Nombre Completo / Razón Social
             $telefono          = $datos_venta['telefono'];
             $correo            = $datos_venta['correo'];
             $ubicacion         = $datos_venta['estado_region'];
@@ -73,20 +72,23 @@ try {
             $costo_envio       = $datos_venta['costo_envio'];
             $id_cotizacion     = $datos_venta['id_cotizacion'];
             $tipo_cliente      = $datos_venta['tipo_cliente'];
-            $rfc_receptor      = $datos_venta['rfc_receptor'];
+            
+            // MODIFICADO: Sanitización estricta del RFC. Si viene vacío o en blanco, inyectamos el genérico oficial por seguridad.
+            $rfc_crudo         = strtoupper(trim($datos_venta['rfc_receptor'] ?? ''));
+            $rfc_receptor      = !empty($rfc_crudo) ? $rfc_crudo : 'XAXX010101000';
 
-            // 3. Verificamos si este cliente ya existe en el catálogo unificado para no duplicar identidades
-            $sql_check = "SELECT id_cliente FROM clientes WHERE nombre_cliente = ? AND apellidos_cliente = ? LIMIT 1";
+            // 3. Verificamos si este cliente ya existe en el catálogo unificado usando solo la Razón Social / Nombre Único
+            $sql_check = "SELECT id_cliente FROM clientes WHERE nombre_cliente = ? LIMIT 1";
             $stmt_check = $pdo->prepare($sql_check);
-            $stmt_check->execute([$nombre_cliente, $apellidos_cliente]);
+            $stmt_check->execute([$nombre_cliente]);
             $id_cliente = $stmt_check->fetchColumn();
 
             if (!$id_cliente) {
-                // Inserción en catálogo unificado
-                $sql_ins_cli = "INSERT INTO clientes (nombre_cliente, apellidos_cliente, telefono, correo, rfc_receptor, ubicacion, id_prospecto_origen, tipo_cliente, fecha_registro) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                // Inserción en catálogo unificado mapeando de forma exacta la columna rfc_receptor
+                $sql_ins_cli = "INSERT INTO clientes (nombre_cliente, telefono, correo, rfc_receptor, ubicacion, id_prospecto_origen, tipo_cliente, fecha_registro) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
                 $stmt_ins = $pdo->prepare($sql_ins_cli);
-                $stmt_ins->execute([$nombre_cliente, $apellidos_cliente, $telefono, $correo, $rfc_receptor, $ubicacion, $id_prospecto, $tipo_cliente]);
+                $stmt_ins->execute([$nombre_cliente, $telefono, !empty($correo) ? $correo : null, $rfc_receptor, $ubicacion, $id_prospecto, $tipo_cliente]);
                 $id_cliente = $pdo->lastInsertId();
             }
 

@@ -2,11 +2,11 @@
 /**
  * ARCHIVO: actions/procesar_edicion_cotizacion.php
  * DESCRIPCIÓN: Procesador de Base de Datos para el UPDATE unificado.
- * Actualiza la cotización, empaqueta los datos bancarios editados y sincroniza
- * los cambios de datos ya sea en la tabla 'formulario' o en la redirección dinámica.
+ * Actualiza la cotización, empaqueta los datos bancarios editados junto con el estado del IVA
+ * y sincroniza las fechas de vencimiento manuales y recordatorios para el semáforo.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 6.4 (Soporte Unificado para Edición de Leads y Recompras)
+ * @version 7.2 (Blindaje de RFC Genérico Automatizado en Modificaciones y Dirección Abierta)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -24,7 +24,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $id_cotizacion        = isset($_POST['id_cotizacion']) ? intval($_POST['id_cotizacion']) : 0;
 $id_maquina           = isset($_POST['id_maquina']) ? intval($_POST['id_maquina']) : 0;
 $cliente_razon        = trim($_POST['cliente'] ?? ''); 
-$rfc_receptor         = !empty($_POST['rfc_receptor']) ? strtoupper(trim($_POST['rfc_receptor'])) : 'XAXX010101000';
+
+// MODIFICADO: Si el RFC viene vacío del formulario de edición, asignamos rigurosamente el genérico oficial por consistencia fiscal
+$rfc_limpio          = strtoupper(trim($_POST['rfc_receptor'] ?? ''));
+$rfc_receptor        = !empty($rfc_limpio) ? $rfc_limpio : 'XAXX010101000';
+
 $sucursal             = !empty($_POST['sucursal']) ? trim($_POST['sucursal']) : 'Matriz';
 $direccion_entrega    = trim($_POST['direccion_entrega'] ?? '');
 $cantidad             = isset($_POST['cantidad']) ? intval($_POST['cantidad']) : 1;
@@ -35,6 +39,14 @@ $descuento_porcentaje = isset($_POST['descuento_porcentaje']) ? intval($_POST['d
 $costo_envio          = floatval($_POST['costo_envio'] ?? 0);
 $especificacion       = trim($_POST['especificion_cotizada'] ?? '');
 $notes_original       = trim($_POST['notas'] ?? '');
+
+// NUEVO: Captura de Fechas desde el Formulario de Edición
+$fecha_hoy            = date('Y-m-d');
+$fecha_vencimiento    = !empty($_POST['fecha_vencimiento']) ? trim($_POST['fecha_vencimiento']) : date('Y-m-d', strtotime('+15 days'));
+$fecha_recordatorio   = !empty($_POST['fecha_recordatorio']) ? trim($_POST['fecha_recordatorio']) : $fecha_hoy;
+
+// Captura del Toggle Button del IVA enviado en la Edición (1 = Incluye, 0 = Exento)
+$incluye_iva_switch      = isset($_POST['incluye_iva']) ? intval($_POST['incluye_iva']) : 1;
 
 // --- CAPTURA DE BLOQUE BANCARIO MODIFICADO DESDE LA EDICIÓN ---
 $condicion_comercial = trim($_POST['condicion_comercial_bancos'] ?? 'Precios de promoción para pagos por transferencia o efectivo.');
@@ -48,14 +60,15 @@ $banco_2_sucursal    = trim($_POST['banco_2_sucursal'] ?? '7010');
 
 // Empaquetamos los datos bancarios en un arreglo JSON codificado en base64 para proteger acentos y caracteres especiales
 $datos_bancos_empaquetados = base64_encode(json_encode([
-    'condicion' => $condicion_comercial,
-    'b1_nom'    => $banco_1_nombre,
-    'b1_cta'    => $banco_1_cuenta,
-    'b1_clabe'  => $banco_1_clabe,
-    'b2_nom'    => $banco_2_nombre,
-    'b2_cta'    => $banco_2_cuenta,
-    'b2_clabe'  => $banco_2_clabe,
-    'b2_suc'    => $banco_2_sucursal
+    'condicion'   => $condicion_comercial,
+    'b1_nom'      => $banco_1_nombre,
+    'b1_cta'      => $banco_1_cuenta,
+    'b1_clabe'    => $banco_1_clabe,
+    'b2_nom'      => $banco_2_nombre,
+    'b2_cta'      => $banco_2_cuenta,
+    'b2_clabe'    => $banco_2_clabe,
+    'b2_suc'      => $banco_2_sucursal,
+    'incluye_iva' => $incluye_iva_switch
 ]));
 
 // Unimos las observaciones originales con el bloque cifrado bancario usando nuestro separador único (|||)
@@ -70,9 +83,12 @@ try {
     // Iniciamos la transacción para asegurar la consistencia transaccional
     $pdo->beginTransaction();
 
-    // 2. Recálculo financiero en Backend
+    // 2. Recálculo financiero en Backend basado en el precio base enviado (que puede ser modificado manual)
     $monto_descuento_unitario = $precio_base_origen * ($descuento_porcentaje / 100);
     $precio_pactado_unitario  = $precio_base_origen - $monto_descuento_unitario;
+
+    // NUEVO: Recálculo en caliente de la vigencia del documento comercial
+    $status_cotizacion = ($fecha_vencimiento < $fecha_hoy) ? 'Vencida' : 'Vigente';
 
     // 3. OBTENER LOS IDs RELACIONADOS DE ORIGEN (id_prospecto e id_cliente)
     $stmt_ids = $pdo->prepare("SELECT id_prospecto, id_cliente FROM cotizacion WHERE id_cotizacion = ? LIMIT 1");
@@ -95,7 +111,7 @@ try {
     $maquina_info = $stmt_maq_name->fetch(PDO::FETCH_ASSOC);
     $modelo_texto = $maquina_info ? $maquina_info['modelo'] : '';
 
-    // 4. PASO A: Actualizar la tabla madre 'cotizacion'
+    // 4. PASO A: Actualizar la tabla madre 'cotizacion' incluyendo las nuevas columnas temporales
     $sql_update_cot = "UPDATE cotizacion 
                        SET id_maquina = :id_maquina,
                            rfc_receptor = :rfc_receptor,
@@ -108,7 +124,10 @@ try {
                            precio_pactado = :precio_pactado,
                            especificacion_cotizada = :especificacion_cotizada,
                            costo_envio = :costo_envio,
-                           notes = :notes
+                           notes = :notes,
+                           fecha_vencimiento = :fecha_vencimiento,
+                           status_cotizacion = :status_cotizacion,
+                           fecha_recordatorio = :fecha_recordatorio
                        WHERE id_cotizacion = :id_cotizacion";
 
     $stmt1 = $pdo->prepare($sql_update_cot);
@@ -125,6 +144,9 @@ try {
         ':especificacion_cotizada' => $especificacion,
         ':costo_envio'             => $costo_envio,
         ':notes'                   => $notes_final,
+        ':fecha_vencimiento'       => $fecha_vencimiento,
+        ':status_cotizacion'       => $status_cotizacion,
+        ':fecha_recordatorio'      => $fecha_recordatorio,
         ':id_cotizacion'           => $id_cotizacion
     ]);
 
@@ -138,38 +160,16 @@ try {
         $id_formulario = $prospecto_actual ? $prospecto_actual['id_formulario'] : null;
 
         if ($id_formulario) {
-            $partes_nombre = explode(' ', $cliente_razon);
-            $total_palabras = count($partes_nombre);
-
-            $nuevo_nombre = '';
-            $nuevos_apellidos = '';
-
-            if ($total_palabras == 1) {
-                $nuevo_nombre = $partes_nombre[0];
-                $nuevos_apellidos = '';
-            } elseif ($total_palabras == 2) {
-                $nuevo_nombre = $partes_nombre[0];
-                $nuevos_apellidos = $partes_nombre[1];
-            } elseif ($total_palabras == 3) {
-                $nuevo_nombre = $partes_nombre[0];
-                $nuevos_apellidos = $partes_nombre[1] . ' ' . $partes_nombre[2];
-            } else {
-                $nuevo_nombre = $partes_nombre[0] . ' ' . $partes_nombre[1];
-                $nuevos_apellidos = implode(' ', array_slice($partes_nombre, 2));
-            }
-
             $sql_update_form = "UPDATE formulario 
                                 SET nombre = :nuevo_nombre, 
-                                    apellidos = :nuevos_apellidos, 
                                     maquina_interes = :maquina_interes
                                 WHERE id_formulario = :id_formulario";
             
             $stmt2 = $pdo->prepare($sql_update_form);
             $stmt2->execute([
-                ':nuevo_nombre'   => $nuevo_nombre,
-                ':nuevos_apellidos'=> $nuevos_apellidos,
-                ':maquina_interes'=> $modelo_texto,
-                ':id_formulario'  => $id_formulario
+                ':nuevo_nombre'    => $cliente_razon,
+                ':maquina_interes' => $modelo_texto,
+                ':id_formulario'   => $id_formulario
             ]);
         }
 
@@ -185,7 +185,7 @@ try {
     // Cerramos la transacción con éxito
     $pdo->commit();
 
-    // Redirección exitosa adaptada al contexto comercial real
+    // Redirección exitosa adaptada al contexto comercial real con el token de Isra
     header("Location: ../Ventas/" . $view_destino . "?msg=success");
     exit();
 
@@ -194,7 +194,6 @@ try {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    // Si ocurre un error, determinamos a dónde regresar basándonos en los datos rescatados
     $view_error = (isset($view_destino)) ? $view_destino : "leads_crm.php";
     header("Location: ../Ventas/" . $view_error . "?msg=error&desc=" . urlencode($e->getMessage()));
     exit();
