@@ -34,11 +34,16 @@ $options = [
 try {
      $pdo = new PDO($dsn, $user, $pass, $options);
 
-     // EJECUCIÓN AUTOMÁTICA Y SILENCIOSA DEL RESPALDO
-     // Corre justo aquí porque ya garantizamos que $pdo se conectó con éxito.
-     require_once __DIR__ . '/backup.php';
-     if (function_exists('ejecutarRespaldoSilencioso')) {
-         ejecutarRespaldoSilencioso($pdo);
+     // CANDADO INFALIBLE PARA EL RESPALDO:
+     // Solo se ejecuta si estamos explícitamente en localhost o en tu IP local de desarrollo.
+     // Si detecta la palabra 'kesug' o 'infinityfree' en la URL, se salta el backup por completo.
+     $es_servidor_pruebas = (strpos($_SERVER['HTTP_HOST'], 'kesug.com') !== false || strpos($_SERVER['HTTP_HOST'], 'infinityfree') !== false);
+
+     if ($es_local && !$es_servidor_pruebas) {
+         require_once __DIR__ . '/backup.php';
+         if (function_exists('ejecutarRespaldoSilencioso')) {
+             ejecutarRespaldoSilencioso($pdo);
+         }
      }
 
 } catch (\PDOException $e) {
