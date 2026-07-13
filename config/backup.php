@@ -11,18 +11,6 @@
 
 function ejecutarRespaldoSilencioso($pdo) {
     date_default_timezone_set('America/Mexico_City');
-
-    // CANDADO DE SEGURIDAD ABSOLUTO PARA ENTORNO DE PRUEBAS (INFINITYFREE)
-    // Si detecta que está en el servidor gratuito, mata la función de inmediato sin romper nada
-    $es_servidor_pruebas = (
-        isset($_SERVER['HTTP_HOST']) && 
-        (strpos($_SERVER['HTTP_HOST'], 'kesug.com') !== false || 
-         strpos($_SERVER['HTTP_HOST'], 'infinityfree') !== false)
-    );
-
-    if ($es_servidor_pruebas) {
-        return; // Detiene la función de golpe y en silencio
-    }
     
     // PRUEBA DE VIDA: Forzamos que se cree el log para saber que la función responde
     file_put_contents(__DIR__ . '/debug_backup.log', "Iniciando proceso de respaldo... \n");

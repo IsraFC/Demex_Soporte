@@ -3,25 +3,11 @@
  * db.php - Gestión de conexión a la base de datos demex_soporte
  * Utiliza el driver PDO para mayor seguridad y flexibilidad.
  */
-
-// Detectamos dinámicamente si el sistema está corriendo en tu entorno local (XAMPP)
-$es_local = ($_SERVER['HTTP_HOST'] === 'localhost' || $_SERVER['REMOTE_ADDR'] === '127.0.0.1');
-
-if ($es_local) {
-    // CONFIGURACIÓN PARA XAMPP LOCAL
-    $host    = 'localhost';
-    $db      = 'portal_demex';
-    $user    = 'root';
-    $pass    = ''; 
-    $charset = 'utf8mb4';
-} else {
-    // CONFIGURACIÓN PARA STAGING INFINITYFREE
-    $host    = 'sql106.infinityfree.com';           // MySQL Hostname de la nube
-    $db      = 'if0_42397413_portal_demex';         // Database Name completo
-    $user    = 'if0_42397413';                      // MySQL Username de la nube
-    $pass    = 'testdemex2026';                     // contraseña de cuenta de hosting
-    $charset = 'utf8mb4';
-}
+$host    = 'localhost';
+$db      = 'portal_demex';
+$user    = 'root';
+$pass    = ''; 
+$charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
 
@@ -34,17 +20,10 @@ $options = [
 try {
      $pdo = new PDO($dsn, $user, $pass, $options);
 
-     // CANDADO INFALIBLE PARA EL RESPALDO:
-     // Solo se ejecuta si estamos explícitamente en localhost o en tu IP local de desarrollo.
-     // Si detecta la palabra 'kesug' o 'infinityfree' en la URL, se salta el backup por completo.
-     $es_servidor_pruebas = (strpos($_SERVER['HTTP_HOST'], 'kesug.com') !== false || strpos($_SERVER['HTTP_HOST'], 'infinityfree') !== false);
-
-     if ($es_local && !$es_servidor_pruebas) {
-         require_once __DIR__ . '/backup.php';
-         if (function_exists('ejecutarRespaldoSilencioso')) {
-             ejecutarRespaldoSilencioso($pdo);
-         }
-     }
+    require_once __DIR__ . '/backup.php';
+    if (function_exists('ejecutarRespaldoSilencioso')) {
+        ejecutarRespaldoSilencioso($pdo);
+    }
 
 } catch (\PDOException $e) {
      $error_msg = $e->getMessage();
