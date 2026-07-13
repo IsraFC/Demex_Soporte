@@ -1,0 +1,38 @@
+name: Despliegue Automático a Staging (InfinityFree)
+
+on:
+  push:
+    branches:
+      - '**'         # Escucha y despliega cualquier rama o feature intermedio
+      - '!main'      # EXCLUYE estrictamente la rama main para no tocar producción
+
+jobs:
+  web-deploy:
+    name: Transmitiendo código a InfinityFree
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🚚 Descargar el código desde GitHub
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 🚀 Sincronizando directorios vía FTP en Tiempo Real
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        server-dir: htdocs/
+        # 🚫 EXCEPCIONES: Filtramos archivos innecesarios locales igual que en Hetzner
+        exclude: |
+          **/.git*
+          **/.git*/**
+          **/.vscode/**
+          **/Thumbs.db
+          **/desktop.ini
+          **/.DS_Store
+          **/*.log
+          **/Soporte/backups/**
+          **/backups/**
+          **/config/ultimo_respaldo.txt

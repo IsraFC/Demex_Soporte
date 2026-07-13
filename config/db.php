@@ -4,11 +4,24 @@
  * Utiliza el driver PDO para mayor seguridad y flexibilidad.
  */
 
-$host = 'localhost';
-$db   = 'portal_demex';
-$user = 'root';
-$pass = ''; 
-$charset = 'utf8mb4';
+// Detectamos dinámicamente si el sistema está corriendo en tu entorno local (XAMPP)
+$es_local = ($_SERVER['HTTP_HOST'] === 'localhost' || $_SERVER['REMOTE_ADDR'] === '127.0.0.1');
+
+if ($es_local) {
+    // CONFIGURACIÓN PARA XAMPP LOCAL
+    $host    = 'localhost';
+    $db      = 'portal_demex';
+    $user    = 'root';
+    $pass    = ''; 
+    $charset = 'utf8mb4';
+} else {
+    // CONFIGURACIÓN PARA STAGING INFINITYFREE
+    $host    = 'sql106.infinityfree.com';           // MySQL Hostname de la nube
+    $db      = 'if0_42397413_portal_demex';         // Database Name completo
+    $user    = 'if0_42397413';                      // MySQL Username de la nube
+    $pass    = 'testdemex2026';                     // contraseña de cuenta de hosting
+    $charset = 'utf8mb4';
+}
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
 
