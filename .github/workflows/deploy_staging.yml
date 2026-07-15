@@ -38,4 +38,5 @@ jobs:
           --exclude='config/mail_config.php' \
           --exclude='config/db.php' \
           --exclude='config/backup.php' \
+          --exclude='.htaccess' \
           ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/html/staging/
