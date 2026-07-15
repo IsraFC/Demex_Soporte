@@ -12,7 +12,7 @@
 function ejecutarRespaldoSilencioso($pdo) {
     date_default_timezone_set('America/Mexico_City');
     
-    // PRUEBA: Forzamos que se cree el log para saber que la función responde
+    // PRUEBA DE VIDA: Forzamos que se cree el log para saber que la función responde
     file_put_contents(__DIR__ . '/debug_backup.log', "Iniciando proceso de respaldo... \n");
     
     $archivo_registro = __DIR__ . '/ultimo_respaldo.txt'; 
