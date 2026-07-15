@@ -2,11 +2,10 @@
 /**
  * ARCHIVO: config/backup.php
  * PROYECTO: Sistema de Gestión General DEMEX
- * DESCRIPCIÓN: Gestiona respaldos automáticos de la base de datos MySQL.
- * Implementa una política de retención de los últimos 5 archivos para optimizar
- * el espacio en disco y garantizar la disponibilidad de versiones históricas.
- * * @author Israel Fernández Carrera
- * @version 1.6
+ * DESCRIPCIÓN: Gestiona respaldos automáticos de la base de datos MySQL de forma dinámica.
+ * Implementa una política de retención de los últimos 5 archivos según el entorno.
+ * @author Israel Fernández Carrera & Gemini
+ * @version 1.7
  */
 
 function ejecutarRespaldoSilencioso($pdo) {
@@ -31,11 +30,12 @@ function ejecutarRespaldoSilencioso($pdo) {
     }
 
     /**
-     * 2. CONFIGURACIÓN DEL ENTORNO Y BASE DE DATOS
+     * 2. DETECCIÓN DINÁMICA DE ENTORNO Y CONFIGURACIÓN
      */
+    // Por defecto asumimos producción
     $db = 'portal_demex';
 
-    // ASIGNACIÓN DE RUTAS ABSOLUTAS SEGÚN EL SISTEMA OPERATIVO
+    // ASIGNACIÓN DE RUTAS ABSOLUTAS SEGÚN EL SISTEMA OPERATIVO Y CARPETA
     if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
         // --- ENTORNO LOCAL (XAMPP WINDOWS) ---
         $folder = __DIR__ . "/../backups/";
@@ -47,9 +47,18 @@ function ejecutarRespaldoSilencioso($pdo) {
         $nuevo_backup = $folder . "db_backup_{$timestamp}.sql";
         $comando = "\"{$mysqldump}\" -h localhost -u root {$db} > \"{$nuevo_backup}\" 2>&1";
     } else {
-        // --- ENTORNO PRODUCCIÓN (HETZNER LINUX) ---
-        // Usamos la ruta real absoluta del sistema de archivos de tu servidor
-        $folder = "/var/www/html/Soporte/backups/";
+        // --- ENTORNO LINUX (UBUNTU HETZNER) ---
+        
+        // DETECCIÓN INTELIGENTE: ¿Estamos en la carpeta de staging?
+        if (strpos(__DIR__, '/staging/') !== false) {
+            // Entorno de Pruebas (Staging)
+            $db = 'portal_demex_staging';
+            $folder = "/var/www/html/staging/Soporte/backups/";
+        } else {
+            // Entorno Real (Producción)
+            $db = 'portal_demex';
+            $folder = "/var/www/html/Soporte/backups/";
+        }
         
         if (!is_dir($folder)) {
             mkdir($folder, 0755, true);
@@ -60,7 +69,7 @@ function ejecutarRespaldoSilencioso($pdo) {
         $timestamp = date('Y-m-d_Hi');
         $nuevo_backup = $folder . "db_backup_{$timestamp}.sql";
         
-        // Comando limpio con redirección estándar de errores
+        // Comando limpio usando las variables dinámicas
         $comando = "mysqldump -h localhost -u {$db_user} -p'{$db_pass}' {$db} > '{$nuevo_backup}' 2>&1";
     }
 
@@ -95,5 +104,5 @@ function ejecutarRespaldoSilencioso($pdo) {
      * 5. ACTUALIZACIÓN DEL REGISTRO DE CONTROL
      */
     file_put_contents($archivo_registro, $tiempo_actual);
-    file_put_contents(__DIR__ . '/debug_backup.log', "Respaldo finalizado con éxito. Archivo de control actualizado.\n", FILE_APPEND);
+    file_put_contents(__DIR__ . '/debug_backup.log', "Respaldo finalizado con éxito ({$db}). Archivo de control actualizado.\n", FILE_APPEND);
 }
