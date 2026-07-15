@@ -4,6 +4,7 @@
  * @package Portal_Demex
  * @brief Interfaz gráfica con validación específica de errores y mitigación precisa de fuerza bruta.
  */
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
