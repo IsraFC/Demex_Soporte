@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: Soporte/tecnicos.php
  * DESCRIPCIÓN: Panel de control y directorio de técnicos de soporte.
- * Integra DataTables para la gestión de contactos, separación modular de teléfonos y mapas.
+ * Integra DataTables para la gestión de contactos, separación modular de teléfonos, mapas y edición.
  * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.5
+ * @version 1.6
  */
 
 require_once '../config/db.php';
@@ -44,6 +44,7 @@ include '../includes/header.php';
                     <th>Nombre / Entidad</th>
                     <th>Ubicación Operativa</th>
                     <th>Teléfono(s) de Contacto</th>
+                    <th width="80" class="text-center">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -58,7 +59,6 @@ include '../includes/header.php';
                 $i = 1;
 
                 while ($row = $stmt->fetch()):
-                    // Construcción exacta de la dirección para el geolocalizador
                     $direccion_completa = $row['zona'] . ', ' . $row['estado'] . ', México';
                 ?>
                 <tr>
@@ -81,7 +81,6 @@ include '../includes/header.php';
                         <div class="d-flex flex-wrap gap-1">
                             <?php 
                             if (!empty($row['telefonos'])): 
-                                // Segmentación del string indexado de teléfonos en un arreglo iterable
                                 $lista_telefonos = explode(',', $row['telefonos']);
                                 foreach ($lista_telefonos as $tel):
                             ?>
@@ -96,6 +95,11 @@ include '../includes/header.php';
                             <?php endif; ?>
                         </div>
                     </td>
+                    <td class="text-center">
+                        <a href="editar_tecnico.php?id=<?= $row['id_tecnico'] ?>" class="btn btn-sm btn-outline-primary border-0" title="Editar Técnico">
+                            <i class="bi bi-pencil-square fs-5"></i>
+                        </a>
+                    </td>
                 </tr>
                 <?php endwhile; ?>
             </tbody>
@@ -105,7 +109,6 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
-    // 1. Inicialización y traducción de DataTables
     var table = $('#tablaTecnicos').DataTable({
         "language": {
             "emptyTable": "No hay técnicos registrados en el directorio",
@@ -123,13 +126,10 @@ $(document).ready(function() {
         table.search(this.value).draw();
     });
 
-    // 2. Lógica delegada del modal del mapa (Compatible con paginación asíncrona)
     $(document).on('click', '.view-map', function(e) {
         e.preventDefault();
-        
         var direccion = $(this).data('direccion');
         var nombre = $(this).data('nombre');
-
         if (!direccion) return;
         
         $('#mapTitle').text('Ubicación Operativa: ' + nombre);
@@ -141,11 +141,9 @@ $(document).ready(function() {
         var gMapsUrl = "https://maps.google.com/?q=" + encodeURIComponent(direccion);
         $('#btnGoogleMaps').attr('href', gMapsUrl);
         
-        // Evita interferencias de capas moviendo el contenedor a la raíz del body
         $('#mapModal').appendTo("body").modal('show');
     });
 
-    // Limpieza de memoria del iframe al ocultar el modal
     $(document).on('hidden.bs.modal', '#mapModal', function () {
         $('#mapIframe').attr('src', '');
     });

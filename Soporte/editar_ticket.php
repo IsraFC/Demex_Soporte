@@ -2,10 +2,11 @@
 /**
  * ARCHIVO: editar_ticket.php
  * DESCRIPCIÓN: Interfaz de edición unificada asíncrona técnica y financiera.
+ * Incorpora la asignación y reasignación dinámica de técnicos basados en el flujo logístico.
  * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 2.0 - Modificación en Segundo Plano (Fetch API)
- * @date 2026-06-08
+ * @version 2.1 - Integración de Asignación Operativa en Edición
+ * @date 2026-07-15
  */
 require_once '../config/db.php';
 $page_title = "Editar Ticket - Soporte";
@@ -14,10 +15,10 @@ $id_ticket = $_GET['id_ticket'] ?? null;
 if (!$id_ticket) { header("Location: index.php"); exit(); }
 
 $sql = "SELECT t.*, d.*, c.nombre_cliente, e.modelo 
-        FROM Tickets_Soporte t 
-        LEFT JOIN Detalles_Costos_Tiempos d ON t.id_ticket = d.id_ticket 
-        JOIN Clientes c ON t.id_cliente = c.id_cliente
-        LEFT JOIN Equipos_Garantia e ON t.no_serie = e.no_serie
+        FROM tickets_soporte t 
+        LEFT JOIN detalles_costos_tiempos d ON t.id_ticket = d.id_ticket 
+        JOIN clientes c ON t.id_cliente = c.id_cliente
+        LEFT JOIN equipos_garantia e ON t.no_serie = e.no_serie
         WHERE t.id_ticket = ?";
 $stmt = $pdo->prepare($sql);
 $stmt->execute([$id_ticket]);
@@ -27,16 +28,28 @@ if (!$ticket) { header("Location: index.php"); exit(); }
 
 $tieneSerie = !empty($ticket['no_serie']) && strpos($ticket['no_serie'], 'S/N-') === false;
 
-$stmt_eq = $pdo->prepare("SELECT no_serie, modelo FROM Equipos_Garantia WHERE id_cliente = ?");
+$stmt_eq = $pdo->prepare("SELECT no_serie, modelo FROM equipos_garantia WHERE id_cliente = ?");
 $stmt_eq->execute([$ticket['id_cliente']]);
 $equipos_cliente = $stmt_eq->fetchAll(PDO::FETCH_ASSOC);
 
-$stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM Equipos_Garantia ORDER BY modelo ASC");
+$stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM equipos_garantia ORDER BY modelo ASC");
 $todos_modelos = $stmt_mod->fetchAll(PDO::FETCH_COLUMN);
+
+// 5. CATÁLOGO DE TÉCNICOS DISPONIBLES PARA ASIGNACIÓN
+$stmt_tec = $pdo->query("SELECT id_tecnico, nombre, zona, estado FROM tecnicos ORDER BY nombre ASC");
+$tecnicos_disponibles = $stmt_tec->fetchAll(PDO::FETCH_ASSOC);
 
 $modulo_actual = 'soporte';
 include '../includes/header.php';
 ?>
+
+<style>
+    .required-alt::after {
+        content: " *";
+        color: #dc3545;
+        font-weight: bold;
+    }
+</style>
 
 <div class="row mb-4">
     <div class="col-12">
@@ -51,7 +64,7 @@ include '../includes/header.php';
     <input type="hidden" name="garantia_valida" id="garantia_valida_input" value="<?= $ticket['garantia_valida'] ?>">
     <input type="hidden" name="fecha_compra_nueva" id="fecha_compra_nueva" value="">
 
-    <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-primary mb-4">
+    <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-danger mb-4">
         <div class="row g-4">
             
             <div class="col-md-4">
@@ -134,11 +147,23 @@ include '../includes/header.php';
                         </select>
                     </div>
                 </div>
+
+                <div class="mt-3" id="contenedor_asignacion_tecnico" style="display:none;">
+                    <label for="id_tecnico_asignado" class="form-label small fw-bold text-danger required-alt">Asignar Técnico Operativo</label>
+                    <select name="id_tecnico_asignado" id="id_tecnico_asignado" class="form-select border-0 bg-light shadow-sm fw-semibold">
+                        <option value="">-- Seleccionar Técnico Directo --</option>
+                        <?php foreach ($tecnicos_disponibles as $tec): ?>
+                            <option value="<?= $tec['id_tecnico'] ?>" <?= ($ticket['id_tecnico_asignado'] == $tec['id_tecnico']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($tec['nombre']) ?> (<?= htmlspecialchars($tec['zona'] . ', ' . $tec['estado']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
         </div>
     </div>
 
-    <div id="seccion_costos" class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-secondary mb-4" style="display:none;">
+    <div id="seccion_costos" class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-dark mb-4" style="display:none;">
         <div class="row g-4 mb-4">
             <div class="col-md-12">
                 <h5 class="fw-bold mb-2 text-danger border-bottom pb-2"><i class="bi bi-calendar-event me-2"></i>Logística y Costos</h5>
@@ -211,7 +236,7 @@ include '../includes/header.php';
 
     <div class="text-center mt-4 d-flex justify-content-center gap-3">
         <a href="index.php" class="btn btn-light border px-5 rounded-pill fw-bold text-dark">Cancelar <i class="bi bi-x-lg ms-1"></i></a>
-        <button type="submit" id="btnActualizarTicket" class="btn btn-primary text-white px-5 rounded-pill fw-bold shadow">
+        <button type="submit" id="btnActualizarTicket" class="btn btn-danger px-5 rounded-pill fw-bold shadow">
             <span id="btnText">Guardar Cambios</span> <i class="bi bi-cloud-arrow-up ms-1"></i>
         </button>
     </div>
@@ -300,7 +325,7 @@ $(document).ready(function() {
 
     // 🎯 INTERCEPTAR SUBMIT EN EDICIÓN (FETCH API)
     $('#formEditar').on('submit', function(e) {
-        e.preventDefault(); // Detiene el salto de página
+        e.preventDefault(); 
 
         const serie = $('#no_serie_input').val().trim();
         if (!$('#no_serie_input').attr('readonly') && !serieExiste && serie !== "" && !serie.startsWith("S/N-")) {
@@ -342,10 +367,10 @@ $(document).ready(function() {
                 icon: data.status,
                 title: data.title,
                 text: data.text,
-                confirmButtonColor: data.status === 'success' ? '#0066cc' : '#C62828'
+                confirmButtonColor: data.status === 'success' ? '#198754' : '#C62828'
             }).then(() => {
                 if (data.status === 'success') {
-                    window.location.href = 'index.php'; // Regresa al tablero principal
+                    window.location.href = 'index.php'; 
                 } else {
                     btn.prop('disabled', false).html(originalHtml);
                 }
@@ -362,11 +387,24 @@ $(document).ready(function() {
         });
     }
 
-    function toggleCostos() {
-        if (['Ninguna', 'Información'].includes($('#accion_select').val())) $('#seccion_costos').slideUp();
+    // CONTROL DE VISIBILIDAD DE SECCIONES DINÁMICAS (COSTOS Y ASIGNACIÓN DE TÉCNICOS)
+    function evaluarAccionEdicion() {
+        const accion = $('#accion_select').val();
+        
+        // Visibilidad de Costos
+        if (['Ninguna', 'Información'].includes(accion)) $('#seccion_costos').slideUp();
         else $('#seccion_costos').slideDown();
+
+        // Visibilidad exclusiva de asignación de técnicos
+        if (['Envio técnico', 'Envio técnico y refacciones'].includes(accion)) {
+            $('#contenedor_asignacion_tecnico').slideDown();
+            $('#id_tecnico_asignado').prop('required', true);
+        } else {
+            $('#contenedor_asignacion_tecnico').slideUp();
+            $('#id_tecnico_asignado').prop('required', false).val('');
+        }
     }
-    $('#accion_select').on('change', toggleCostos);
+    $('#accion_select').on('change', evaluarAccionEdicion);
 
     $('.costo-input').on('input', function() {
         let total = 0;
@@ -408,7 +446,8 @@ $(document).ready(function() {
         $('#label_pago').html('Estatus: ' + txt);
     });
 
-    toggleCostos();
+    // Evaluación inicial al renderizar la página para respetar valores precargados
+    evaluarAccionEdicion();
     setTimeout(function() { $('.costo-input').first().trigger('input'); }, 100);
 
     const initG = $('#garantia_valida_input').val();

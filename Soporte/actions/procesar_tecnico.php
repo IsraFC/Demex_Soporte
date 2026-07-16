@@ -1,11 +1,11 @@
 <?php
 /**
  * ARCHIVO: Soporte/actions/procesar_tecnico.php
- * DESCRIPCIÓN: Controlador asíncrono para la persistencia transaccional de técnicos.
- * Devuelve respuestas estructuradas bajo formato JSON para interceptores Fetch API.
+ * DESCRIPCIÓN: Controlador asíncrono unificado para creación y edición transaccional de técnicos.
+ * Evalúa dinámicamente el id_tecnico para ejecutar lógica de inserción o actualización (Upsert).
  * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.0
+ * @version 2.0
  * @date 2026-07-15
  */
 
@@ -16,16 +16,18 @@ header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
-    $nombre    = trim($_POST['nombre'] ?? '');
-    $estado    = trim($_POST['estado'] ?? '');
-    $zona      = trim($_POST['zona'] ?? '');
-    $telefonos = isset($_POST['telefonos']) ? $_POST['telefonos'] : [];
+    // Si viene el ID, lo parseamos como entero (indica modo EDICIÓN)
+    $id_tecnico = isset($_POST['id_tecnico']) && !empty($_POST['id_tecnico']) ? intval($_POST['id_tecnico']) : null;
+    $nombre     = trim($_POST['nombre'] ?? '');
+    $estado     = trim($_POST['estado'] ?? '');
+    $zona       = trim($_POST['zona'] ?? '');
+    $telefonos  = isset($_POST['telefonos']) ? $_POST['telefonos'] : [];
 
     if (empty($nombre) || empty($estado) || empty($zona)) {
         echo json_encode([
             'status' => 'error',
-            'title' => 'Estructura Incompleta',
-            'text' => 'Los campos de nombre, estado y zona operativa son estrictamente obligatorios.'
+            'title'  => 'Estructura Incompleta',
+            'text'   => 'Los campos de nombre, estado y zona operativa son estrictamente obligatorios.'
         ]);
         exit;
     }
@@ -34,14 +36,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Inicialización de contexto transaccional atomizado
         $pdo->beginTransaction();
 
-        // Operación 1: Persistencia del elemento maestro (Técnico)
-        $sqlTecnico = "INSERT INTO tecnicos (nombre, estado, zona) VALUES (?, ?, ?)";
-        $stmt = $pdo->prepare($sqlTecnico);
-        $stmt->execute([$nombre, $estado, $zona]);
-        
-        $id_tecnico = $pdo->lastInsertId();
+        if ($id_tecnico) {
+            // ==========================================
+            // MODO MIGRACIÓN / EDICIÓN
+            // ==========================================
+            $sqlTecnico = "UPDATE tecnicos SET nombre = ?, estado = ?, zona = ? WHERE id_tecnico = ?";
+            $stmt = $pdo->prepare($sqlTecnico);
+            $stmt->execute([$nombre, $estado, $zona, $id_tecnico]);
 
-        // Operación 2: Inserción iterativa de sub-nodos relacionados (Telefonos)
+            // Limpieza absoluta de teléfonos anteriores para este técnico para evitar huérfanos
+            $sqlDelTel = "DELETE FROM tecnicos_telefonos WHERE id_tecnico = ?";
+            $stmtDel = $pdo->prepare($sqlDelTel);
+            $stmtDel->execute([$id_tecnico]);
+
+            $titulo_js = '¡Registro Actualizado!';
+            $texto_js  = 'Los cambios operativos del técnico se guardaron exitosamente en el directorio.';
+
+        } else {
+            // ==========================================
+            // MODO CREACIÓN
+            // ==========================================
+            $sqlTecnico = "INSERT INTO tecnicos (nombre, estado, zona) VALUES (?, ?, ?)";
+            $stmt = $pdo->prepare($sqlTecnico);
+            $stmt->execute([$nombre, $estado, $zona]);
+            
+            $id_tecnico = $pdo->lastInsertId();
+
+            $titulo_js = '¡Registro Exitoso!';
+            $texto_js  = 'El técnico ha sido incorporado correctamente al directorio del portal.';
+        }
+
+        // ==========================================
+        // PERSISTENCIA DE TELÉFONOS (Común para ambos)
+        // ==========================================
         if (!empty($telefonos) && is_array($telefonos)) {
             $sqlTelefono = "INSERT INTO tecnicos_telefonos (id_tecnico, telefono) VALUES (?, ?)";
             $stmtTel = $pdo->prepare($sqlTelefono);
@@ -59,8 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         echo json_encode([
             'status' => 'success',
-            'title' => '¡Registro Exitoso!',
-            'text' => 'El técnico ha sido incorporado correctamente al directorio del portal.'
+            'title'  => $titulo_js,
+            'text'   => $texto_js
         ]);
         exit;
 
@@ -72,16 +99,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         echo json_encode([
             'status' => 'error',
-            'title' => 'Fallo Transaccional',
-            'text' => 'El motor SQL abortó la operación debido al siguiente error: ' . $e->getMessage()
+            'title'  => 'Fallo Transaccional',
+            'text'   => 'El motor SQL abortó la operación debido al siguiente error: ' . $e->getMessage()
         ]);
         exit;
     }
 } else {
     echo json_encode([
         'status' => 'error',
-        'title' => 'Protocolo No Permitido',
-        'text' => 'El método de envío solicitado no es válido.'
+        'title'  => 'Protocolo No Permitido',
+        'text'   => 'El método de envío solicitado no es válido.'
     ]);
     exit;
 }
