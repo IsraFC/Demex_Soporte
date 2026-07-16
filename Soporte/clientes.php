@@ -3,10 +3,10 @@
  * ARCHIVO: clientes.php
  * DESCRIPCIÓN: Panel de control y directorio de clientes.
  * Integra DataTables para gestión de grandes volúmenes de datos, 
- * geolocalización vía Google Maps Embed y comunicación directa por WhatsApp.
- * * @author Israel Fernández Carrera
+ * geolocalización asíncrona mediante un componente externo de mapas y comunicación directa por WhatsApp.
+ * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.5
+ * @version 1.6
  */
 require_once '../config/db.php';
 $page_title = "Clientes - Soporte";
@@ -119,29 +119,6 @@ include '../includes/header.php';
     </div>
 </div>
 
-<div class="modal fade" id="mapModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header bg-danger text-white border-0">
-                <h5 class="modal-title fw-bold" id="mapTitle">Ubicación del Cliente</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-0 bg-light" style="height: 450px;">
-                <iframe id="mapIframe" width="100%" height="100%" frameborder="0" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
-            </div>
-            <div class="modal-footer bg-white border-0 d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center text-muted small">
-                    <i class="bi bi-geo-alt-fill text-danger me-2"></i>
-                    <span id="mapAddressText"></span>
-                </div>
-                <a href="#" id="btnGoogleMaps" target="_blank" class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm">
-                    <i class="bi bi-google me-2"></i>Ver en Google Maps
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
 $(document).ready(function() {
     /**
@@ -157,7 +134,7 @@ $(document).ready(function() {
             "zeroRecords": "Sin coincidencias",
             "paginate": { "next": "Sig.", "previous": "Ant." }
         },
-        "dom": 'rtip', // Solo muestra Tabla, Información y Paginación (Buscador oculto para usar el personalizado)
+        "dom": 'rtip', 
         "pageLength": 10
     });
 
@@ -168,7 +145,7 @@ $(document).ready(function() {
 
     /**
      * 3. LÓGICA DE MAPAS (DELEGACIÓN DE EVENTOS)
-     * Se usa delegación (.on click) para asegurar que funcione tras filtrar o paginar.
+     * Consume el modal centralizado delegando los clics para soportar paginación.
      */
     $(document).on('click', '.view-map', function(e) {
         e.preventDefault();
@@ -182,7 +159,7 @@ $(document).ready(function() {
                 text: 'Este cliente no tiene una dirección válida en el sistema.',
                 icon: 'warning',
                 confirmButtonText: 'Entendido',
-                confirmButtonColor: 'var(--primary-color)', /* Se adapta automáticamente si es Global o Soporte */
+                confirmButtonColor: '#C62828',
                 buttonsStyling: true,
                 customClass: {
                     popup: 'rounded-4 border-0 shadow-lg',
@@ -192,7 +169,7 @@ $(document).ready(function() {
             return;
         }
         
-        // Carga de metadatos en el modal
+        // Carga de metadatos en el modal común
         $('#mapTitle').text('Ubicación: ' + nombre);
         $('#mapAddressText').text(direccion);
         
@@ -203,19 +180,21 @@ $(document).ready(function() {
         var gMapsUrl = "https://maps.google.com/?q=" + encodeURIComponent(direccion);
         $('#btnGoogleMaps').attr('href', gMapsUrl);
         
-        // --- EL TRUCO INFALIBLE CORREGIDO ---
-        // Desplazamos el modal a la raíz del body para romper el bloqueo de la capa page-fade-wrapper
+        // Desplazamos el modal a la raíz del body para romper el bloqueo de capas
         $('#mapModal').appendTo("body").modal('show');
     });
 
     /**
      * 4. LIMPIEZA DE RECURSOS
-     * Evita que el Iframe siga cargado en segundo plano al cerrar el modal.
      */
-    $('#mapModal').on('hidden.bs.modal', function () {
+    $(document).on('hidden.bs.modal', '#mapModal', function () {
         $('#mapIframe').attr('src', '');
     });
 });
 </script>
 
-<?php include '../includes/footer.php'; ?>
+<?php 
+// Inclusión del fragmento global reutilizable del mapa y cierre del layout maestro
+include '../includes/modal_mapa.php'; 
+include '../includes/footer.php'; 
+?>

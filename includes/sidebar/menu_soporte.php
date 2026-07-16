@@ -31,6 +31,9 @@ global $link_prefix_soporte, $pagina_actual_php, $en_soporte; ?>
 <a href="<?= $link_prefix_soporte ?>estadisticas.php" class="sidebar-link <?= ($pagina_actual_php === 'estadisticas.php' && $en_soporte) ? 'active-page no-anim' : '' ?>">
     <div class="sidebar-icon"><i class="bi bi-bar-chart-line"></i></div> <span>Estadísticas</span>
 </a>
+<a href="<?= $link_prefix_soporte ?>tecnicos.php" class="sidebar-link <?= ($pagina_actual_php === 'tecnicos.php' && $en_soporte) ? 'active-page no-anim' : '' ?>">
+    <div class="sidebar-icon"><i class="bi bi-person-lines-fill"></i></div> <span>Técnicos</span>
+</a>
 
 <div class="seccion-herramientas pt-3 mt-2 mx-3">
     <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Herramientas</span>
