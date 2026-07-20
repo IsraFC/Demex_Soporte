@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: registro_ticket.php
  * DESCRIPCIÓN: Panel de control unificado asíncrono para la creación de folios de soporte técnico.
- * Incorpora asignación dinámica de personal técnico basada en la acción operativa seleccionada.
+ * Incorpora asignación OPCIONAL de personal técnico basada en la acción operativa seleccionada.
  * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 2.1 - Integración de Asignación de Técnicos
+ * @version 2.2 - Técnico Opcional en Registro
  * @date 2026-07-15
  */
 require_once '../config/db.php';
@@ -29,7 +29,7 @@ $equipos_cliente = $stmt_eq->fetchAll(PDO::FETCH_ASSOC);
 $stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM equipos_garantia ORDER BY modelo ASC");
 $todos_modelos = $stmt_mod->fetchAll(PDO::FETCH_COLUMN);
 
-// 5. CATÁLOGO DE TÉCNICOS DISPONIBLES (NUEVO)
+// 5. CATÁLOGO DE TÉCNICOS DISPONIBLES
 $stmt_tec = $pdo->query("SELECT id_tecnico, nombre, zona, estado FROM tecnicos ORDER BY nombre ASC");
 $tecnicos_disponibles = $stmt_tec->fetchAll(PDO::FETCH_ASSOC);
 
@@ -150,9 +150,9 @@ include '../includes/header.php';
                 </div>
 
                 <div class="mt-3" id="contenedor_asignacion_tecnico" style="display:none;">
-                    <label for="id_tecnico_asignado" class="form-label small fw-bold text-danger required-alt">Asignar Técnico Operativo</label>
+                    <label for="id_tecnico_asignado" class="form-label small fw-bold text-muted">Técnico Operativo (Opcional)</label>
                     <select name="id_tecnico_asignado" id="id_tecnico_asignado" class="form-select border-0 bg-light shadow-sm fw-semibold">
-                        <option value="">-- Seleccionar Técnico Directo --</option>
+                        <option value="">-- Sin Asignar / Pendiente --</option>
                         <?php foreach ($tecnicos_disponibles as $tec): ?>
                             <option value="<?= $tec['id_tecnico'] ?>">
                                 <?= htmlspecialchars($tec['nombre']) ?> (<?= htmlspecialchars($tec['zona'] . ', ' . $tec['estado']) ?>)
@@ -313,7 +313,7 @@ $(document).ready(function() {
     });
     $(document).on('focus', 'input, textarea', function() { $(this).select(); });
 
-    // 4. CONTROL DE VISIBILIDAD DE SECCIONES DINÁMICAS (COSTOS Y ASIGNACIÓN DE TÉCNICO)
+    // 4. CONTROL DE VISIBILIDAD DE SECCIONES DINÁMICAS (COSTOS Y ASIGNACIÓN OPCIONAL)
     function evaluarAccionPrincipal() {
         const accion = $('#accion_select').val();
         
@@ -321,13 +321,12 @@ $(document).ready(function() {
         if (['Ninguna', 'Información'].includes(accion)) $('#seccion_costos').slideUp();
         else $('#seccion_costos').slideDown();
 
-        // Control exclusivo de la asignación del técnico operativo
+        // Muestra el campo pero sin forzarlo como obligatorio (Sin .prop('required', true))
         if (['Envio técnico', 'Envio técnico y refacciones'].includes(accion)) {
             $('#contenedor_asignacion_tecnico').slideDown();
-            $('#id_tecnico_asignado').prop('required', true);
         } else {
             $('#contenedor_asignacion_tecnico').slideUp();
-            $('#id_tecnico_asignado').prop('required', false).val('');
+            $('#id_tecnico_asignado').val('');
         }
     }
     $('#accion_select').on('change', evaluarAccionPrincipal);
