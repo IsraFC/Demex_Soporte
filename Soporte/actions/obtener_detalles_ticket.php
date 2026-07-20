@@ -2,29 +2,25 @@
 /**
  * ARCHIVO: actions/obtener_detalles_ticket.php
  * DESCRIPCIÓN: Genera la vista detallada del ticket mediante una consulta multi-tabla.
- * Calcula dinámicamente badges de estatus, lógica de pago (N/A) y visualización de costos.
+ * Incorpora el despliegue del nombre completo del técnico operativo asignado al servicio.
  * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 1.6 - Teléfono del cliente agregado
+ * @version 1.8 - Corrección de alias de geolocalización de técnicos
+ * @date 2026-07-15
  */
 require_once '../../config/db.php';
 
-// Validamos la recepción del ID para evitar errores de consulta
 $id_ticket = $_GET['id_ticket'] ?? null;
 if (!$id_ticket) { echo "ID no válido."; exit; }
 
 try {
-    /**
-     * CONSULTA INTEGRAL:
-     * Une Tickets_Soporte con Clientes, Equipos y Detalles de Costos.
-     * Se usa LEFT JOIN en Equipos y Detalles por si el ticket aún no tiene esos registros.
-     */
     $sql = "SELECT t.*, c.nombre_cliente, c.telefono, c.ubicacion, 
-                   e.modelo, d.*
-            FROM Tickets_Soporte t
-            JOIN Clientes c ON t.id_cliente = c.id_cliente
-            LEFT JOIN Equipos_Garantia e ON t.no_serie = e.no_serie
-            LEFT JOIN Detalles_Costos_Tiempos d ON t.id_ticket = d.id_ticket
+                   e.modelo, d.*, tec.nombre AS tecnico_asignado, tec.zona AS tecnico_zona, tec.estado AS tecnico_estado
+            FROM tickets_soporte t
+            JOIN clientes c ON t.id_cliente = c.id_cliente
+            LEFT JOIN equipos_garantia e ON t.no_serie = e.no_serie
+            LEFT JOIN detalles_costos_tiempos d ON t.id_ticket = d.id_ticket
+            LEFT JOIN tecnicos tec ON d.id_tecnico_asignado = tec.id_tecnico
             WHERE t.id_ticket = ?";
     
     $stmt = $pdo->prepare($sql);
@@ -33,18 +29,10 @@ try {
 
     if (!$data) { echo "Sin datos."; exit; }
 
-    /**
-     * LÓGICA DE PAGO (N/A):
-     * Determina si el estatus de pago debe mostrarse como No Aplica basándose en la acción o el total.
-     */
     $pago_no_aplica = (empty($data['estatus_pago']) || $data['accion'] == 'Ninguna' || $data['accion'] == 'Información');
     $textoPago = $pago_no_aplica ? "N/A" : $data['estatus_pago'];
     $badgePago = $pago_no_aplica ? "bg-secondary" : (($data['estatus_pago'] == 'Pagado') ? 'bg-success' : 'bg-danger');
 
-    /**
-     * LÓGICA DE ESTILOS DE ESTATUS:
-     * Asigna clases de Bootstrap según el estado actual del ticket.
-     */
     $colorEstatus = [
         'Abierto'   => 'bg-warning text-dark',
         'Cerrado'   => 'bg-success text-white',
@@ -101,6 +89,15 @@ try {
                     <small class="text-muted d-block fw-bold" style="font-size: 0.65rem;">ACCIÓN REALIZADA</small>
                     <span class="fw-bold text-danger"><?= $data['accion'] ?: 'Información' ?></span>
                 </div>
+                
+                <?php if (!empty($data['tecnico_asignado'])): ?>
+                    <div class="col-12 p-2 bg-dark bg-opacity-10 border border-secondary border-opacity-25 rounded animate__animated animate__fadeIn">
+                        <small class="text-muted d-block fw-bold" style="font-size: 0.65rem;"><i class="bi bi-person-badge text-danger me-1"></i>TÉCNICO OPERATIVO ASIGNADO</small>
+                        <span class="fw-bold text-dark"><?= htmlspecialchars($data['tecnico_asignado']) ?></span>
+                        <small class="text-muted d-block" style="font-size: 0.7rem; margin-top: 2px;"><i class="bi bi-geo-alt me-1"></i>Zona Cobertura: <?= htmlspecialchars($data['tecnico_zona'] . ', ' . $data['tecnico_estado']) ?></small>
+                    </div>
+                <?php endif; ?>
+
                 <div class="col-6 p-2 bg-light rounded border">
                     <small class="text-muted d-block fw-bold" style="font-size: 0.65rem;">FECHA INICIO ACC.</small>
                     <span class="small"><?= $data['fecha_inicio_acc'] ?: '---' ?></span>

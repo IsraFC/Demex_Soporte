@@ -2,10 +2,11 @@
 /**
  * ARCHIVO: registro_ticket.php
  * DESCRIPCIÓN: Panel de control unificado asíncrono para la creación de folios de soporte técnico.
+ * Incorpora asignación dinámica de personal técnico basada en la acción operativa seleccionada.
  * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 2.0 - Despacho Asíncrono Integrado (Fetch API)
- * @date 2026-06-08
+ * @version 2.1 - Integración de Asignación de Técnicos
+ * @date 2026-07-15
  */
 require_once '../config/db.php';
 $page_title = "Registrar Ticket - Soporte";
@@ -28,9 +29,21 @@ $equipos_cliente = $stmt_eq->fetchAll(PDO::FETCH_ASSOC);
 $stmt_mod = $pdo->query("SELECT DISTINCT modelo FROM equipos_garantia ORDER BY modelo ASC");
 $todos_modelos = $stmt_mod->fetchAll(PDO::FETCH_COLUMN);
 
+// 5. CATÁLOGO DE TÉCNICOS DISPONIBLES (NUEVO)
+$stmt_tec = $pdo->query("SELECT id_tecnico, nombre, zona, estado FROM tecnicos ORDER BY nombre ASC");
+$tecnicos_disponibles = $stmt_tec->fetchAll(PDO::FETCH_ASSOC);
+
 $modulo_actual = 'soporte';
 include '../includes/header.php';
 ?>
+
+<style>
+    .required-alt::after {
+        content: " *";
+        color: #dc3545;
+        font-weight: bold;
+    }
+</style>
 
 <div class="row mb-4">
     <div class="col-12">
@@ -134,6 +147,18 @@ include '../includes/header.php';
                             <option value="Cambio de maquina">Cambio de máquina</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="mt-3" id="contenedor_asignacion_tecnico" style="display:none;">
+                    <label for="id_tecnico_asignado" class="form-label small fw-bold text-danger required-alt">Asignar Técnico Operativo</label>
+                    <select name="id_tecnico_asignado" id="id_tecnico_asignado" class="form-select border-0 bg-light shadow-sm fw-semibold">
+                        <option value="">-- Seleccionar Técnico Directo --</option>
+                        <?php foreach ($tecnicos_disponibles as $tec): ?>
+                            <option value="<?= $tec['id_tecnico'] ?>">
+                                <?= htmlspecialchars($tec['nombre']) ?> (<?= htmlspecialchars($tec['zona'] . ', ' . $tec['estado']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
         </div>
@@ -288,13 +313,24 @@ $(document).ready(function() {
     });
     $(document).on('focus', 'input, textarea', function() { $(this).select(); });
 
-    // 4. CONTROL DE VISIBILIDAD DE SECCIÓN COSTOS
-    function toggleSeccionCostos() {
+    // 4. CONTROL DE VISIBILIDAD DE SECCIONES DINÁMICAS (COSTOS Y ASIGNACIÓN DE TÉCNICO)
+    function evaluarAccionPrincipal() {
         const accion = $('#accion_select').val();
+        
+        // Control de Costos
         if (['Ninguna', 'Información'].includes(accion)) $('#seccion_costos').slideUp();
         else $('#seccion_costos').slideDown();
+
+        // Control exclusivo de la asignación del técnico operativo
+        if (['Envio técnico', 'Envio técnico y refacciones'].includes(accion)) {
+            $('#contenedor_asignacion_tecnico').slideDown();
+            $('#id_tecnico_asignado').prop('required', true);
+        } else {
+            $('#contenedor_asignacion_tecnico').slideUp();
+            $('#id_tecnico_asignado').prop('required', false).val('');
+        }
     }
-    $('#accion_select').on('change', toggleSeccionCostos);
+    $('#accion_select').on('change', evaluarAccionPrincipal);
 
     // 5. EVALUADOR ASÍNCRONO DE GARANTÍA (AJAX)
     var typingTimer;
@@ -337,14 +373,13 @@ $(document).ready(function() {
         } else { msgDiv.hide(); serieExiste = false; }
     });
 
-    // 🎯 6. INTERCEPTOR ASÍNCRONO DEFINITIVO (FETCH API)
+    // 6. INTERCEPTOR ASÍNCRONO DEFINITIVO (FETCH API)
     $('#formTicket').on('submit', function(e) {
-        e.preventDefault(); // Detiene el envío físico tradicional
+        e.preventDefault();
 
         const serie = $('#no_serie_input').val().trim();
         const modelo = $('#modelo_select').val();
 
-        // Si el equipo no existe en catálogo, detonamos tu modal relocalizado en el body
         if (!serieExiste && serie !== "" && !serie.startsWith("S/N-")) {
             $('#txtSerieNueva').text(serie);
             
@@ -360,11 +395,9 @@ $(document).ready(function() {
             return false;
         }
 
-        // Si la serie ya es válida o genérica, despachamos de forma asíncrona mediante Fetch
         ejecutarEnvioAsincrono(this);
     });
 
-    // Procesamiento definitivo desde el modal blanco relocalizado
     $('#btnConfirmarRegistro').on('click', function() {
         if ($('#modelo_select').val() === "") return false; 
         
@@ -375,11 +408,9 @@ $(document).ready(function() {
         $('#modalSerieNueva').modal('hide');
         serieExiste = true; 
         
-        // Disparamos el despacho Fetch pasando el elemento nativo del formulario
         ejecutarEnvioAsincrono(document.getElementById('formTicket'));
     });
 
-    // Función unificada de despacho Fetch API + SweetAlert2
     function ejecutarEnvioAsincrono(formElement) {
         const btn = $('#btnGuardarTicket');
         const txtBtn = $('#btnText');
@@ -406,7 +437,7 @@ $(document).ready(function() {
                 confirmButtonColor: data.status === 'success' ? '#198754' : '#C62828'
             }).then(() => {
                 if (data.status === 'success') {
-                    window.location.href = 'index.php'; // Redirección al panel técnico
+                    window.location.href = 'index.php';
                 } else {
                     btn.prop('disabled', false).html(originalHtml);
                 }

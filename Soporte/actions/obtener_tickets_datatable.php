@@ -2,9 +2,9 @@
 /**
  * ARCHIVO: actions/obtener_tickets_datatable.php
  * DESCRIPCIÓN: Motor de procesamiento Server-side para DataTables en DEMEX.
- * PURIFICADO: Remueve por completo las uniones y dependencias hacia la tabla de Almacén.
+ * Incorpora la relación hacia el catálogo maestro de técnicos asignados de forma limpia.
  * @project Soporte Técnico DEMEX
- * @version 2.0 - Motor de Tickets Autónomo
+ * @version 2.1 - Motor Autónomo con Soporte de Técnicos
  */
 
 require_once '../../config/db.php';
@@ -20,12 +20,13 @@ $length = $_POST['length'] ?? 13;
 $searchValue = $_POST['search']['value'] ?? '';
 
 /**
- * 2. CONSTRUCCIÓN DE LA CONSULTA BASE PURA
+ * 2. CONSTRUCCIÓN DE LA CONSULTA BASE PURA (JOIN A TÉCNICOS INYECTADO)
  */
 $queryBase = "FROM tickets_soporte t 
               JOIN clientes c ON t.id_cliente = c.id_cliente
               LEFT JOIN equipos_garantia e ON t.no_serie = e.no_serie
               LEFT JOIN detalles_costos_tiempos d ON t.id_ticket = d.id_ticket
+              LEFT JOIN tecnicos tec ON d.id_tecnico_asignado = tec.id_tecnico
               LEFT JOIN usuarios uc ON t.id_usuario_creador = uc.id_usuario
               LEFT JOIN usuarios ue ON t.id_usuario_editor = ue.id_usuario";
 
@@ -36,7 +37,7 @@ $where = " WHERE 1=1 ";
 
 if (!empty($searchValue)) {
     $searchClean = str_replace("'", "", $searchValue);
-    $where .= " AND (c.nombre_cliente LIKE '%$searchClean%' OR t.no_serie LIKE '%$searchClean%') ";
+    $where .= " AND (c.nombre_cliente LIKE '%$searchClean%' OR t.no_serie LIKE '%$searchClean%' OR tec.nombre LIKE '%$searchClean%') ";
 }
 
 if (!empty($_POST['filterTipo']))   $where .= " AND t.tipo_llamada = '" . str_replace("'", "", $_POST['filterTipo']) . "' ";
@@ -65,7 +66,7 @@ $totalRecordsWithFilter = $pdo->query("SELECT COUNT(*) $queryBase $where")->fetc
  */
 $sql = "SELECT t.id_ticket, c.nombre_cliente, e.modelo, t.no_serie, t.tipo_falla, 
                t.garantia_valida, t.estatus, t.fecha_inicial, d.estatus_pago, t.tipo_llamada, 
-               d.accion, d.fecha_inicio_acc, d.fecha_fin_acc, d.costo_total,
+               d.accion, d.fecha_inicio_acc, d.fecha_fin_acc, d.costo_total, tec.nombre AS tecnico_nom,
                uc.nombre AS creador_nom, uc.apellidos AS creador_ape,
                ue.nombre AS editor_nom, ue.apellidos AS editor_ape
         $queryBase 

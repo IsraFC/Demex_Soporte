@@ -4,12 +4,11 @@ on:
   push:
     branches:
       - develop
-      - 'feature/**'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Descargar el código desde GitHub
       uses: actions/checkout@v3
@@ -21,7 +20,7 @@ jobs:
 
     - name: Sincronizar archivos hacia Hetzner vía Rsync (Entorno Staging)
       run: |
-        sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete \
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz \
           -e "ssh -o StrictHostKeyChecking=no" \
           --exclude='.git/' \
           --exclude='.github/' \
