@@ -29,7 +29,7 @@ function tieneAcceso($roles_permitidos) {
 
 /* 1. SEGURIDAD CENTRALIZADA Y CONTROL DE ACCESO MULTI-ROL */
 $url_actual = $_SERVER['PHP_SELF'];
-// Usamos SCRIPT_NAME para obtener el nombre físico del archivo real en ejecución
+// SCRIPT_NAME para obtener el nombre físico del archivo real en ejecución
 $pagina_actual_php = basename($_SERVER['SCRIPT_NAME']);
 
 $en_soporte = (strpos($url_actual, '/Soporte/') !== false);

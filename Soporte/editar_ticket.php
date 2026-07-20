@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: editar_ticket.php
  * DESCRIPCIÓN: Interfaz de edición unificada asíncrona técnica y financiera.
- * Incorpora la asignación y reasignación dinámica de técnicos basados en el flujo logístico.
+ * Incorpora la asignación OPCIONAL y reasignación dinámica de técnicos.
  * @author Israel Fernández Carrera
  * @project Soporte Técnico DEMEX
- * @version 2.1 - Integración de Asignación Operativa en Edición
+ * @version 2.2 - Técnico Opcional en Edición
  * @date 2026-07-15
  */
 require_once '../config/db.php';
@@ -149,9 +149,9 @@ include '../includes/header.php';
                 </div>
 
                 <div class="mt-3" id="contenedor_asignacion_tecnico" style="display:none;">
-                    <label for="id_tecnico_asignado" class="form-label small fw-bold text-danger required-alt">Asignar Técnico Operativo</label>
+                    <label for="id_tecnico_asignado" class="form-label small fw-bold text-muted">Técnico Operativo (Opcional)</label>
                     <select name="id_tecnico_asignado" id="id_tecnico_asignado" class="form-select border-0 bg-light shadow-sm fw-semibold">
-                        <option value="">-- Seleccionar Técnico Directo --</option>
+                        <option value="">-- Sin Asignar / Pendiente --</option>
                         <?php foreach ($tecnicos_disponibles as $tec): ?>
                             <option value="<?= $tec['id_tecnico'] ?>" <?= ($ticket['id_tecnico_asignado'] == $tec['id_tecnico']) ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($tec['nombre']) ?> (<?= htmlspecialchars($tec['zona'] . ', ' . $tec['estado']) ?>)
@@ -387,7 +387,7 @@ $(document).ready(function() {
         });
     }
 
-    // CONTROL DE VISIBILIDAD DE SECCIONES DINÁMICAS (COSTOS Y ASIGNACIÓN DE TÉCNICOS)
+    // CONTROL DE VISIBILIDAD DE SECCIONES DINÁMICAS (COSTOS Y ASIGNACIÓN OPCIONAL)
     function evaluarAccionEdicion() {
         const accion = $('#accion_select').val();
         
@@ -395,13 +395,12 @@ $(document).ready(function() {
         if (['Ninguna', 'Información'].includes(accion)) $('#seccion_costos').slideUp();
         else $('#seccion_costos').slideDown();
 
-        // Visibilidad exclusiva de asignación de técnicos
+        // Muestra el campo pero sin forzarlo como obligatorio (Sin .prop('required', true))
         if (['Envio técnico', 'Envio técnico y refacciones'].includes(accion)) {
             $('#contenedor_asignacion_tecnico').slideDown();
-            $('#id_tecnico_asignado').prop('required', true);
         } else {
             $('#contenedor_asignacion_tecnico').slideUp();
-            $('#id_tecnico_asignado').prop('required', false).val('');
+            $('#id_tecnico_asignado').val('');
         }
     }
     $('#accion_select').on('change', evaluarAccionEdicion);
@@ -446,7 +445,7 @@ $(document).ready(function() {
         $('#label_pago').html('Estatus: ' + txt);
     });
 
-    // Evaluación inicial al renderizar la página para respetar valores precargados
+    // Evaluación inicial al renderizar la página
     evaluarAccionEdicion();
     setTimeout(function() { $('.costo-input').first().trigger('input'); }, 100);
 
