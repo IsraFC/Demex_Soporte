@@ -23,6 +23,10 @@ global $link_prefix_ventas, $pagina_actual_php, $en_ventas;
     <div class="sidebar-icon"><i class="bi bi-people-fill"></i></div> <span>Clientes</span>
 </a>
 
+<a href="<?= $link_prefix_ventas ?>catalogo_productos.php" class="sidebar-link <?= ($pagina_actual_php === 'catalogo_productos.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
+    <div class="sidebar-icon"><i class="bi bi-box"></i></div> <span>Productos</span>
+</a>
+
 <div class="seccion-herramientas pt-3 mt-2 mx-3">
     <span class="text-uppercase text-light fw-bold d-block" style="font-size: 10px; letter-spacing: 0.5px;">Analítica</span>
 </div>
