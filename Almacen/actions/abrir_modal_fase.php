@@ -4,7 +4,8 @@
  * DESCRIPCIÓN: Renderiza dinámicamente el formulario interno del modal según la fase actual de la máquina.
  * CONTROL LOGÍSTICO: Secuencia lineal con redirección comercial de Comodato a Pagada.
  * @project Almacén Técnico DEMEX
- * @version 5.6 - Flujo Restringido por Integridad Referencial
+ * @version 6.1 - Sincronización con Subtablas Child Rows
+ * @author Israel Fernández Carrera
  */
 
 require_once '../../config/db.php';
@@ -67,20 +68,20 @@ switch ($estatus_actual) {
         $nombre_campo_fecha = 'fecha_entrega_cliente';
         break;
     case 'COMODATO':
-        // REGLA NUEVA: El comodato no se va directo a entregada; primero pasa a Pagada para forzar la captura del cliente
         $siguiente_estatus = 'PAGADA / POR ENTREGAR';
         $label_fecha = 'Fecha en que el Comodato se convierte en Venta o Cierre Definitivo';
         $nombre_campo_fecha = 'fecha_entrega_cliente';
         break;
     case 'PAGADA / POR ENTREGAR':
     case 'CAMBIO':
-        // El modal de fases se congela porque estas dos salidas se despachan exclusivamente con el botón verde
         $siguiente_estatus = '';
         break;
     case 'ENTREGADA':
         $siguiente_estatus = '';
         break;
 }
+
+$serie_mostrar = !empty($equipo['no_serie']) ? htmlspecialchars($equipo['no_serie']) : 'S/N PENDIENTE';
 ?>
 
 <form id="formCambiarFase" novalidate>
@@ -88,13 +89,15 @@ switch ($estatus_actual) {
         
         <div class="bg-light p-3 mb-3 rounded-4 border-start border-danger border-4 small shadow-sm">
             <span class="d-block text-secondary text-uppercase fw-bold" style="font-size: 10px;">Equipo Seleccionado</span>
-            <div class="fw-bold text-dark fs-6 mt-1">Serie: <?= htmlspecialchars($equipo['no_serie']) ?></div>
-            <div class="text-muted" style="font-size: 11px;">Contenedor: <?= htmlspecialchars($equipo['contenedor']) ?> | Estatus Actual: <span class="badge bg-secondary p-1" style="font-size: 9px"><?= $estatus_actual ?></span></div>
+            <div class="fw-bold text-dark fs-6 mt-1">Modelo: <?= htmlspecialchars($equipo['modelo']) ?></div>
+            <div class="text-muted" style="font-size: 11px;">
+                Serie: <code class="text-danger fw-bold"><?= $serie_mostrar ?></code> | Contenedor: <?= htmlspecialchars($equipo['contenedor']) ?> | Estatus: <span class="badge bg-secondary p-1" style="font-size: 9px"><?= $estatus_actual ?></span>
+            </div>
         </div>
 
         <?php if (empty($siguiente_estatus) && ($estatus_actual === 'PAGADA / POR ENTREGAR' || $estatus_actual === 'CAMBIO')): ?>
             <div class="alert alert-info border-0 rounded-4 text-center p-3 mb-0" style="background-color: #f0f7ff;">
-                <span class="fw-bold text-dark small">Esta máquina requiere asignación de cliente y activación de póliza de garantía. Cierra este cuadro y utiliza el botón verde de "Entregar" en la tabla principal.</span>
+                <span class="fw-bold text-dark small">Esta máquina requiere asignación de cliente y activación de póliza de garantía. Cierra este cuadro y utiliza el botón verde de "Entregar".</span>
             </div>
         <?php elseif (empty($siguiente_estatus)): ?>
             <div class="alert alert-success border-0 rounded-4 text-center p-3 mb-0" style="background-color: #f4fbf7;">
@@ -148,26 +151,64 @@ document.getElementById('formCambiarFase')?.addEventListener('submit', function(
     e.preventDefault();
     const formData = new FormData(this);
 
-    Swal.fire({ title: 'Actualizando fase...', text: 'Guardando marca de tiempo logística.', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+    Swal.fire({ 
+        title: 'Actualizando fase...', 
+        text: 'Guardando marca de tiempo logística.', 
+        allowOutsideClick: false, 
+        didOpen: () => { Swal.showLoading(); } 
+    });
 
     fetch('actions/actualizar_fase.php', { method: 'POST', body: formData })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) throw new Error('Ocurrió un error en el servidor local.');
+        return response.json();
+    })
     .then(data => {
         Swal.close();
         if (data.success) {
+            // 1. Ocultar modal
             const modalEl = document.getElementById('modalActualizarFase');
             const modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) modalInstance.hide();
-            Swal.fire({ icon: 'success', title: 'Actualizado', text: data.message, timer: 1500, showConfirmButton: false });
-            table.ajax.reload(null, false);
-            actualizarKPIs();
+
+            Swal.fire({ icon: 'success', title: '¡Fase Actualizada!', text: data.message, timer: 1500, showConfirmButton: false });
+
+            // 2. Refrescar DataTable principal
+            if (typeof table !== 'undefined') {
+                table.ajax.reload(null, false);
+            }
+
+            // 3. Refrescar filas hijas desplegadas si están abiertas
+            $('#tablaLotes tr.shown').each(function() {
+                var row = table.row(this);
+                if (row.child.isShown()) {
+                    $.ajax({
+                        url: 'actions/obtener_desglose_lote.php',
+                        method: 'GET',
+                        data: { id_lote: row.data().id_lote },
+                        success: function (html) {
+                            row.child(html).show();
+                        }
+                    });
+                }
+            });
+
+            if (typeof actualizarKPIs === 'function') {
+                actualizarKPIs();
+            }
+
         } else {
             Swal.fire({ icon: 'error', title: 'Falla al Actualizar', text: data.message, confirmButtonColor: '#dc3545' });
         }
     })
     .catch(error => {
         Swal.close();
-        Swal.fire({ icon: 'error', title: 'Error de Red', text: 'Ocurrió un colapso en la petición asíncrona.', confirmButtonColor: '#dc3545' });
+        Swal.fire({ 
+            icon: 'error', 
+            title: 'Respuesta Inesperada', 
+            text: error.message, 
+            confirmButtonColor: '#dc3545' 
+        });
     });
 });
 </script>

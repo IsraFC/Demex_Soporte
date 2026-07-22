@@ -1,9 +1,9 @@
 <?php
 /**
  * ARCHIVO: Almacen/indicadores.php
- * DESCRIPCIÓN: Panel analítico avanzado que desglosa los tiempos promedio de permanencia por fase logístca.
+ * DESCRIPCIÓN: Panel analítico avanzado que desglosa los tiempos promedio de permanencia por fase logística.
  * @project Almacén Técnico DEMEX
- * @version 1.0 (Vista Analítica de Rendimiento)
+ * @version 1.1 (Vista Analítica de Rendimiento)
  */
 
 require_once '../config/db.php';
@@ -13,10 +13,10 @@ $page_title = "Indicadores de Rendimiento - Almacén";
  * CONSULTAS ANALÍTICAS (Métricas de Desfase Promedio):
  * Calculan el promedio de días reales utilizando las diferencias de fechas registradas.
  */
-$promedio_espera = $pdo->query("SELECT IFNULL(AVG(DATEDIFF(fecha_inicio_ajustes_almacen, fecha_ingreso_contenedor)), 0) FROM almacen_inventario WHERE fecha_inicio_ajustes_almacen IS NOT NULL")->fetchColumn();
+$promedio_espera  = $pdo->query("SELECT IFNULL(AVG(DATEDIFF(fecha_inicio_ajustes_almacen, fecha_ingreso_contenedor)), 0) FROM almacen_inventario WHERE fecha_inicio_ajustes_almacen IS NOT NULL")->fetchColumn();
 $promedio_ajustes = $pdo->query("SELECT IFNULL(AVG(DATEDIFF(fecha_disponible_soporte, fecha_inicio_ajustes_almacen)), 0) FROM almacen_inventario WHERE fecha_disponible_soporte IS NOT NULL")->fetchColumn();
 $promedio_soporte = $pdo->query("SELECT IFNULL(AVG(DATEDIFF(fecha_reingreso_almacen, fecha_entrega_soporte)), 0) FROM almacen_inventario WHERE fecha_reingreso_almacen IS NOT NULL AND fecha_entrega_soporte IS NOT NULL")->fetchColumn();
-$promedio_total = $pdo->query("SELECT IFNULL(AVG(DATEDIFF(fecha_entrega_cliente, fecha_ingreso_contenedor)), 0) FROM almacen_inventario WHERE fecha_entrega_cliente IS NOT NULL")->fetchColumn();
+$promedio_total   = $pdo->query("SELECT IFNULL(AVG(DATEDIFF(fecha_entrega_cliente, fecha_ingreso_contenedor)), 0) FROM almacen_inventario WHERE fecha_entrega_cliente IS NOT NULL")->fetchColumn();
 
 include '../includes/header.php';
 ?>

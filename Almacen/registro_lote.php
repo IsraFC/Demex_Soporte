@@ -1,92 +1,161 @@
 <?php
 /**
  * ARCHIVO: Almacen/registro_lote.php
- * DESCRIPCIÓN: Interfaz para el registro individual de maquinaria nueva de importación en Almacén.
- * Optimizada para captura rápida mediante teclado y adaptada a los modelos oficiales DEMEX.
+ * DESCRIPCIÓN: Interfaz para el registro masivo de lotes/contenedores de importación.
+ * Controles con dimensiones y estilos 100% estandarizados en altura y peso visual.
  * @project Almacén Técnico DEMEX
- * @version 5.3 - Catálogo Oficial de Modelos de Producción
+ * @version 6.2 - Estilos Uniformes de Alta Precisión
+ * @author Israel Fernández Carrera
  */
 require_once '../config/db.php';
-$page_title = "Registrar Entrada de Maquinaria Nueva";
+$page_title = "Registrar Lote de Importación";
+
+$modelos_oficiales = [
+    'DEMEX 313', 'DEMEX 313T', 'DEMEX 513', 'DEMEX 613', 
+    'DEMEX 1020', 'DEMEX 125', 'SPICE MT15', 'SPICE MV89'
+];
 
 include '../includes/header.php';
 ?>
 
+<style>
+    /* 1. Forzar altura, tipografía y estilo uniforme para TODOS los controles */
+    .form-control-demex {
+        height: 45px !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        background-color: #f8f9fa !important;
+        border: 1px solid #e9ecef !important;
+        border-radius: 50rem !important;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.04) !important;
+    }
+
+    /* Enfoque homogéneo en color rojo DEMEX */
+    .form-control-demex:focus, 
+    .input-group-demex:focus-within {
+        background-color: #ffffff !important;
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.15) !important;
+    }
+
+    /* Contenedor tipo Input-Group estandarizado a 45px */
+    .input-group-demex {
+        height: 45px !important;
+        background-color: #f8f9fa !important;
+        border: 1px solid #e9ecef !important;
+        border-radius: 50rem !important;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.04) !important;
+        overflow: hidden;
+    }
+
+    .input-group-demex .form-control {
+        height: 100% !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
+
+    .input-group-demex .input-group-text {
+        height: 100% !important;
+        background: transparent !important;
+        border: none !important;
+    }
+
+    /* Botón de acción proporcional de 45px */
+    .btn-action-demex {
+        height: 45px !important;
+        width: 45px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+    }
+</style>
+
 <div class="row mb-4 animate__animated animate__fadeIn">
     <div class="col-12">
-        <h1 class="fw-bold text-danger mb-0 text-uppercase"><i class="bi bi-box-arrow-in-down me-2"></i>Registrar Ingreso de Stock</h1>
-        <p class="text-muted">Introduce el número de serie y especificaciones de la maquinaria nueva para darla de alta en el inventario global.</p>
+        <h1 class="fw-bold text-danger mb-0 text-uppercase"><i class="bi bi-boxes me-2"></i>Nuevo Lote de Importación</h1>
+        <p class="text-muted small">Registra el contenedor de llegada y el desglose de maquinaria por modelo.</p>
     </div>
 </div>
 
 <form action="actions/procesar_lote.php" method="POST" id="formRegistroLote">
-    <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-danger mb-4 mx-auto" style="max-width: 700px;">
-        <h5 class="fw-bold mb-4 text-secondary text-uppercase" style="font-size: 0.85rem; letter-spacing: 0.5px;">
-            <i class="bi bi-file-earmark-medical-fill me-2 text-danger"></i>Especificaciones del Contenedor y Equipo
-        </h5>
+    <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-danger mb-4 mx-auto" style="max-width: 850px;">
         
-        <div class="row g-3">
-            <!-- Número de Serie -->
-            <div class="col-md-12">
-                <label class="form-label small fw-bold text-muted">Número de Serie</label>
-                <div class="input-group shadow-sm rounded-pill overflow-hidden bg-light border px-2 py-1">
-                    <span class="input-group-text border-0 bg-transparent text-danger"><i class="bi bi-hash"></i></span>
-                    <input type="text" name="no_serie" id="no_serie_input" class="form-control border-0 bg-transparent fw-bold text-uppercase text-danger" placeholder="Numero de serie..." required autocomplete="off" style="font-size: 15px;">
-                </div>
-                <div id="status_busqueda" class="mt-2 p-2 rounded small fw-bold" style="display:none; background-color: #f8f9fa; border-left: 4px solid #dee2e6;">
-                    <span id="txt_status_busqueda">Validando formato de serie...</span>
-                </div>
-            </div>
-
-            <!-- Modelo de la Máquina -->
-            <div class="col-md-12">
-                <label class="form-label small fw-bold text-muted">Modelo de la Maquinaria</label>
-                <div class="input-group shadow-sm rounded-pill overflow-hidden bg-light border px-2 py-1">
-                    <span class="input-group-text border-0 bg-transparent text-muted"><i class="bi bi-cpu-fill"></i></span>
-                    <select name="modelo" id="modelo" class="form-control border-0 bg-transparent fw-bold text-dark" required style="font-size: 15px; background: transparent;">
-                        <option value="" disabled selected>Seleccione el modelo correspondiente...</option>
-                        <option value="DEMEX 313">DEMEX 313</option>
-                        <option value="DEMEX 313T">DEMEX 313T</option>
-                        <option value="DEMEX 513">DEMEX 513</option>
-                        <option value="DEMEX 613">DEMEX 613</option>
-                        <option value="DEMEX 1020">DEMEX 1020</option>
-                        <option value="DEMEX 125">DEMEX 125</option>
-                        <option value="SPICE MT15">SPICE MT15</option>
-                        <option value="SPICE MV89">SPICE MV89</option>
-                    </select>
-                </div>
-            </div>
-
+        <!-- CABECERA DE DATOS DEL EMBARQUE -->
+        <h5 class="fw-bold mb-3 text-secondary text-uppercase" style="font-size: 0.82rem; letter-spacing: 0.5px;">
+            <i class="bi bi-truck me-2 text-danger"></i>Datos del Embarque / Contenedor
+        </h5>
+       
+        <div class="row g-3 mb-4">
             <!-- Identificador del Contenedor -->
-            <div class="col-md-12">
-                <label class="form-label small fw-bold text-muted">Identificador del Contenedor / Lote de Importación</label>
-                <div class="input-group shadow-sm rounded-pill overflow-hidden bg-light border px-2 py-1">
-                    <span class="input-group-text border-0 bg-transparent text-muted"><i class="bi bi-truck"></i></span>
-                    <input type="text" name="contenedor" id="contenedor" class="form-control border-0 bg-transparent fw-bold text-uppercase text-dark" placeholder="Identificador del contenedor..." required autocomplete="off">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold text-muted mb-1">Identificador del Contenedor / Lote</label>
+                <div class="input-group input-group-demex d-flex align-items-center px-2">
+                    <span class="input-group-text text-danger fs-6"><i class="bi bi-box-seam"></i></span>
+                    <input type="text" name="contenedor" id="contenedor" class="form-control border-0 bg-transparent text-uppercase text-dark" placeholder="EJ: CONT-2026-07" required autocomplete="off">
                 </div>
             </div>
 
             <!-- Tipo de Stock -->
-            <div class="col-md-6">
-                <label class="form-label small fw-bold text-muted">Tipo de Stock</label>
-                <select name="tipo" id="tipo" class="form-select border-5 rounded-pill bg-light shadow-sm fw-bold text-dark px-3" required>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1">Tipo de Stock</label>
+                <select name="tipo" id="tipo" class="form-select form-control-demex px-3 text-dark" required>
                     <option value="ORIGINAL" selected>ORIGINAL</option>
                     <option value="DEMO">DEMO</option>
                 </select>
             </div>
 
             <!-- Fecha de Arribo -->
-            <div class="col-md-6">
-                <label class="form-label small fw-bold text-muted">Fecha de Arribo a Almacén</label>
-                <input type="date" name="fecha_ingreso" id="fecha_ingreso" class="form-control border-5 rounded-pill bg-light shadow-sm fw-semibold text-muted px-3" value="<?= date('Y-m-d') ?>" required>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1">Fecha de Arribo</label>
+                <input type="date" name="fecha_ingreso" id="fecha_ingreso" class="form-control form-control-demex px-3 text-muted" value="<?= date('Y-m-d') ?>" required>
             </div>
         </div>
+
+        <!-- SECCIÓN DINÁMICA DE MAQUINARIA -->
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <h5 class="fw-bold mb-0 text-secondary text-uppercase" style="font-size: 0.82rem; letter-spacing: 0.5px;">
+                <i class="bi bi-cpu-fill me-2 text-danger"></i>Desglose de Maquinaria
+            </h5>
+            <button type="button" class="btn btn-dark btn-sm rounded-pill px-3 fw-bold shadow-sm" id="btnAgregarModelo" style="height: 38px;">
+                <i class="bi bi-plus-circle me-1"></i> Agregar Modelo
+            </button>
+        </div>
+
+        <div id="contenedorModelos">
+            <div class="row g-2 align-items-center mb-3 fila-modelo">
+                <!-- Select Modelo (Misma Altura) -->
+                <div class="col-md-7">
+                    <select name="modelos[]" class="form-select form-control-demex px-3 text-dark" required>
+                        <option value="" disabled selected>-- Seleccione Modelo --</option>
+                        <?php foreach($modelos_oficiales as $mod): ?>
+                            <option value="<?= $mod ?>"><?= $mod ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <!-- Input Cantidad (Misma Altura) -->
+                <div class="col-md-4">
+                    <div class="input-group input-group-demex d-flex align-items-center px-2">
+                        <span class="input-group-text text-muted fs-6"><i class="bi bi-hash"></i></span>
+                        <input type="number" name="cantidades[]" class="form-control border-0 bg-transparent text-dark text-center" placeholder="Cantidad de Piezas" min="1" max="200" required>
+                    </div>
+                </div>
+                <!-- Botón Eliminar Proporcional -->
+                <div class="col-md-1 text-center">
+                    <button type="button" class="btn btn-outline-danger border-0 btn-action-demex btnEliminarFila" disabled title="Eliminar fila">
+                        <i class="bi bi-trash-fill fs-6"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
+    <!-- BOTONES DE ACCIÓN -->
     <div class="text-center mt-4 d-flex justify-content-center gap-3">
-        <a href="index.php" class="btn btn-light border px-5 rounded-pill fw-bold text-dark shadow-sm">Cancelar</a>
-        <button type="submit" id="btnGuardarLote" class="btn btn-danger px-5 rounded-pill fw-bold shadow" style="background-color: #dc3545;">
-            <span id="btnText">Finalizar Entrada</span> <i class="bi bi-check-circle ms-1"></i>
+        <a href="index.php" class="btn btn-light border px-5 rounded-pill fw-bold text-dark shadow-sm" style="height: 45px; line-height: 30px;">Cancelar</a>
+        <button type="submit" id="btnGuardarLote" class="btn btn-danger px-5 rounded-pill fw-bold shadow" style="background-color: #dc3545; height: 45px;">
+            <span id="btnText">Generar Lote en Stock</span> <i class="bi bi-check-circle ms-1"></i>
         </button>
     </div>
 </form>
@@ -95,58 +164,73 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
-    // Validamos únicamente que el campo contenga caracteres antes de activar el botón
-    $('#no_serie_input').on('input', function() {
-        let val = $(this).val().trim();
-        let msgDiv = $('#status_busqueda');
-        let txtStatus = $('#txt_status_busqueda');
-        let btnGuardar = $('#btnGuardarLote');
+    const opcionesModelos = `<?php foreach($modelos_oficiales as $mod): ?><option value="<?= $mod ?>"><?= $mod ?></option><?php endforeach; ?>`;
 
-        if (val.length > 2) {
-            msgDiv.show();
-            txtStatus.text('Serie lista para registrar').css('color', '#0d6efd');
-            msgDiv.css('border-left', '4px solid #0d6efd');
-            btnGuardar.prop('disabled', false);
-        } else {
-            msgDiv.hide();
+    $('#btnAgregarModelo').on('click', function() {
+        const nuevaFila = `
+            <div class="row g-2 align-items-center mb-3 fila-modelo animate__animated animate__fadeIn">
+                <div class="col-md-7">
+                    <select name="modelos[]" class="form-select form-control-demex px-3 text-dark" required>
+                        <option value="" disabled selected>-- Seleccione Modelo --</option>
+                        ${opcionesModelos}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <div class="input-group input-group-demex d-flex align-items-center px-2">
+                        <span class="input-group-text text-muted fs-6"><i class="bi bi-hash"></i></span>
+                        <input type="number" name="cantidades[]" class="form-control border-0 bg-transparent text-dark text-center" placeholder="Cantidad de Piezas" min="1" max="200" required>
+                    </div>
+                </div>
+                <div class="col-md-1 text-center">
+                    <button type="button" class="btn btn-outline-danger border-0 btn-action-demex btnEliminarFila" title="Eliminar fila">
+                        <i class="bi bi-trash-fill fs-6"></i>
+                    </button>
+                </div>
+            </div>`;
+        
+        $('#contenedorModelos').append(nuevaFila);
+        actualizarBotonesEliminar();
+    });
+
+    $(document).on('click', '.btnEliminarFila', function() {
+        if ($('.fila-modelo').length > 1) {
+            $(this).closest('.fila-modelo').remove();
+            actualizarBotonesEliminar();
         }
     });
 
-    // Envío asíncrono seguro por Fetch API hacia el procesador
+    function actualizarBotonesEliminar() {
+        if ($('.fila-modelo').length <= 1) {
+            $('.btnEliminarFila').prop('disabled', true);
+        } else {
+            $('.btnEliminarFila').prop('disabled', false);
+        }
+    }
+
     $('#formRegistroLote').on('submit', function(e) {
         e.preventDefault();
 
         const btn = $('#btnGuardarLote');
-        const txtBtn = $('#btnText');
-        
-        btn.prop('disabled', true);
-        txtBtn.text('Guardando en Stock...');
-
-        Swal.fire({
-            title: 'Registrando maquinaria nueva...',
-            text: 'Inyectando traza logística de importación en la base de datos.',
-            allowOutsideClick: false,
-            didOpen: () => { Swal.showLoading(); }
-        });
+        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Procesando Lote...');
 
         fetch(this.action, { method: this.method, body: new FormData(this) })
         .then(res => res.json())
         .then(data => {
-            Swal.close();
-            Swal.fire({
-                icon: data.success ? 'success' : 'error',
-                title: data.success ? '¡Ingreso Exitoso!' : 'Falla de Duplicidad',
-                text: data.message,
-                confirmButtonColor: data.success ? '#198754' : '#dc3545'
-            }).then(() => {
-                if (data.success) window.location.href = 'index.php';
-                else btn.prop('disabled', false).text('Finalizar Entrada');
-            });
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Lote Creado!',
+                    text: data.message,
+                    confirmButtonColor: '#198754'
+                }).then(() => { window.location.href = 'index.php'; });
+            } else {
+                btn.prop('disabled', false).html('Generar Lote en Stock <i class="bi bi-check-circle ms-1"></i>');
+                Swal.fire({ icon: 'error', title: 'Atención', text: data.message, confirmButtonColor: '#dc3545' });
+            }
         })
         .catch(error => {
-            Swal.close();
-            btn.prop('disabled', false).text('Finalizar Entrada');
-            Swal.fire({ icon: 'error', title: 'Error de Comunicación', text: error.message });
+            btn.prop('disabled', false).html('Generar Lote en Stock <i class="bi bi-check-circle ms-1"></i>');
+            Swal.fire({ icon: 'error', title: 'Error de Red', text: error.message, confirmButtonColor: '#dc3545' });
         });
     });
 });

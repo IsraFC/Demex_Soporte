@@ -1,56 +1,79 @@
 <?php
 /**
  * ARCHIVO: Almacen/actions/procesar_lote.php
- * DESCRIPCIÓN: Guarda de forma individual la maquinaria nueva de importación incluyendo su modelo.
+ * DESCRIPCIÓN: Procesador transaccional para alta de lotes y generación automática de unidades.
  * @project Almacén Técnico DEMEX
- * @version 5.1 - Inserción de Lote con Mapeo de Modelo
+ * @version 6.0
+ * @author Israel Fernández Carrera
  */
 
-ini_set('display_errors', 0);
-error_reporting(E_ALL);
-
-require_once '../../config/db.php';
+session_start();
 header('Content-Type: application/json; charset=utf-8');
+require_once '../../config/db.php';
 
-$no_serie      = isset($_POST['no_serie']) ? strtoupper(trim($_POST['no_serie'])) : '';
-$modelo        = isset($_POST['modelo']) ? trim($_POST['modelo']) : '';
-$contenedor    = isset($_POST['contenedor']) ? strtoupper(trim($_POST['contenedor'])) : '';
-$tipo          = isset($_POST['tipo']) ? strtoupper(trim($_POST['tipo'])) : 'ORIGINAL';
-$fecha_ingreso = isset($_POST['fecha_ingreso']) ? trim($_POST['fecha_ingreso']) : '';
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['success' => false, 'message' => 'Método de solicitud no permitido.']);
+    exit();
+}
 
-// Validamos estrictamente que los nuevos campos requeridos no vengan vacíos
-if (empty($no_serie) || empty($modelo) || empty($contenedor) || empty($fecha_ingreso)) {
-    if (ob_get_length()) ob_clean();
-    echo json_encode(['success' => false, 'message' => 'Todos los campos (Serie, Modelo, Contenedor y Fecha) son completamente obligatorios.']);
+$contenedor    = trim($_POST['contenedor'] ?? '');
+$tipo          = trim($_POST['tipo'] ?? 'ORIGINAL');
+$fecha_ingreso = $_POST['fecha_ingreso'] ?? date('Y-m-d');
+$modelos       = $_POST['modelos'] ?? [];
+$cantidades    = $_POST['cantidades'] ?? [];
+
+if (empty($contenedor) || empty($modelos) || empty($cantidades)) {
+    echo json_encode(['success' => false, 'message' => 'Complete todos los campos obligatorios del lote.']);
     exit();
 }
 
 try {
-    // 1. Validar que la serie de la máquina de importación no exista ya activa en el almacén
-    $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM almacen_inventario WHERE no_serie = ? AND estatus != 'ENTREGADA'");
-    $stmtCheck->execute([$no_serie]);
-    
-    if ($stmtCheck->fetchColumn() > 0) {
-        if (ob_get_length()) ob_clean();
-        echo json_encode(['success' => false, 'message' => "Error: El número de serie {$no_serie} ya tiene un registro de stock activo en las bodegas del almacén."]);
+    $pdo->beginTransaction();
+
+    // 1. Validar que el contenedor no exista
+    $stmtCheck = $pdo->prepare("SELECT id_lote FROM almacen_lotes WHERE contenedor = ?");
+    $stmtCheck->execute([$contenedor]);
+    if ($stmtCheck->fetch()) {
+        echo json_encode(['success' => false, 'message' => "El identificador de contenedor '{$contenedor}' ya fue registrado previamente."]);
+        $pdo->rollBack();
         exit();
     }
 
-    // 2. Inserción limpia incluyendo el modelo seleccionado
-    $sqlInsert = "INSERT INTO almacen_inventario (contenedor, no_serie, modelo, tipo, estatus, fecha_ingreso_contenedor) 
-                  VALUES (?, ?, ?, ?, 'SIN REVISAR', ?)";
-    $stmtInsert = $pdo->prepare($sqlInsert);
-    $stmtInsert->execute([$contenedor, $no_serie, $modelo, $tipo, $fecha_ingreso]);
+    // 2. Insertar Lote Maestro
+    $sqlLote = "INSERT INTO almacen_lotes (contenedor, tipo, fecha_ingreso) VALUES (?, ?, ?)";
+    $stmtLote = $pdo->prepare($sqlLote);
+    $stmtLote->execute([$contenedor, $tipo, $fecha_ingreso]);
+    $id_lote = $pdo->lastInsertId();
 
-    if (ob_get_length()) ob_clean();
+    // 3. Generar unidades individuales para cada modelo según la cantidad capturada
+    $sqlUnidad = "INSERT INTO almacen_inventario (id_lote, contenedor, modelo, tipo, estatus, fecha_ingreso_contenedor) 
+                  VALUES (?, ?, ?, ?, 'SIN REVISAR', ?)";
+    $stmtUnidad = $pdo->prepare($sqlUnidad);
+
+    $total_maquinas_registradas = 0;
+
+    for ($i = 0; $i < count($modelos); $i++) {
+        $modelo_actual = trim($modelos[$i]);
+        $cant_actual   = intval($cantidades[$i]);
+
+        if (!empty($modelo_actual) && $cant_actual > 0) {
+            for ($k = 0; $k < $cant_actual; $k++) {
+                $stmtUnidad->execute([$id_lote, $contenedor, $modelo_actual, $tipo, $fecha_ingreso]);
+                $total_maquinas_registradas++;
+            }
+        }
+    }
+
+    $pdo->commit();
+
     echo json_encode([
         'success' => true,
-        'message' => "¡Excelente! La maquinaria nueva modelo {$modelo} con serie {$no_serie} fue dada de alta en el lote logístico {$contenedor}."
+        'message' => "Se ha generado con éxito el lote '{$contenedor}' con un total de {$total_maquinas_registradas} unidades en inventario."
     ]);
     exit();
 
 } catch (Exception $e) {
-    if (ob_get_length()) ob_clean();
-    echo json_encode(['success' => false, 'message' => 'Falla interna en base de datos: ' . $e->getMessage()]);
+    if ($pdo->inTransaction()) { $pdo->rollBack(); }
+    echo json_encode(['success' => false, 'message' => 'Error en base de datos: ' . $e->getMessage()]);
     exit();
 }
