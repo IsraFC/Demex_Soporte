@@ -1,7 +1,7 @@
 <?php
 /**
  * ARCHIVO: Almacen/actions/obtener_desglose_lote.php
- * DESCRIPCIÓN: Genera la subtabla HTML desplegable agrupando las máquinas por Modelo y Estatus.
+ * DESCRIPCIÓN: Subtabla HTML desplegable agrupando las máquinas por Modelo y Estatus, e incluyendo Observaciones del Lote.
  * @project Almacén Técnico DEMEX
  * @author Israel Fernández Carrera
  */
@@ -14,7 +14,12 @@ if ($id_lote <= 0) {
     exit();
 }
 
-// Consulta agrupada por Modelo y Estatus
+// 1. Consultar observaciones del Lote
+$stmtLote = $pdo->prepare("SELECT contenedor, observaciones FROM almacen_lotes WHERE id_lote = ?");
+$stmtLote->execute([$id_lote]);
+$infoLote = $stmtLote->fetch(PDO::FETCH_ASSOC);
+
+// 2. Consulta agrupada por Modelo y Estatus
 $sql = "SELECT id, modelo, estatus, COUNT(*) AS cantidad, no_serie
         FROM almacen_inventario 
         WHERE id_lote = ? 
@@ -32,6 +37,16 @@ if (empty($grupos)) {
 ?>
 
 <div class="subtabla-lote my-2">
+    <?php if (!empty($infoLote['observaciones'])): ?>
+        <div class="alert alert-light border shadow-sm rounded-3 p-2 mb-3 d-flex align-items-center gap-2">
+            <i class="bi bi-chat-left-text-fill text-danger fs-5"></i>
+            <div>
+                <small class="fw-bold text-secondary text-uppercase d-block" style="font-size: 10px;">Notas / Observaciones del Contenedor:</small>
+                <span class="small fw-semibold text-dark"><?= htmlspecialchars($infoLote['observaciones']) ?></span>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <div class="d-flex align-items-center justify-content-between mb-2 pb-1 border-bottom border-danger border-opacity-25">
         <span class="fw-bold text-danger small text-uppercase"><i class="bi bi-cpu-fill me-1"></i> Desglose Agrupado de Maquinaria</span>
         <small class="text-muted fw-bold">Stock por Modelo y Estado Operativo</small>

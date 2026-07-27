@@ -2,9 +2,9 @@
 /**
  * ARCHIVO: Almacen/registro_lote.php
  * DESCRIPCIÓN: Interfaz para el registro masivo de lotes/contenedores de importación.
- * Controles con dimensiones y estilos 100% estandarizados en altura y peso visual.
+ * Controles con dimensiones estandarizadas e inclusión de observaciones de embarque.
  * @project Almacén Técnico DEMEX
- * @version 6.2 - Estilos Uniformes de Alta Precisión
+ * @version 6.3 - Inclusión de Observaciones de Lote
  * @author Israel Fernández Carrera
  */
 require_once '../config/db.php';
@@ -19,7 +19,6 @@ include '../includes/header.php';
 ?>
 
 <style>
-    /* 1. Forzar altura, tipografía y estilo uniforme para TODOS los controles */
     .form-control-demex {
         height: 45px !important;
         font-size: 14px !important;
@@ -30,7 +29,6 @@ include '../includes/header.php';
         box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.04) !important;
     }
 
-    /* Enfoque homogéneo en color rojo DEMEX */
     .form-control-demex:focus, 
     .input-group-demex:focus-within {
         background-color: #ffffff !important;
@@ -38,7 +36,6 @@ include '../includes/header.php';
         box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.15) !important;
     }
 
-    /* Contenedor tipo Input-Group estandarizado a 45px */
     .input-group-demex {
         height: 45px !important;
         background-color: #f8f9fa !important;
@@ -60,7 +57,6 @@ include '../includes/header.php';
         border: none !important;
     }
 
-    /* Botón de acción proporcional de 45px */
     .btn-action-demex {
         height: 45px !important;
         width: 45px !important;
@@ -74,29 +70,26 @@ include '../includes/header.php';
 <div class="row mb-4 animate__animated animate__fadeIn">
     <div class="col-12">
         <h1 class="fw-bold text-danger mb-0 text-uppercase"><i class="bi bi-boxes me-2"></i>Nuevo Lote de Importación</h1>
-        <p class="text-muted small">Registra el contenedor de llegada y el desglose de maquinaria por modelo.</p>
+        <p class="text-muted small">Registra el contenedor de llegada, observaciones generales y desglose por modelo.</p>
     </div>
 </div>
 
 <form action="actions/procesar_lote.php" method="POST" id="formRegistroLote">
     <div class="card-main shadow-lg p-4 bg-white rounded border-top border-4 border-danger mb-4 mx-auto" style="max-width: 850px;">
         
-        <!-- CABECERA DE DATOS DEL EMBARQUE -->
         <h5 class="fw-bold mb-3 text-secondary text-uppercase" style="font-size: 0.82rem; letter-spacing: 0.5px;">
-            <i class="bi bi-truck me-2 text-danger"></i>Datos del Embarque / Contenedor
+            <i class="bi bi-truck me-2 text-danger"></i>Datos del Contenedor
         </h5>
        
-        <div class="row g-3 mb-4">
-            <!-- Identificador del Contenedor -->
+        <div class="row g-3 mb-3">
             <div class="col-md-6">
                 <label class="form-label small fw-bold text-muted mb-1">Identificador del Contenedor / Lote</label>
                 <div class="input-group input-group-demex d-flex align-items-center px-2">
                     <span class="input-group-text text-danger fs-6"><i class="bi bi-box-seam"></i></span>
-                    <input type="text" name="contenedor" id="contenedor" class="form-control border-0 bg-transparent text-uppercase text-dark" placeholder="EJ: CONT-2026-07" required autocomplete="off">
+                    <input type="text" name="contenedor" id="contenedor" class="form-control border-0 bg-transparent text-uppercase text-dark" placeholder="Contenedor..." required autocomplete="off">
                 </div>
             </div>
 
-            <!-- Tipo de Stock -->
             <div class="col-md-3">
                 <label class="form-label small fw-bold text-muted mb-1">Tipo de Stock</label>
                 <select name="tipo" id="tipo" class="form-select form-control-demex px-3 text-dark" required>
@@ -105,14 +98,17 @@ include '../includes/header.php';
                 </select>
             </div>
 
-            <!-- Fecha de Arribo -->
             <div class="col-md-3">
                 <label class="form-label small fw-bold text-muted mb-1">Fecha de Arribo</label>
                 <input type="date" name="fecha_ingreso" id="fecha_ingreso" class="form-control form-control-demex px-3 text-muted" value="<?= date('Y-m-d') ?>" required>
             </div>
+
+            <div class="col-12">
+                <label class="form-label small fw-bold text-muted mb-1">Observaciones (Opcional)</label>
+                <textarea name="observaciones" id="observaciones" class="form-control bg-light border-0 shadow-sm rounded-4 p-3 fw-semibold text-dark" rows="2" placeholder="Notas iniciales o condiciones de entrega..."></textarea>
+            </div>
         </div>
 
-        <!-- SECCIÓN DINÁMICA DE MAQUINARIA -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
             <h5 class="fw-bold mb-0 text-secondary text-uppercase" style="font-size: 0.82rem; letter-spacing: 0.5px;">
                 <i class="bi bi-cpu-fill me-2 text-danger"></i>Desglose de Maquinaria
@@ -124,7 +120,6 @@ include '../includes/header.php';
 
         <div id="contenedorModelos">
             <div class="row g-2 align-items-center mb-3 fila-modelo">
-                <!-- Select Modelo (Misma Altura) -->
                 <div class="col-md-7">
                     <select name="modelos[]" class="form-select form-control-demex px-3 text-dark" required>
                         <option value="" disabled selected>-- Seleccione Modelo --</option>
@@ -133,14 +128,12 @@ include '../includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <!-- Input Cantidad (Misma Altura) -->
                 <div class="col-md-4">
                     <div class="input-group input-group-demex d-flex align-items-center px-2">
                         <span class="input-group-text text-muted fs-6"><i class="bi bi-hash"></i></span>
                         <input type="number" name="cantidades[]" class="form-control border-0 bg-transparent text-dark text-center" placeholder="Cantidad de Piezas" min="1" max="200" required>
                     </div>
                 </div>
-                <!-- Botón Eliminar Proporcional -->
                 <div class="col-md-1 text-center">
                     <button type="button" class="btn btn-outline-danger border-0 btn-action-demex btnEliminarFila" disabled title="Eliminar fila">
                         <i class="bi bi-trash-fill fs-6"></i>
@@ -151,7 +144,6 @@ include '../includes/header.php';
 
     </div>
 
-    <!-- BOTONES DE ACCIÓN -->
     <div class="text-center mt-4 d-flex justify-content-center gap-3">
         <a href="index.php" class="btn btn-light border px-5 rounded-pill fw-bold text-dark shadow-sm" style="height: 45px; line-height: 30px;">Cancelar</a>
         <button type="submit" id="btnGuardarLote" class="btn btn-danger px-5 rounded-pill fw-bold shadow" style="background-color: #dc3545; height: 45px;">

@@ -1,10 +1,9 @@
 <?php
 /**
  * ARCHIVO: Almacen/index.php
- * DESCRIPCIÓN: Panel de Control de Almacén con Despliegue de Filas Hijas (Child Rows).
- * Agrupa por Lote y despliega subtabla resumida por Modelo y Estatus sin salir de la vista.
+ * DESCRIPCIÓN: Panel de Control de Almacén con Despliegue de Filas Hijas (Child Rows) y Edición de Lote.
  * @project Almacén Técnico DEMEX
- * @version 6.5 - Filas Hijas Agrupadas por Modelo
+ * @version 6.6 - Integración de Botón Editar Lote
  * @author Israel Fernández Carrera
  */
 
@@ -24,11 +23,7 @@ include '../includes/header.php';
 ?>
 
 <style>
-    /* Estilos para el desplegable Child Rows */
-    td.details-control {
-        cursor: pointer;
-        text-align: center;
-    }
+    td.details-control { cursor: pointer; text-align: center; }
     .subtabla-lote {
         background-color: #f8f9fa !important;
         border-radius: 12px;
@@ -118,6 +113,7 @@ include '../includes/header.php';
                     <th class="text-center">Total Unidades</th>
                     <th>Resumen de Estatus</th>
                     <th class="text-center">Notas</th>
+                    <th class="text-center" width="80">Acciones</th>
                 </tr>
             </thead>
             <tbody class="small fw-semibold text-dark"></tbody>
@@ -125,7 +121,6 @@ include '../includes/header.php';
     </div>
 </div>
 
-<!-- Modal para Asignar Cliente y Póliza (Al vender) -->
 <div class="modal fade" id="modalAsignarCliente" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
@@ -140,7 +135,6 @@ include '../includes/header.php';
     </div>
 </div>
 
-<!-- Modal para Cambiar Fase -->
 <div class="modal fade" id="modalActualizarFase" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
@@ -155,7 +149,6 @@ include '../includes/header.php';
     </div>
 </div>
 
-<!-- Chat Flotante para Lotes -->
 <div id="recuadroFlotanteChat" class="widget-chat-flotante animate__animated animate__fadeInUp">
     <div class="widget-chat-header shadow-sm">
         <div>
@@ -215,6 +208,16 @@ include '../includes/header.php';
                                     <i class="bi bi-chat-dots-fill me-1"></i> Notas
                                 </button>`;
                     }
+                },
+                {
+                    "data": null,
+                    "orderable": false,
+                    "className": "text-center",
+                    "render": function(data, type, row) {
+                        return `<a href="editar_lote.php?id_lote=${row.id_lote}" class="btn btn-sm btn-outline-primary border-0" title="Editar Lote">
+                                    <i class="bi bi-pencil-square fs-5"></i>
+                                </a>`;
+                    }
                 }
             ],
             "language": { "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json" },
@@ -223,19 +226,17 @@ include '../includes/header.php';
             "order": [[3, "desc"]]
         });
 
-        // EVENTO DESPLEGABLE CHILD ROWS (Al dar clic en el botón +)
+        // EVENTO DESPLEGABLE CHILD ROWS
         $('#tablaLotes tbody').on('click', 'td.details-control', function () {
             var tr = $(this).closest('tr');
             var row = table.row(tr);
             var btn = $(this).find('button i');
 
             if (row.child.isShown()) {
-                // Cerrar subtabla
                 row.child.hide();
                 tr.removeClass('shown');
                 btn.removeClass('bi-dash-circle-fill').addClass('bi-plus-circle-fill');
             } else {
-                // Abrir subtabla con la consulta agrupada
                 btn.removeClass('bi-plus-circle-fill').addClass('bi-dash-circle-fill');
                 row.child('<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-danger" role="status"></div> Cargando desglose...</div>').show();
                 tr.addClass('shown');
