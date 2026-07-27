@@ -5,7 +5,7 @@
  * Decodifica dinámicamente el bloque JSON de atributos para la materia prima.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.0 (Cabecera limpia y optimizada para Insumos)
+ * @version 1.1 (Integración de borrado asíncrono con SweetAlert2)
  */
 
 $page_title = "Catálogo de Bases para Helado | CRM Ventas";
@@ -50,7 +50,7 @@ include '../includes/header.php';
                     <th class="text-end">P. Público</th>
                     <th class="text-end">P. Distribuidor</th>
                     <th class="text-center">Stock (Bultos)</th>
-                    <th class="text-center" style="width: 100px;">Acciones</th>
+                    <th class="text-center" style="width: 120px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -58,7 +58,7 @@ include '../includes/header.php';
                 foreach ($bases as $base): 
                     $attrs = json_decode($base['atributos_especificos'], true) ?? [];
                 ?>
-                <tr>
+                <tr id="fila-producto-<?= $base['id_producto'] ?>">
                     <td class="fw-bold text-secondary small">
                         <span class="badge bg-light text-dark border px-2 py-1"><?= htmlspecialchars($base['sku_codigo']) ?></span>
                     </td>
@@ -93,6 +93,9 @@ include '../includes/header.php';
                             <a href="editar_producto.php?id_producto=<?= $base['id_producto'] ?>" class="btn btn-outline-warning border-0" title="Editar Precios y Stock">
                                 <i class="bi bi-pencil-square fs-5"></i>
                             </a>
+                            <button type="button" class="btn btn-outline-danger border-0 btn-eliminar-producto" data-id="<?= $base['id_producto'] ?>" data-nombre="<?= htmlspecialchars($base['nombre']) ?>" title="Eliminar Producto del Catálogo">
+                                <i class="bi bi-trash fs-5"></i>
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -106,8 +109,8 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
-    // Inicialización limpia y formateada sin buscadores redundantes de DataTables
-    $('#tablaBases').DataTable({
+    // 1. Inicialización de DataTables sin buscadores redundantes
+    const table = $('#tablaBases').DataTable({
         "searching": false,
         "lengthChange": false,
         "language": { 
@@ -121,6 +124,60 @@ $(document).ready(function() {
         "pageLength": 100,
         "responsive": true,
         "ordering": true
+    });
+
+    // 2. Evento asíncrono asignado de forma limpia dentro del scope del ready
+    $(document).on('click', '.btn-eliminar-producto', function() {
+        const idProducto = $(this).data('id');
+        const nombreProducto = $(this).data('nombre');
+
+        Swal.fire({
+            title: '¿Eliminar del Catálogo?',
+            text: `¿Estás seguro de quitar "${nombreProducto}"? Esta acción no se puede deshacer.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: 'eliminar_producto.php', // Apunta directo al mismo nivel de carpeta
+                    method: 'POST',
+                    data: { id_producto: idProducto },
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire({
+                                title: '¡Eliminado!',
+                                text: 'El insumo ha sido retirado del sistema con éxito.',
+                                icon: 'success',
+                                confirmButtonColor: '#198754',
+                                confirmButtonText: 'Entendido'
+                            });
+                            // Borramos dinámicamente la fila de la interfaz
+                            table.row(`#fila-producto-${idProducto}`).remove().draw(false);
+                        } else {
+                            Swal.fire({
+                                title: 'Error al eliminar',
+                                text: response.message,
+                                icon: 'error',
+                                confirmButtonColor: '#dc3545'
+                            });
+                        }
+                    },
+                    error: function() {
+                        Swal.fire({
+                            title: 'Error de Red',
+                            text: 'No se pudo conectar con el servidor central.',
+                            icon: 'error',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    }
+                });
+            }
+        });
     });
 });
 </script>

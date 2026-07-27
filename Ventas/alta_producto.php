@@ -52,7 +52,7 @@ include '../includes/header.php';
 
 <div class="row mb-4 align-items-center animate__animated animate__fadeIn">
     <div class="col-md-12">
-        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-plus-circle"></i> Alta de Producto Automática</h1>
+        <h1 class="fw-bold text-danger mb-0"><i class="bi bi-plus-circle"></i> Alta de Producto</h1>
         <p class="text-muted small">Selecciona la categoría; el sistema cargará los modelos oficiales de DEMEX y sus costos base al instante.</p>
     </div>
 </div>
@@ -208,8 +208,8 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.success) {
                     Swal.fire({
-                        title: '¡Venta Cerrada!', 
-                        text: '¡Producto registrado e integrado al catálogo comercial con éxito!',
+                        title: '¡Operacion Realizada!', 
+                        text: '¡Producto registrado e integrado al catálogo comercial!',
                         icon: 'success',
                         confirmButtonColor: '#198754',
                         confirmButtonText: 'Entendido'

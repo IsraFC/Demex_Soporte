@@ -2,17 +2,17 @@
 /**
  * ARCHIVO: actions/procesar_edicion_producto.php
  * DESCRIPCIÓN: Controlador Backend unificado para la actualización de productos.
- * Procesa datos financieros generales y re-empaqueta los campos específicos en JSON.
+ * Procesa datos financieros generales, nombre y re-empaqueta los campos específicos en JSON.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.0 (Procesador Único Global de Edición)
+ * @version 1.1 (Soporte para actualización de nombre y cabeceras JSON estrictas)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Configuración de respuesta estricta JSON para interactuar con tu CRM
+// CORREGIDO: Cabecera JSON estricta para evitar fallos de lectura en el AJAX del SweetAlert
 header('Content-Type: application/json; charset=utf-8');
 require_once '../config/db.php';
 
@@ -21,15 +21,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-// 1. CAPTURA DE DATOS MAESTROS
+// 1. CAPTURA Y SANITIZACIÓN DE DATOS MAESTROS
 $id_producto         = isset($_POST['id_producto']) ? intval($_POST['id_producto']) : 0;
+$nombre              = trim($_POST['nombre'] ?? ''); // AGREGADO: Capturamos el nombre por si fue modificado
 $precio_publico      = floatval($_POST['precio_publico'] ?? 0);
 $precio_distribuidor = floatval($_POST['precio_distribuidor'] ?? 0);
 $stock               = isset($_POST['stock']) ? intval($_POST['stock']) : 0;
 $descripcion         = trim($_POST['descripcion'] ?? '');
 
-if ($id_producto <= 0) {
-    echo json_encode(['success' => false, 'message' => 'Identificador de producto inválido.']);
+if ($id_producto <= 0 || empty($nombre)) {
+    echo json_encode(['success' => false, 'message' => 'Identificador o nombre de producto inválido.']);
     exit();
 }
 
@@ -78,7 +79,9 @@ try {
     $json_atributos = !empty($atributos_armados) ? json_encode($atributos_armados, JSON_UNESCAPED_UNICODE) : null;
 
     // 4. EJECUTAR EL UPDATE GENERAL EN LA BASE DE DATOS
+    // CORREGIDO: Añadido el campo 'nombre = :nombre' a la sentencia SQL
     $sql_update = "UPDATE productos SET 
+                        nombre = :nombre,
                         precio_publico = :precio_publico, 
                         precio_distribuidor = :precio_distribuidor, 
                         stock = :stock, 
@@ -88,6 +91,7 @@ try {
 
     $stmt_up = $pdo->prepare($sql_update);
     $stmt_up->execute([
+        ':nombre'                => $nombre,
         ':precio_publico'        => $precio_publico,
         ':precio_distribuidor'   => $precio_distribuidor,
         ':stock'                 => $stock,

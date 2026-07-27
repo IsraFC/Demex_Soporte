@@ -5,7 +5,7 @@
  * Decodifica dinámicamente el bloque JSON de atributos para rendimiento en DataTables.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.1 (Cabecera limpia sin buscador DataTables ni alta duplicada)
+ * @version 1.3 (Corrección estricta de sintaxis en cierres de llaves de jQuery)
  */
 
 $page_title = "Catálogo de Maquinaria | CRM Ventas";
@@ -30,7 +30,6 @@ include '../includes/header.php';
         <p class="text-muted small">Catálogo oficial de líneas Demex y Spice para helado suave y duro.</p>
     </div>
     <div class="col-md-5 text-md-end">
-        <!-- CORREGIDO: Se quitó el botón de agregar máquina para centralizarlo todo en el panel principal -->
         <a href="catalogo_productos.php" class="btn btn-secondary py-2 px-3 fw-bold shadow-sm" style="border-radius: 8px;">
             <i class="bi bi-arrow-left-short fs-5"></i> Regresar al Catálogo
         </a>
@@ -52,7 +51,7 @@ include '../includes/header.php';
                     <th class="text-end">P. Público</th>
                     <th class="text-end">P. Distribuidor</th>
                     <th class="text-center">Stock</th>
-                    <th class="text-center" style="width: 100px;">Acciones</th>
+                    <th class="text-center" style="width: 120px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -60,7 +59,7 @@ include '../includes/header.php';
                 foreach ($maquinas as $maq): 
                     $attrs = json_decode($maq['atributos_especificos'], true) ?? [];
                 ?>
-                <tr>
+                <tr id="fila-producto-<?= $maq['id_producto'] ?>">
                     <td class="fw-bold text-secondary small">
                         <span class="badge bg-light text-dark border px-2 py-1"><?= htmlspecialchars($maq['sku_codigo']) ?></span>
                     </td>
@@ -100,6 +99,9 @@ include '../includes/header.php';
                             <a href="editar_producto.php?id_producto=<?= $maq['id_producto'] ?>" class="btn btn-outline-warning border-0" title="Editar Especificaciones y Precios">
                                 <i class="bi bi-pencil-square fs-5"></i>
                             </a>
+                            <button type="button" class="btn btn-outline-danger border-0 btn-eliminar-producto" data-id="<?= $maq['id_producto'] ?>" data-nombre="<?= htmlspecialchars($maq['nombre']) ?>" title="Eliminar Producto del Catálogo">
+                                <i class="bi bi-trash fs-5"></i>
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -113,10 +115,10 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
-    // CORREGIDO: Configuración blindada para ocultar buscador ("Search") y paginación forzada de registros
-    $('#tablaMaquinas').DataTable({
-        "searching": false,      // Elimina por completo el input de buscador de arriba a la derecha
-        "lengthChange": false,   // Elimina el dropdown "Show entries" que se bugeaba visualmente
+    // 1. Inicialización correcta de la instancia DataTable
+    const table = $('#tablaMaquinas').DataTable({
+        "searching": false,      
+        "lengthChange": false,   
         "language": { 
             "emptyTable": "No hay máquinas registradas en el catálogo", 
             "info": "Mostrando _START_ a _END_ de _TOTAL_ equipos", 
@@ -125,9 +127,62 @@ $(document).ready(function() {
             "zeroRecords": "Sin coincidencias encontradas", 
             "paginate": { "next": "Sig.", "previous": "Ant." } 
         },
-        "pageLength": 100, // Lo dejamos predeterminado alto para que liste todo limpiamente sin romper cortes
+        "pageLength": 100, 
         "responsive": true,
         "ordering": true
+    });
+
+    // 2. Evento dinámico asignado CORRECTAMENTE dentro del scope del ready
+    $(document).on('click', '.btn-eliminar-producto', function() {
+        const idProducto = $(this).data('id');
+        const nombreProducto = $(this).data('nombre');
+
+        Swal.fire({
+            title: '¿Eliminar del Catálogo?',
+            text: `¿Estás seguro de quitar "${nombreProducto}"? Esta acción no se puede deshacer.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: 'eliminar_producto.php', 
+                    method: 'POST',
+                    data: { id_producto: idProducto },
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire({
+                                title: '¡Eliminado!',
+                                text: 'El equipo ha sido retirado del sistema con éxito.',
+                                icon: 'success',
+                                confirmButtonColor: '#198754',
+                                confirmButtonText: 'Entendido'
+                            });
+                            table.row(`#fila-producto-${idProducto}`).remove().draw(false);
+                        } else {
+                            Swal.fire({
+                                title: 'Error al eliminar',
+                                text: response.message,
+                                icon: 'error',
+                                confirmButtonColor: '#dc3545'
+                            });
+                        }
+                    },
+                    error: function() {
+                        Swal.fire({
+                            title: 'Error de Red',
+                            text: 'No se pudo conectar con el servidor central.',
+                            icon: 'error',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    }
+                });
+            }
+        });
     });
 });
 </script>
