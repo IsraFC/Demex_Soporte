@@ -1,9 +1,9 @@
 <?php
 /**
  * ARCHIVO: Almacen/index.php
- * DESCRIPCIÓN: Panel de Control de Almacén con Despliegue de Filas Hijas (Child Rows) y Edición de Lote.
+ * DESCRIPCIÓN: Panel de Control de Almacén con Despliegue Child Rows, KPIs asíncronos y Chat por Lote.
  * @project Almacén Técnico DEMEX
- * @version 6.6 - Integración de Botón Editar Lote
+ * @version 6.7 - KPIs en Vivo y Control Integral de Lotes
  * @author Israel Fernández Carrera
  */
 
@@ -13,7 +13,7 @@ $page_title = "Panel de Control - Almacén";
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 $id_usuario_actual = intval($_SESSION['id_usuario'] ?? 0);
 
-// KPIs Generales
+// KPIs Generales Iniciales
 $total_lotes   = $pdo->query("SELECT COUNT(*) FROM almacen_lotes")->fetchColumn();
 $total_equipos = $pdo->query("SELECT COUNT(*) FROM almacen_inventario")->fetchColumn();
 $sin_revisar   = $pdo->query("SELECT COUNT(*) FROM almacen_inventario WHERE estatus = 'SIN REVISAR'")->fetchColumn();
@@ -82,19 +82,19 @@ include '../includes/header.php';
     <div class="col-md-7 text-md-end mt-3 mt-md-0">
         <div class="d-inline-flex gap-2">
             <div class="p-2 bg-white shadow-sm rounded border-start border-danger border-4 text-center" style="min-width: 100px;">
-                <span class="d-block fw-bold fs-5 text-dark"><?= intval($total_lotes) ?></span>
+                <span id="kpi_lotes" class="d-block fw-bold fs-5 text-dark"><?= intval($total_lotes) ?></span>
                 <small class="text-muted fw-bold" style="font-size: 0.6rem;">LOTES</small>
             </div>
             <div class="p-2 bg-white shadow-sm rounded border-start border-secondary border-4 text-center" style="min-width: 100px;">
-                <span class="d-block fw-bold fs-5 text-dark"><?= intval($total_equipos) ?></span>
+                <span id="kpi_total" class="d-block fw-bold fs-5 text-dark"><?= intval($total_equipos) ?></span>
                 <small class="text-muted fw-bold" style="font-size: 0.6rem;">TOTAL UNIDADES</small>
             </div>
             <div class="p-2 bg-white shadow-sm rounded border-start border-warning border-4 text-center" style="min-width: 100px;">
-                <span class="d-block fw-bold fs-5 text-warning"><?= intval($sin_revisar) ?></span>
+                <span id="kpi_sin_revisar" class="d-block fw-bold fs-5 text-warning"><?= intval($sin_revisar) ?></span>
                 <small class="text-muted fw-bold" style="font-size: 0.6rem;">SIN REVISAR</small>
             </div>
             <div class="p-2 bg-white shadow-sm rounded border-start border-success border-4 text-center" style="min-width: 100px;">
-                <span class="d-block fw-bold fs-5 text-success"><?= intval($disponibles) ?></span>
+                <span id="kpi_disponibles" class="d-block fw-bold fs-5 text-success"><?= intval($disponibles) ?></span>
                 <small class="text-muted fw-bold" style="font-size: 0.6rem;">DISPONIBLES VENTA</small>
             </div>
         </div>
@@ -176,6 +176,22 @@ include '../includes/header.php';
     var fuenteEventosChat = null;
     var ultimoIdComentario = 0;
     var usuarioActualId = <?= $id_usuario_actual ?>;
+
+    function actualizarKPIs() {
+        $.ajax({
+            url: 'actions/obtener_conteos_kpi.php',
+            method: 'GET',
+            dataType: 'json',
+            success: function(res) {
+                if (res.success) {
+                    $('#kpi_lotes').text(res.total_lotes);
+                    $('#kpi_total').text(res.total);
+                    $('#kpi_sin_revisar').text(res.sin_revisar);
+                    $('#kpi_disponibles').text(res.disponibles);
+                }
+            }
+        });
+    }
 
     $(document).ready(function() {
         $('#recuadroFlotanteChat').appendTo("body");

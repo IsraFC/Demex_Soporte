@@ -1,9 +1,9 @@
 <?php
 /**
  * ARCHIVO: Almacen/actions/abrir_modal_entrega.php
- * DESCRIPCIÓN: Formulario dinámico de asignación con datalist, captura de serie física y cliente.
+ * DESCRIPCIÓN: Formulario dinámico de asignación comercial. La serie ya viene grabada en el equipo.
  * @project Almacén Técnico DEMEX
- * @version 6.1 - Captura de Serie Física de Lote
+ * @version 6.4 - Serie Fija de Solo Lectura
  * @author Israel Fernández Carrera
  */
 
@@ -33,43 +33,35 @@ try {
 }
 
 $fecha_hoy = date('Y-m-d');
+$no_serie_equipo = !empty($equipo['no_serie']) ? htmlspecialchars($equipo['no_serie']) : 'SIN SERIE';
 ?>
 
 <form id="formProcesarEntrega" novalidate>
     <div class="modal-body p-4">
         
-        <div class="bg-light p-3 mb-3 rounded-4 border-start border-success border-4 small shadow-sm">
+        <div class="bg-light p-3 mb-3 rounded-4 border-start border-success border-4 shadow-sm">
             <span class="d-block text-secondary text-uppercase fw-bold" style="font-size: 10px;">Maquinaria Lista para Despliegue</span>
             <div class="fw-bold text-dark fs-6 mt-1">Modelo: <?= htmlspecialchars($equipo['modelo']) ?></div>
-            <div class="text-muted" style="font-size: 11px;">
-                Contenedor: <code class="text-dark fw-bold"><?= htmlspecialchars($equipo['contenedor']) ?></code> | Estatus: <span class="badge bg-dark"><?= htmlspecialchars($equipo['estatus']) ?></span>
+            <div class="text-muted mt-1" style="font-size: 12px;">
+                Nº Serie Grabado: <code class="fw-bold text-danger fs-6 me-2"><?= $no_serie_equipo ?></code> | Contenedor: <span class="fw-bold text-dark"><?= htmlspecialchars($equipo['contenedor']) ?></span>
             </div>
         </div>
 
         <input type="hidden" name="id_almacen" value="<?= $id ?>">
         <input type="hidden" name="modelo" value="<?= htmlspecialchars($equipo['modelo']) ?>">
+        <input type="hidden" name="no_serie" value="<?= $no_serie_equipo ?>">
         <input type="hidden" name="fecha_termino" id="entrega_fecha_termino">
 
-        <!-- Campo obligatorio para la Serie Física -->
-        <div class="mb-3">
-            <label class="form-label small fw-bold text-danger text-uppercase" style="font-size: 11px;">Número de Serie Físico de la Máquina *</label>
-            <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
-                <span class="input-group-text border-0 bg-transparent text-danger"><i class="bi bi-barcode"></i></span>
-                <input type="text" class="form-control bg-transparent border-0 fw-bold text-uppercase text-danger p-1" 
-                       name="no_serie" id="entrega_no_serie" 
-                       value="<?= htmlspecialchars($equipo['no_serie'] ?? '') ?>" 
-                       placeholder="Ingresa la serie..." required autocomplete="off" style="font-size: 14px;">
-            </div>
-        </div>
-
-        <div class="form-check form-switch mb-3 bg-light p-2 rounded-pill ps-5 border shadow-sm">
-            <input class="form-check-input" type="checkbox" role="switch" id="switchClienteNuevo" name="es_cliente_nuevo" value="1">
-            <label class="form-check-label small fw-bold text-danger text-uppercase" style="font-size: 11px;" for="switchClienteNuevo">¿Es un Cliente Nuevo?</label>
+        <div class="form-check form-switch bg-light py-2 pe-3 ps-5 rounded-pill border shadow-sm mb-3">
+            <input class="form-check-input ms-n4" type="checkbox" role="switch" id="switchClienteNuevo" name="es_cliente_nuevo" value="1" style="cursor: pointer;">
+            <label class="form-check-label small fw-bold text-danger text-uppercase ms-2" style="font-size: 11px; cursor: pointer;" for="switchClienteNuevo">
+                ¿Es un Cliente Nuevo?
+            </label>
         </div>
 
         <div id="wrapperClienteExistente">
             <div class="mb-3">
-                <label class="form-label small fw-bold text-secondary text-uppercase" style="font-size: 11px;">Buscar o Seleccionar Cliente</label>
+                <label class="form-label small fw-bold text-secondary text-uppercase" style="font-size: 11px;">Buscar o Seleccionar Cliente *</label>
                 <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm mb-2">
                     <span class="input-group-text border-0 bg-transparent text-muted"><i class="bi bi-person-search"></i></span>
                     <input type="text" class="form-control bg-transparent border-0 fw-bold text-dark p-1" id="buscador_cliente_datalist" placeholder="Da clic para ver la lista o escribe para buscar..." list="lista_clientes_maestra" style="font-size: 14px;">
@@ -195,12 +187,6 @@ document.getElementById('switchClienteNuevo')?.addEventListener('change', functi
 document.getElementById('formProcesarEntrega')?.addEventListener('submit', function(e) {
     e.preventDefault();
     let esNuevo = document.getElementById('switchClienteNuevo').checked;
-    let serie = document.getElementById('entrega_no_serie').value.trim();
-
-    if (!serie) {
-        Swal.fire({ icon: 'warning', title: 'Serie Requerida', text: 'Por favor ingresa el número de serie físico.', confirmButtonColor: '#dc3545' });
-        return false;
-    }
     
     if (!esNuevo && !document.getElementById('entrega_id_cliente').value) {
         Swal.fire({ icon: 'warning', title: 'Cliente Inválido', text: 'Debes seleccionar un cliente válido de la lista.', confirmButtonColor: '#dc3545' });
@@ -231,7 +217,6 @@ document.getElementById('formProcesarEntrega')?.addEventListener('submit', funct
 
             Swal.fire({ icon: 'success', title: 'Despliegue Exitoso', text: data.message, timer: 2000, showConfirmButton: false });
 
-            // Refrescar tabla principal y desplegable
             if (typeof table !== 'undefined') table.ajax.reload(null, false);
             
             $('#tablaLotes tr.shown').each(function() {
@@ -246,13 +231,17 @@ document.getElementById('formProcesarEntrega')?.addEventListener('submit', funct
                 }
             });
 
+            if (typeof actualizarKPIs === 'function') {
+                actualizarKPIs();
+            }
+
         } else {
             Swal.fire({ icon: 'error', title: 'Falla Operativa', text: data.message, confirmButtonColor: '#dc3545' });
         }
     })
     .catch(() => {
         Swal.close();
-        Swal.fire({ icon: 'error', title: 'Error de Red', text: 'Ocurrió un error en la comunicación.', confirmButtonColor: '#dc3545' });
+        Swal.fire({ icon: 'error', title: 'Error de Red', text: 'Ocurrió un error en la comunicación con el servidor.', confirmButtonColor: '#dc3545' });
     });
 });
 </script>

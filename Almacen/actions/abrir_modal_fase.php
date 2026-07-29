@@ -1,10 +1,10 @@
 <?php
 /**
  * ARCHIVO: Almacen/actions/abrir_modal_fase.php
- * DESCRIPCIÓN: Renderiza dinámicamente el formulario interno del modal según la fase actual de la máquina.
- * CONTROL LOGÍSTICO: Secuencia lineal con redirección comercial de Comodato a Pagada.
+ * DESCRIPCIÓN: Renderiza dinámicamente el modal de avance de fase.
+ * Pide el Número de Serie Físico de forma OBLIGATORIA al pasar de 'SIN REVISAR' a 'EN REVISIÓN ALMACÉN'.
  * @project Almacén Técnico DEMEX
- * @version 6.1 - Sincronización con Subtablas Child Rows
+ * @version 6.3 - Captura Temprana Obligatoria de Serie Física
  * @author Israel Fernández Carrera
  */
 
@@ -108,6 +108,24 @@ $serie_mostrar = !empty($equipo['no_serie']) ? htmlspecialchars($equipo['no_seri
             <input type="hidden" name="id" value="<?= $id ?>">
             <input type="hidden" name="campo_fecha" value="<?= $nombre_campo_fecha ?>">
 
+            <?php if ($estatus_actual === 'SIN REVISAR'): ?>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-danger text-uppercase" style="font-size: 11px;">
+                        <i class="bi bi-barcode me-1"></i> Número de Serie Físico de la Máquina *
+                    </label>
+                    <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
+                        <span class="input-group-text border-0 bg-transparent text-danger"><i class="bi bi-upc-scan"></i></span>
+                        <input type="text" class="form-control bg-transparent border-0 fw-bold text-uppercase text-danger p-1" 
+                               name="no_serie" id="fase_no_serie" 
+                               value="<?= htmlspecialchars($equipo['no_serie'] ?? '') ?>" 
+                               placeholder="Ingresa la serie de la placa..." required autocomplete="off" style="font-size: 14px;">
+                    </div>
+                    <small class="text-muted d-block mt-1" style="font-size: 10px;">Al abrir la caja e iniciar revisión, registre el número de serie grabado en la máquina.</small>
+                </div>
+            <?php else: ?>
+                <input type="hidden" name="no_serie" value="<?= htmlspecialchars($equipo['no_serie'] ?? '') ?>">
+            <?php endif; ?>
+
             <div class="mb-3">
                 <label class="form-label small fw-bold text-secondary text-uppercase" style="font-size: 11px;">Nuevo Estatus del Equipo</label>
                 <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
@@ -149,11 +167,18 @@ $serie_mostrar = !empty($equipo['no_serie']) ? htmlspecialchars($equipo['no_seri
 <script>
 document.getElementById('formCambiarFase')?.addEventListener('submit', function(e) {
     e.preventDefault();
+    
+    const inputSerie = document.getElementById('fase_no_serie');
+    if (inputSerie && inputSerie.value.trim() === '') {
+        Swal.fire({ icon: 'warning', title: 'Serie Requerida', text: 'Por favor ingresa el número de serie físico del equipo.', confirmButtonColor: '#dc3545' });
+        return false;
+    }
+
     const formData = new FormData(this);
 
     Swal.fire({ 
         title: 'Actualizando fase...', 
-        text: 'Guardando marca de tiempo logística.', 
+        text: 'Guardando marca de tiempo y serie del equipo.', 
         allowOutsideClick: false, 
         didOpen: () => { Swal.showLoading(); } 
     });
@@ -166,19 +191,16 @@ document.getElementById('formCambiarFase')?.addEventListener('submit', function(
     .then(data => {
         Swal.close();
         if (data.success) {
-            // 1. Ocultar modal
             const modalEl = document.getElementById('modalActualizarFase');
             const modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) modalInstance.hide();
 
             Swal.fire({ icon: 'success', title: '¡Fase Actualizada!', text: data.message, timer: 1500, showConfirmButton: false });
 
-            // 2. Refrescar DataTable principal
             if (typeof table !== 'undefined') {
                 table.ajax.reload(null, false);
             }
 
-            // 3. Refrescar filas hijas desplegadas si están abiertas
             $('#tablaLotes tr.shown').each(function() {
                 var row = table.row(this);
                 if (row.child.isShown()) {
@@ -198,7 +220,7 @@ document.getElementById('formCambiarFase')?.addEventListener('submit', function(
             }
 
         } else {
-            Swal.fire({ icon: 'error', title: 'Falla al Actualizar', text: data.message, confirmButtonColor: '#dc3545' });
+            Swal.fire({ icon: 'error', title: 'Atención', text: data.message, confirmButtonColor: '#dc3545' });
         }
     })
     .catch(error => {
