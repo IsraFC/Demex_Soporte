@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: Ventas/lista_bases.php
  * DESCRIPCIÓN: Listado especializado del catálogo de Bases para Helado DEMEX.
- * Decodifica dinámicamente el bloque JSON de atributos para la materia prima.
+ * Decodifica dinámicamente el bloque JSON de atributos e integra vista de ficha técnica en Modal.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.1 (Integración de borrado asíncrono con SweetAlert2)
+ * @version 1.3 (Ruta corregida estrictamente hacia la carpeta img/bases/)
  */
 
 $page_title = "Catálogo de Bases para Helado | CRM Ventas";
@@ -50,13 +50,14 @@ include '../includes/header.php';
                     <th class="text-end">P. Público</th>
                     <th class="text-end">P. Distribuidor</th>
                     <th class="text-center">Stock (Bultos)</th>
-                    <th class="text-center" style="width: 120px;">Acciones</th>
+                    <th class="text-center" style="width: 140px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 <?php 
                 foreach ($bases as $base): 
                     $attrs = json_decode($base['atributos_especificos'], true) ?? [];
+                    $img_name = !empty($attrs['imagen']) ? $attrs['imagen'] : '';
                 ?>
                 <tr id="fila-producto-<?= $base['id_producto'] ?>">
                     <td class="fw-bold text-secondary small">
@@ -90,6 +91,20 @@ include '../includes/header.php';
                     </td>
                     <td class="text-center">
                         <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-info border-0 btn-ver-detalle" 
+                                    data-nombre="<?= htmlspecialchars($base['nombre']) ?>"
+                                    data-sku="<?= htmlspecialchars($base['sku_codigo']) ?>"
+                                    data-sabor="<?= htmlspecialchars($attrs['sabor'] ?? 'N/A') ?>"
+                                    data-peso="<?= htmlspecialchars($attrs['peso'] ?? 'N/A') ?>"
+                                    data-rendimiento="<?= htmlspecialchars($attrs['rendimiento'] ?? 'N/A') ?>"
+                                    data-publico="$<?= number_format($base['precio_publico'], 2) ?>"
+                                    data-distribuidor="$<?= number_format($base['precio_distribuidor'], 2) ?>"
+                                    data-stock="<?= $base['stock'] ?>"
+                                    data-desc="<?= htmlspecialchars($base['descripcion'] ?? 'Sin descripción comercial.') ?>"
+                                    data-imagen="<?= $img_name ?>"
+                                    title="Ver Detalles Completos e Imagen">
+                                <i class="bi bi-eye fs-5"></i>
+                            </button>
                             <a href="editar_producto.php?id_producto=<?= $base['id_producto'] ?>" class="btn btn-outline-warning border-0" title="Editar Precios y Stock">
                                 <i class="bi bi-pencil-square fs-5"></i>
                             </a>
@@ -105,11 +120,77 @@ include '../includes/header.php';
     </div>
 </div>
 
+<!-- ================= MODAL DETALLE DE INSUMO ================= -->
+<div class="modal fade" id="modalDetalleBase" tabindex="-1" aria-labelledby="modalDetalleBaseLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+            <div class="modal-header bg-danger text-white py-3" style="border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <h5 class="modal-title fw-bold" id="modalDetalleBaseLabel"><i class="bi bi-moisture me-2"></i> Ficha Técnica de Materia Prima</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 bg-white">
+                <div class="row g-4">
+                    <!-- Sección Izquierda: Imagen del Insumo -->
+                    <div class="col-12 col-md-5 text-center d-flex flex-column align-items-center justify-content-center border-end border-light">
+                        <div class="p-2 border rounded bg-light shadow-sm w-100 d-flex align-items-center justify-content-center" style="height: 250px; overflow: hidden;">
+                            <img src="" id="modal_img_eq" class="img-fluid rounded" style="max-height: 100%; object-fit: contain;" alt="Fotografía del Insumo">
+                        </div>
+                        <span class="badge bg-secondary px-3 py-2 mt-3 fw-bold text-uppercase w-100" id="modal_lbl_sku" style="font-size:0.85rem;">SKU: -</span>
+                    </div>
+                    <!-- Sección Derecha: Información Estructurada -->
+                    <div class="col-12 col-md-7">
+                        <h3 class="fw-bold text-danger mb-1" id="modal_lbl_nombre">-</h3>
+                        <p class="text-muted small mb-3 border-bottom pb-2" id="modal_lbl_desc">-</p>
+                        
+                        <div class="row g-2 mb-3">
+                            <div class="col-12">
+                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
+                                    <small class="text-muted d-block small text-uppercase fw-semibold">Sabor / Variante</small>
+                                    <span class="fw-bold text-dark" id="modal_lbl_sabor">-</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
+                                    <small class="text-muted d-block small text-uppercase fw-semibold">Presentación / Peso</small>
+                                    <span class="fw-semibold text-secondary small" id="modal_lbl_peso">-</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
+                                    <small class="text-muted d-block small text-uppercase fw-semibold">Rendimiento Sugerido</small>
+                                    <span class="fw-semibold text-secondary small" id="modal_lbl_rendimiento">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <small class="text-muted d-block small text-uppercase fw-semibold">P. Público</small>
+                                <span class="fs-5 fw-bold text-dark" id="modal_lbl_publico">-</span>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block small text-uppercase fw-semibold">P. Distribuidor</small>
+                                <span class="fs-5 fw-bold text-danger" id="modal_lbl_distribuidor">-</span>
+                            </div>
+                            <div class="col-4 text-center">
+                                <small class="text-muted d-block small text-uppercase fw-semibold">Bultos Stock</small>
+                                <span class="badge bg-success px-3 py-2 fw-bold mt-1" id="modal_lbl_stock" style="font-size:0.9rem;">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal" style="border-radius:6px;">Cerrar Ficha</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php include '../includes/footer.php'; ?>
 
 <script>
 $(document).ready(function() {
-    // 1. Inicialización de DataTables sin buscadores redundantes
     const table = $('#tablaBases').DataTable({
         "searching": false,
         "lengthChange": false,
@@ -126,7 +207,46 @@ $(document).ready(function() {
         "ordering": true
     });
 
-    // 2. Evento asíncrono asignado de forma limpia dentro del scope del ready
+    // === LÓGICA REACTIVA PARA CARGAR EL MODAL DE DETALLES ===
+    $(document).on('click', '.btn-ver-detalle', function() {
+        const nombre = $(this).data('nombre');
+        const sku = $(this).data('sku');
+        const sabor = $(this).data('sabor');
+        const peso = $(this).data('peso');
+        const rendimiento = $(this).data('rendimiento');
+        const publico = $(this).data('publico');
+        const distribuidor = $(this).data('distribuidor');
+        const stock = $(this).data('stock');
+        const desc = $(this).data('desc');
+        const imagen = $(this).data('imagen');
+
+        // CORREGIDO: Apunta de forma estricta al directorio de bases
+        if (imagen !== '') {
+            $('#modal_img_eq').attr('src', '../img/bases/' + imagen);
+        } else {
+            $('#modal_img_eq').attr('src', 'https://placehold.co/400x400/f8f9fa/6c757d?text=Sin+Imagen+Oficial');
+        }
+
+        $('#modal_lbl_nombre').text(nombre);
+        $('#modal_lbl_sku').text('SKU: ' + sku);
+        $('#modal_lbl_sabor').text(sabor);
+        $('#modal_lbl_peso').text(peso);
+        $('#modal_lbl_rendimiento').text(rendimiento);
+        $('#modal_lbl_publico').text(publico);
+        $('#modal_lbl_distribuidor').text(distribuidor);
+        $('#modal_lbl_desc').text(desc);
+        
+        $('#modal_lbl_stock').text(stock).removeClass('bg-success bg-danger');
+        if (parseInt(stock) > 0) {
+            $('#modal_lbl_stock').addClass('bg-success');
+        } else {
+            $('#modal_lbl_stock').addClass('bg-danger');
+        }
+
+        $('#modalDetalleBase').appendTo("body").modal('show');
+    });
+
+    // === EVENTO ASÍNCRONO DE ELIMINACIÓN ===
     $(document).on('click', '.btn-eliminar-producto', function() {
         const idProducto = $(this).data('id');
         const nombreProducto = $(this).data('nombre');
@@ -143,7 +263,7 @@ $(document).ready(function() {
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
-                    url: 'eliminar_producto.php', // Apunta directo al mismo nivel de carpeta
+                    url: 'eliminar_producto.php', 
                     method: 'POST',
                     data: { id_producto: idProducto },
                     dataType: 'json',
@@ -156,7 +276,6 @@ $(document).ready(function() {
                                 confirmButtonColor: '#198754',
                                 confirmButtonText: 'Entendido'
                             });
-                            // Borramos dinámicamente la fila de la interfaz
                             table.row(`#fila-producto-${idProducto}`).remove().draw(false);
                         } else {
                             Swal.fire({

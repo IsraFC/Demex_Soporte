@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: Ventas/editar_producto.php
  * DESCRIPCIÓN: Interfaz reactiva para la edición de productos del catálogo.
- * Detecta el origen del producto para retornar a su lista correspondiente.
+ * Detecta el origen del producto para retornar a su lista correspondiente y permite actualización de imagen.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 2.1 (Retorno dinámico a listas especializadas)
+ * @version 2.3 (Soporte extendido para reemplazo de imágenes en Maquinaria, Bases y Saborizantes)
  */
 
 $page_title = "Editar Producto | CRM Ventas";
@@ -58,7 +58,7 @@ include '../includes/header.php';
 <div class="card-main mb-4 py-4 px-4 shadow-sm border-top border-4 border-danger bg-white rounded animate__animated animate__fadeInUp">
     <h5 class="fw-bold text-dark mb-4"><i class="bi bi-sliders text-danger me-2"></i> Ficha de Modificación</h5>
     
-    <form action="../actions/procesar_edicion_producto.php" method="POST" id="formEditarProducto">
+    <form action="../actions/procesar_edicion_producto.php" method="POST" id="formEditarProducto" enctype="multipart/form-data">
         <input type="hidden" name="id_producto" value="<?= $producto['id_producto'] ?>">
         <input type="hidden" id="id_categoria_actual" value="<?= $producto['id_categoria'] ?>">
         
@@ -70,7 +70,6 @@ include '../includes/header.php';
             </div>
             <div class="col-12 col-md-5">
                 <label class="form-label fw-semibold text-dark small">Nombre del Producto / Modelo <span class="text-danger">*</span></label>
-                <!-- Ojo Mau: Si es registro manual o de catálogo, dejamos el nombre visible pero editable o lectura según prefieras -->
                 <input type="text" class="form-control fw-bold" name="nombre" value="<?= htmlspecialchars($producto['nombre']) ?>">
             </div>
             <div class="col-12 col-md-3">
@@ -111,8 +110,8 @@ include '../includes/header.php';
         
         <!-- Bloque Máquinas (ID 1) -->
         <div id="bloque_maquinas" class="bloque-dinamico border-top pt-3 mt-3" style="display: none;">
-            <h6 class="fw-bold text-danger mb-3"><i class="bi bi-cpu me-2"></i> Especificaciones de Maquinaria</h6>
-            <div class="row g-3">
+            <h6 class="fw-bold text-danger mb-3"><i class="bi bi-cpu me-2"></i> Especificaciones de Maquinaria e Imagen</h6>
+            <div class="row g-3 mb-3">
                 <div class="col-12 col-md-3">
                     <label class="form-label fw-semibold text-dark small">Línea del Equipo</label>
                     <input type="text" class="form-control" name="attr_linea" value="<?= htmlspecialchars($attrs['linea'] ?? '') ?>">
@@ -130,12 +129,26 @@ include '../includes/header.php';
                     <input type="text" class="form-control" name="attr_capacidad" value="<?= htmlspecialchars($attrs['capacidad'] ?? '') ?>">
                 </div>
             </div>
+            
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold text-dark small"><i class="bi bi-image text-danger me-1"></i> Remplazar Fotografía del Equipo (Opcional - formato PNG)</label>
+                    <input type="file" class="form-control border-secondary shadow-sm foto-input-control" name="foto_producto_maq" accept="image/png">
+                    <div class="form-text small text-muted">Deja este campo vacío si deseas conservar la imagen actual del registro.</div>
+                </div>
+                <?php if(!empty($attrs['imagen'])): ?>
+                    <div class="col-12 col-md-6 text-md-start mt-3">
+                        <small class="text-muted d-block mb-1">Imagen actual registrada en Maquinaria:</small>
+                        <span class="badge bg-light text-dark border p-2"><i class="bi bi-file-earmark-image text-primary me-1"></i> <?= htmlspecialchars($attrs['imagen']) ?></span>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
 
-        <!-- Bloque Insumos (Bases/Saborizantes - ID 2 y 3) -->
+        <!-- Bloque Insumos (Bases/Saborizantes - ID 2 y 3) (MODIFICADO: Se añade soporte de imagen simétrico) -->
         <div id="bloque_insumos" class="bloque-dinamico border-top pt-3 mt-3" style="display: none;">
-            <h6 class="fw-bold text-danger mb-3"><i class="bi bi-egg-fried me-2"></i> Detalles de Materia Prima</h6>
-            <div class="row g-3">
+            <h6 class="fw-bold text-danger mb-3"><i class="bi bi-egg-fried me-2"></i> Detalles de Materia Prima e Imagen</h6>
+            <div class="row g-3 mb-3">
                 <div class="col-12 col-md-4">
                     <label class="form-label fw-semibold text-dark small">Sabor / Variante</label>
                     <input type="text" class="form-control" name="attr_sabor" value="<?= htmlspecialchars($attrs['sabor'] ?? '') ?>">
@@ -148,6 +161,20 @@ include '../includes/header.php';
                     <label class="form-label fw-semibold text-dark small">Rendimiento Estimado</label>
                     <input type="text" class="form-control" name="attr_rendimiento" value="<?= htmlspecialchars($attrs['rendimiento'] ?? '') ?>">
                 </div>
+            </div>
+            
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold text-dark small"><i class="bi bi-image text-danger me-1"></i> Remplazar Fotografía del Insumo (Opcional - formato PNG)</label>
+                    <input type="file" class="form-control border-secondary shadow-sm foto-input-control" name="foto_producto_insumo" accept="image/png">
+                    <div class="form-text small text-muted">Deja este campo vacío si deseas conservar la imagen actual del insumo.</div>
+                </div>
+                <?php if(!empty($attrs['imagen'])): ?>
+                    <div class="col-12 col-md-6 text-md-start mt-3">
+                        <small class="text-muted d-block mb-1">Imagen actual registrada en Insumos:</small>
+                        <span class="badge bg-light text-dark border p-2"><i class="bi bi-file-earmark-image text-primary me-1"></i> <?= htmlspecialchars($attrs['imagen']) ?></span>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -168,7 +195,6 @@ include '../includes/header.php';
 
         <!-- === SECCIÓN 3: BOTONES DE ACCIÓN === -->
         <div class="d-grid gap-2 d-md-flex justify-content-md-end border-top pt-4 mt-4">
-            <!-- CORREGIDO: Cancela y te regresa a la lista específica -->
             <a href="<?= $url_retorno ?>" class="btn btn-secondary py-2 px-4 fw-bold shadow-sm" style="border-radius: 8px;">
                 <i class="bi bi-x-circle me-1"></i> Cancelar
             </a>
@@ -194,18 +220,21 @@ $(document).ready(function() {
         $('#bloque_refacciones').show();
     }
 
-    // Variable para redirección dinámica leída desde PHP
     const urlRetorno = '<?= $url_retorno ?>';
 
-    // 2. Intercepción asíncrona del envío para el SweetAlert de éxito estilo Recompras
+    // 2. Intercepción asíncrona del envío usando FormData para soportar imágenes en todas las categorías viables
     $('#formEditarProducto').on('submit', function(e) {
         e.preventDefault();
+
+        var formData = new FormData(this);
 
         $.ajax({
             url: '../actions/procesar_edicion_producto.php',
             method: 'POST',
-            data: $(this).serialize(),
+            data: formData,
             dataType: 'json',
+            contentType: false, 
+            processData: false, 
             success: function(response) {
                 if (response.success) {
                     Swal.fire({
@@ -215,7 +244,6 @@ $(document).ready(function() {
                         confirmButtonColor: '#198754',
                         confirmButtonText: 'Entendido'
                     }).then(() => {
-                        // CORREGIDO: Redirecciona de vuelta a la lista origen (ej. lista_maquinas.php)
                         window.location.href = urlRetorno;
                     });
                 } else {

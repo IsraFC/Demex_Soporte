@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: Ventas/lista_maquinas.php
  * DESCRIPCIÓN: Listado especializado del catálogo de Maquinaria DEMEX.
- * Decodifica dinámicamente el bloque JSON de atributos para rendimiento en DataTables.
+ * Decodifica dinámicamente el bloque JSON de atributos e integra vista de ficha técnica en Modal.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.3 (Corrección estricta de sintaxis en cierres de llaves de jQuery)
+ * @version 1.4 (Inclusión de Modal Detallado con Visualización de Imagen Dinámica)
  */
 
 $page_title = "Catálogo de Maquinaria | CRM Ventas";
@@ -51,13 +51,15 @@ include '../includes/header.php';
                     <th class="text-end">P. Público</th>
                     <th class="text-end">P. Distribuidor</th>
                     <th class="text-center">Stock</th>
-                    <th class="text-center" style="width: 120px;">Acciones</th>
+                    <th class="text-center" style="width: 140px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 <?php 
                 foreach ($maquinas as $maq): 
                     $attrs = json_decode($maq['atributos_especificos'], true) ?? [];
+                    // Validamos si tiene imagen personalizada cargada en el JSON
+                    $img_name = !empty($attrs['imagen']) ? $attrs['imagen'] : '';
                 ?>
                 <tr id="fila-producto-<?= $maq['id_producto'] ?>">
                     <td class="fw-bold text-secondary small">
@@ -65,7 +67,7 @@ include '../includes/header.php';
                     </td>
                     <td>
                         <div class="fw-bold text-dark lh-sm"><?= htmlspecialchars($maq['nombre']) ?></div>
-                        <small class="text-muted text-truncate d-inline-block" style="max-width: 200px;" title="<?= htmlspecialchars($maq['descripcion'] ?? '') ?>">
+                        <small class="text-muted text-truncate d-inline-block" style="max-width: 180px;" title="<?= htmlspecialchars($maq['descripcion'] ?? '') ?>">
                             <?= htmlspecialchars($maq['descripcion'] ?? 'Sin descripción comercial.') ?>
                         </small>
                     </td>
@@ -95,7 +97,24 @@ include '../includes/header.php';
                         </span>
                     </td>
                     <td class="text-center">
+                        <!-- Botones de Acción Modificados -->
                         <div class="btn-group btn-group-sm">
+                            <!-- AGREGADO: Botón Ojo para Detalles Técnicos -->
+                            <button type="button" class="btn btn-outline-info border-0 btn-ver-detalle" 
+                                    data-nombre="<?= htmlspecialchars($maq['nombre']) ?>"
+                                    data-sku="<?= htmlspecialchars($maq['sku_codigo']) ?>"
+                                    data-linea="<?= htmlspecialchars($attrs['linea'] ?? 'Demex') ?>"
+                                    data-tipo="<?= htmlspecialchars($attrs['tipo_helado'] ?? 'Suave') ?>"
+                                    data-voltaje="<?= htmlspecialchars($attrs['voltaje'] ?? 'N/A') ?>"
+                                    data-capacidad="<?= htmlspecialchars($attrs['capacidad'] ?? 'N/A') ?>"
+                                    data-publico="$<?= number_format($maq['precio_publico'], 2) ?>"
+                                    data-distribuidor="$<?= number_format($maq['precio_distribuidor'], 2) ?>"
+                                    data-stock="<?= $maq['stock'] ?>"
+                                    data-desc="<?= htmlspecialchars($maq['descripcion'] ?? 'Sin descripción.') ?>"
+                                    data-imagen="<?= $img_name ?>"
+                                    title="Ver Detalles Completos e Imagen">
+                                <i class="bi bi-eye fs-5"></i>
+                            </button>
                             <a href="editar_producto.php?id_producto=<?= $maq['id_producto'] ?>" class="btn btn-outline-warning border-0" title="Editar Especificaciones y Precios">
                                 <i class="bi bi-pencil-square fs-5"></i>
                             </a>
@@ -111,11 +130,84 @@ include '../includes/header.php';
     </div>
 </div>
 
+<!-- ================= MODAL DETALLE DE PRODUCTO (ESTILO CRM CLEAN) ================= -->
+<div class="modal fade" id="modalDetalleMaquina" transatlantic="true"          tabindex="-1" aria-labelledby="modalDetalleMaquinaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+            <!-- ================= MODAL DETALLE DE PRODUCTO (CORREGIDO Y BLINDADO CONTRA CONGELAMIENTO) ================= -->
+                <div class="modal fade" id="modalDetalleMaquina" tabindex="-1" aria-labelledby="modalDetalleMaquinaLabel" aria-hidden="true" data-bs-backdrop="true">
+                <h5 class="modal-title fw-bold" id="modalDetalleMaquinaLabel"><i class="bi bi-cpu-fill me-2"></i> Ficha Técnica Comercial</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 bg-white">
+                <div class="row g-4">
+                    <!-- Sección Izquierda: Imagen del Equipo -->
+                    <div class="col-12 col-md-5 text-center d-flex flex-column align-items-center justify-content-center border-end border-light">
+                        <div class="p-2 border rounded bg-light shadow-sm w-100 d-flex align-items-center justify-content-center" style="height: 250px; overflow: hidden;">
+                            <img src="" id="modal_img_eq" class="img-fluid rounded" style="max-height: 100%; object-fit: contain;" alt="Fotografía del Insumo">
+                        </div>
+                        <span class="badge bg-secondary px-3 py-2 mt-3 fw-bold text-uppercase w-100" id="modal_lbl_sku" style="font-size:0.85rem;">SKU: -</span>
+                    </div>
+                    <!-- Sección Derecha: Información Estructurada -->
+                    <div class="col-12 col-md-7">
+                        <h3 class="fw-bold text-danger mb-1" id="modal_lbl_nombre">-</h3>
+                        <p class="text-muted small mb-3 border-bottom pb-2" id="modal_lbl_desc">-</p>
+                        
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
+                                    <small class="text-muted d-block small text-uppercase fw-semibold">Línea</small>
+                                    <span class="fw-bold text-dark" id="modal_lbl_linea">-</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
+                                    <small class="text-muted d-block small text-uppercase fw-semibold">Tipo Helado</small>
+                                    <span class="fw-bold text-dark" id="modal_lbl_tipo">-</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
+                                    <small class="text-muted d-block small text-uppercase fw-semibold">Voltaje</small>
+                                    <span class="fw-semibold text-secondary small" id="modal_lbl_voltaje">-</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
+                                    <small class="text-muted d-block small text-uppercase fw-semibold">Capacidad</small>
+                                    <span class="fw-semibold text-secondary small" id="modal_lbl_capacidad">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <small class="text-muted d-block small text-uppercase fw-semibold">P. Público</small>
+                                <span class="fs-5 fw-bold text-dark" id="modal_lbl_publico">-</span>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block small text-uppercase fw-semibold">P. Distribuidor</small>
+                                <span class="fs-5 fw-bold text-danger" id="modal_lbl_distribuidor">-</span>
+                            </div>
+                            <div class="col-4 text-center">
+                                <small class="text-muted d-block small text-uppercase fw-semibold">Disponibles</small>
+                                <span class="badge bg-success px-3 py-2 fw-bold mt-1" id="modal_lbl_stock" style="font-size:0.9rem;">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal" style="border-radius:6px;">Cerrar Ficha</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php include '../includes/footer.php'; ?>
 
 <script>
 $(document).ready(function() {
-    // 1. Inicialización correcta de la instancia DataTable
     const table = $('#tablaMaquinas').DataTable({
         "searching": false,      
         "lengthChange": false,   
@@ -132,7 +224,53 @@ $(document).ready(function() {
         "ordering": true
     });
 
-    // 2. Evento dinámico asignado CORRECTAMENTE dentro del scope del ready
+    // === LÓGICA REACTIVA PARA CARGAR EL MODAL COMERCIAL ===
+    $(document).on('click', '.btn-ver-detalle', function() {
+        // Capturamos la información contenida en los atributos data
+        const nombre = $(this).data('nombre');
+        const sku = $(this).data('sku');
+        const linea = $(this).data('linea');
+        const tipo = $(this).data('tipo');
+        const voltaje = $(this).data('voltaje');
+        const capacidad = $(this).data('capacidad');
+        const publico = $(this).data('publico');
+        const distribuidor = $(this).data('distribuidor');
+        const stock = $(this).data('stock');
+        const desc = $(this).data('desc');
+        const imagen = $(this).data('imagen');
+
+        // Seteamos la ruta de la imagen. Si está vacía, jala una silueta por defecto de Bootstrap Icons
+        if (imagen !== '') {
+            $('#modal_img_eq').attr('src', '../img/maquinas/' + imagen);
+        } else {
+            // Imagen Placeholder limpia si no subieron foto
+            $('#modal_img_eq').attr('src', 'https://placehold.co/400x400/f8f9fa/6c757d?text=Sin+Imagen+Oficial');
+        }
+
+        // Inyectamos los textos en las etiquetas correspondientes del Modal
+        $('#modal_lbl_nombre').text(nombre);
+        $('#modal_lbl_sku').text('SKU: ' + sku);
+        $('#modal_lbl_linea').text(linea);
+        $('#modal_lbl_tipo').text(tipo);
+        $('#modal_lbl_voltaje').text(voltaje);
+        $('#modal_lbl_capacidad').text(capacidad);
+        $('#modal_lbl_publico').text(publico);
+        $('#modal_lbl_distribuidor').text(distribuidor);
+        $('#modal_lbl_desc').text(desc);
+        
+        // Formateamos visualmente el badge de stock
+        $('#modal_lbl_stock').text(stock).removeClass('bg-success bg-danger');
+        if (parseInt(stock) > 0) {
+            $('#modal_lbl_stock').addClass('bg-success');
+        } else {
+            $('#modal_lbl_stock').addClass('bg-danger');
+        }
+
+        // Desplegamos el modal en caliente
+        $('#modalDetalleMaquina').appendTo("body").modal('show');
+    });
+
+    // === EVENTO ASÍNCRONO DE ELIMINACIÓN ===
     $(document).on('click', '.btn-eliminar-producto', function() {
         const idProducto = $(this).data('id');
         const nombreProducto = $(this).data('nombre');
