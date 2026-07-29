@@ -1,17 +1,14 @@
 <?php
 /**
- * ARCHIVO: registro_maquina.php
- * DESCRIPCIÓN: Formulario de alta para equipos con modal de cliente integrado.
- * * ACTUALIZACIÓN V1.6.1:
- * - Fix de Validaciones: Se limpian de forma estricta las clases is-valid e is-invalid para alternar correctamente los iconos.
- * - Unificación Semántica: Corrección de minúsculas para la tabla clientes según el esquema real.
- * * @author Israel Fernández Carrera
+ * ARCHIVO: Soporte/registro_maquina.php
+ * DESCRIPCIÓN: Formulario de alta para equipos con modal de cliente integrado y switch de garantía vencida.
+ * @author Israel Fernández Carrera
  * @project Soporte Desarrollo Mexicano (DEMEX)
- * @version 1.6.1
+ * @version 1.7.2 - Formato de Garantía Vencida 01/01/2000
  */
 
 require_once '../config/db.php';
-$page_title = "Registrar Máquina - Soporte";
+$page_title = "Registrar Nueva Máquina - Soporte";
 $modulo_actual = 'soporte';
 include '../includes/header.php';
 ?>
@@ -27,7 +24,7 @@ include '../includes/header.php';
 <div class="row mb-4">
     <div class="col-12 text-center">
         <h1 class="fw-bold text-danger mb-0">Registrar Nueva Máquina</h1>
-        <p class="text-muted small">Complete la información técnica para activar la garantía en el sistema.</p>
+        <p class="text-muted small">Complete la información técnica para activar o registrar el equipo en el sistema.</p>
     </div>
 </div>
 
@@ -40,7 +37,7 @@ include '../includes/header.php';
                     <i class="bi bi-upc-scan me-1"></i> Número de Serie
                 </label>
                 <input type="text" name="no_serie" id="no_serie" class="form-control border-0 bg-light shadow-sm" 
-                    placeholder="Número de serie..." required maxlength="15"
+                    placeholder="Número de serie..." required maxlength="25"
                     value="<?= htmlspecialchars($_GET['no_serie'] ?? '') ?>">
                 <div id="status_serie" class="small mt-1 fw-bold" style="display:none;"></div>
             </div>
@@ -84,29 +81,51 @@ include '../includes/header.php';
             </div>
         </div>
 
-        <div class="row justify-content-center g-4 pt-4">
-            <div class="col-md-4 text-center">
-                <label class="form-label fw-bold small text-muted required-alt">
-                    <i class="bi bi-calendar-check me-1"></i> Inicio de Garantía
-                </label>
-                <input type="date" name="fecha_inicio" class="form-control border-0 bg-light shadow-sm text-center" 
-                       value="<?= date('Y-m-d') ?>" required>
+        <div class="card bg-light border-0 rounded-4 p-4 my-4 shadow-sm">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <span class="fw-bold text-secondary small text-uppercase">
+                    <i class="bi bi-shield-check me-1"></i> Configuración de Póliza de Garantía
+                </span>
+                
+                <div class="form-check form-switch bg-white py-2 pe-3 ps-5 rounded-pill border shadow-sm mb-0">
+                    <input class="form-check-input ms-n4" type="checkbox" role="switch" id="switch_vencida" name="garantia_vencida" value="1" style="cursor: pointer;">
+                    <label class="form-check-label fw-bold small text-danger ms-2" for="switch_vencida" style="cursor: pointer;">
+                        ¿Equipo Antiguo / Garantía Vencida?
+                    </label>
+                </div>
             </div>
 
-            <div class="col-md-4 text-center">
-                <label class="form-label fw-bold small text-muted required-alt">
-                    <i class="bi bi-hourglass-split me-1"></i> Tiempo de Vigencia
-                </label>
-                <div class="d-flex justify-content-center gap-4 mt-2">
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="vigencia" id="v1" value="1" checked>
-                        <label class="form-check-label small" for="v1">1 Año</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="vigencia" id="v2" value="2">
-                        <label class="form-check-label small" for="v2">2 Años</label>
+            <div id="wrapper_garantia_normal" class="row justify-content-center g-4 pt-2">
+                <div class="col-md-4 text-center">
+                    <label class="form-label fw-bold small text-muted required-alt">
+                        <i class="bi bi-calendar-check me-1"></i> Inicio de Garantía
+                    </label>
+                    <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control border-0 bg-white shadow-sm text-center" 
+                           value="<?= date('Y-m-d') ?>">
+                </div>
+
+                <div class="col-md-4 text-center">
+                    <label class="form-label fw-bold small text-muted required-alt">
+                        <i class="bi bi-hourglass-split me-1"></i> Tiempo de Vigencia
+                    </label>
+                    <div class="d-flex justify-content-center gap-4 mt-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="vigencia" id="v1" value="1" checked>
+                            <label class="form-check-label small fw-bold" for="v1">1 Año</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="vigencia" id="v2" value="2">
+                            <label class="form-check-label small fw-bold" for="v2">2 Años</label>
+                        </div>
                     </div>
                 </div>
+            </div>
+
+            <div id="aviso_vencida" class="alert alert-warning border-0 rounded-3 text-center mb-0 mt-2 p-2 shadow-sm" style="display: none;">
+                <i class="bi bi-exclamation-triangle-fill me-2 text-warning fs-5"></i>
+                <span class="small fw-bold text-dark">
+                    La garantía se registrará como <strong>VENCIDA AUTOMÁTICAMENTE (01/01/0000)</strong>.
+                </span>
             </div>
         </div>
 
@@ -158,12 +177,24 @@ include '../includes/header.php';
 
 <script>
 $(document).ready(function() {
-    // Intercepta el modal antes de renderizar para mandarlo a la raíz del body
     $('#modalNuevoCliente').on('show.bs.modal', function () {
         $(this).appendTo("body");
     });
 
-    // 1. VALIDACIÓN DE SERIE (Mantiene tu lógica POST y respuestas en texto plano)
+    // DINÁMICA DEL SWITCH DE GARANTÍA VENCIDA
+    $('#switch_vencida').on('change', function() {
+        if ($(this).is(':checked')) {
+            $('#wrapper_garantia_normal').slideUp(200);
+            $('#aviso_vencida').slideDown(200);
+            $('#fecha_inicio').prop('required', false);
+        } else {
+            $('#wrapper_garantia_normal').slideDown(200);
+            $('#aviso_vencida').slideUp(200);
+            $('#fecha_inicio').prop('required', true);
+        }
+    });
+
+    // 1. VALIDACIÓN DE SERIE
     var typingTimer;
     $('#no_serie').on('input', function() {
         clearTimeout(typingTimer);
@@ -191,7 +222,6 @@ $(document).ready(function() {
                 });
             }, 500);
         } else {
-            // Si el usuario borra texto y cae abajo de 3 caracteres, reiniciamos el estado limpio
             input.removeClass('is-invalid is-valid').css('border', 'none');
             msg.hide();
             $('#btnGuardar').attr('disabled', false);
@@ -243,14 +273,13 @@ $(document).ready(function() {
         });
     });
 
-    // 4. INTERCEPTOR ASÍNCRONO PARA EL FORMULARIO PRINCIPAL DE LA MÁQUINA (NUEVO)
+    // 4. ENVIAR FORMULARIO PRINCIPAL
     $('#formRegistroMaquina').on('submit', function(e) {
-        e.preventDefault(); // Evita la recarga física de la página vieja
+        e.preventDefault();
 
         const btnGuardar = $('#btnGuardar');
         const textoOriginal = btnGuardar.html();
         
-        // Estado visual de carga para evitar clicks dobles
         btnGuardar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Guardando...');
 
         const formulario = this;
@@ -261,22 +290,20 @@ $(document).ready(function() {
             body: datosFormulario
         })
         .then(respuesta => {
-            if (!respuesta.ok) {
-                throw new Error('Error en la comunicación de red con el servidor.');
-            }
-            return respuesta.json(); // Parsea la respuesta JSON pura de procesar_maquina.php
+            if (!respuesta.ok) throw new Error('Error en la red con el servidor.');
+            return respuesta.json();
         })
         .then(data => {
             Swal.fire({
                 icon: data.status,
                 title: data.title,
                 text: data.text,
-                confirmButtonColor: data.status === 'success' ? '#d15b00' : '#C62828'
+                confirmButtonColor: data.status === 'success' ? '#198754' : '#C62828'
             }).then(() => {
                 if (data.status === 'success') {
-                    window.location.href = 'maquinas.php'; // Redirección limpia hacia el inventario
+                    window.location.href = 'maquinas.php';
                 } else {
-                    btnGuardar.prop('disabled', false).html(textoOriginal); // Reactiva el botón si fue advertencia
+                    btnGuardar.prop('disabled', false).html(textoOriginal);
                 }
             });
         })
@@ -291,7 +318,6 @@ $(document).ready(function() {
         });
     });
 
-    // Si el campo ya viene con texto de inicio, gatillamos la validación
     if ($('#no_serie').val().length >= 3) {
         $('#no_serie').trigger('input');
     }
