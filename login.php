@@ -13,8 +13,9 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once 'config/db.php';
 
 if (isset($_SESSION['rol'])) {
-    if ($_SESSION['rol'] === 'administrador' || $_SESSION['rol'] === 'soporte') {
-        header("Location: Soporte/index.php");
+// En el inicio de login.php, cambia las líneas 14-22 por esto:
+    if (isset($_SESSION['roles']) && is_array($_SESSION['roles'])) {
+        header("Location: inicio.php");
         exit();
     } elseif ($_SESSION['rol'] === 'cliente') {
         header("Location: vista_cliente.php");

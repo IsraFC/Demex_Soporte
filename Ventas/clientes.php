@@ -5,7 +5,7 @@
  * Gestiona el catálogo unificado de clientes, perfiles e integración a recompras comerciales.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.5 (Catálogo Simplificado con Botón de Edición de Cliente Incorporado)
+ * @version 1.6 (Botón de eliminación asíncrona de cliente incorporado)
  */
 
 $page_title = "Catálogo Histórico de Clientes | CRM Ventas";
@@ -101,7 +101,7 @@ include '../includes/header.php';
                     <th>Ubicación</th>
                     <th class="text-center">Última Compra</th>
                     <th style="display:none;">Equipos Flota</th>
-                    <th class="text-center" style="width: 150px;">Acciones</th>
+                    <th class="text-center" style="width: 180px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -126,7 +126,7 @@ include '../includes/header.php';
                 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)):
                     $fecha_compra_formato = !empty($row['ultima_fecha_compra']) ? date('d/m/Y', strtotime($row['ultima_fecha_compra'])) : '<em>Ninguna</em>';
                 ?>
-                <tr class="row-cliente-item" data-equipos-count="<?= $row['total_equipos'] ?>">
+                <tr id="fila-cliente-<?= $row['id_cliente'] ?>" class="row-cliente-item" data-equipos-count="<?= $row['total_equipos'] ?>">
                     <td>
                         <div class="fw-bold text-dark lh-sm"><?= htmlspecialchars($row['nombre_cliente']) ?></div>
                         <span class="badge mt-1 text-uppercase text-muted border bg-light" style="font-size: 0.65rem; padding: 0.2rem 0.4rem; border-radius: 4px;"><?= htmlspecialchars($row['tipo_cliente'] ?? 'Publico General') ?></span>
@@ -158,9 +158,13 @@ include '../includes/header.php';
                             <a href="editar_cliente.php?id_cliente=<?= $row['id_cliente'] ?>" class="btn btn-outline-warning border-0" title="Editar Información del Cliente">
                                 <i class="bi bi-pencil-square fs-5"></i>
                             </a>
-                            <a href="cotizaciones.php?id_prospecto=0&cliente_recompra=<?= $row['id_cliente'] ?>" class="btn btn-outline-danger border-0" title="Generar Nueva Cotización (Recompra)">
+                            <a href="cotizaciones.php?id_prospecto=0&cliente_recompra=<?= $row['id_cliente'] ?>" class="btn btn-outline-primary border-0" title="Generar Nueva Cotización (Recompra)">
                                 <i class="bi bi-file-earmark-plus-fill fs-5"></i>
                             </a>
+                            <!-- BOTÓN ELIMINAR CLIENTE -->
+                            <button type="button" class="btn btn-outline-danger border-0 btn-eliminar-cliente" data-id="<?= $row['id_cliente'] ?>" data-nombre="<?= htmlspecialchars($row['nombre_cliente']) ?>" title="Eliminar Cliente">
+                                <i class="bi bi-trash fs-5"></i>
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -196,6 +200,59 @@ $(document).ready(function() {
 
     $('#btnFiltrarFrecuentes').on('change', function() {
         table.draw();
+    });
+
+    // === EVENTO ASÍNCRONO DE ELIMINACIÓN DE CLIENTE ===
+    $(document).on('click', '.btn-eliminar-cliente', function() {
+        const idCliente = $(this).data('id');
+        const nombreCliente = $(this).data('nombre');
+
+        Swal.fire({
+            title: '¿Eliminar Cliente?',
+            text: `¿Estás seguro de eliminar a "${nombreCliente}" del catálogo? Esta acción no se puede deshacer.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: 'eliminar_cliente.php',
+                    method: 'POST',
+                    data: { id_cliente: idCliente },
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire({
+                                title: '¡Eliminado!',
+                                text: 'El cliente ha sido retirado del sistema.',
+                                icon: 'success',
+                                confirmButtonColor: '#198754',
+                                confirmButtonText: 'Entendido'
+                            });
+                            table.row(`#fila-cliente-${idCliente}`).remove().draw(false);
+                        } else {
+                            Swal.fire({
+                                title: 'No se pudo eliminar',
+                                text: response.message,
+                                icon: 'error',
+                                confirmButtonColor: '#dc3545'
+                            });
+                        }
+                    },
+                    error: function() {
+                        Swal.fire({
+                            title: 'Error de Red',
+                            text: 'No se pudo conectar con el servidor central.',
+                            icon: 'error',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    }
+                });
+            }
+        });
     });
 });
 </script>
