@@ -11,7 +11,7 @@ global $link_prefix_soporte, $pagina_actual_php, $en_soporte; ?>
 </div>
 
 <a href="<?= $link_prefix_soporte ?>index.php" class="sidebar-link <?= ($pagina_actual_php === 'index.php' && $en_soporte) ? 'active-page no-anim' : '' ?>">
-    <div class="sidebar-icon"><i class="bi bi-house-door"></i></div> <span>Inicio</span>
+    <div class="sidebar-icon"><i class="bi bi-clipboard-check"></i></div> <span>Seguimiento</span>
 </a>
 
 <a href="<?= $link_prefix_soporte ?>tickets_usuario.php" class="sidebar-link <?= ($pagina_actual_php === 'tickets_usuario.php' && $en_soporte) ? 'active-page no-anim' : '' ?>">

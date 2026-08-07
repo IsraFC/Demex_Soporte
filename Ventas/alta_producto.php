@@ -217,8 +217,8 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.success) {
                     Swal.fire({
-                        title: '¡Venta Cerrada!', 
-                        text: '¡Producto registrado e integrado al catálogo comercial con éxito!',
+                        title: '¡Producto Registrado!', 
+                        text: '¡Producto integrado al catálogo con éxito!',
                         icon: 'success',
                         confirmButtonColor: '#198754',
                         confirmButtonText: 'Entendido'

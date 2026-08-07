@@ -87,39 +87,29 @@ try {
         $_SESSION['correo']     = $user['correo'];
         $_SESSION['roles']      = $mis_roles; // Guardamos el array completo de roles asignados
 
-        // 5. Redirección por prioridades de roles asignados (Case-Sensitive)
-        if (in_array('Administrador', $mis_roles) || in_array('Soporte', $mis_roles)) {
-            header("Location: ../Soporte/index.php");
-            exit();
-        } elseif (in_array('Ventas', $mis_roles)) {
-            header("Location: ../Ventas/leads_crm.php");
-            exit();
-        } else {
-            // Corrección: Redirige al enrutador index.php de la raíz al no existir vista_cliente.php
-            header("Location: ../index.php");
+        // 5. REDIRECCIÓN HOMOLOGADA HACIA LA PANTALLA DE BIENVENIDA (inicio.php)
+                header("Location: ../inicio.php");
+                exit();
+
+            } else {
+                // CONTRASEÑA INCORRECTA
+                $nuevos_intentos = $user['intentos_fallidos'] + 1;
+                $bloqueo_fecha = null;
+
+                if ($nuevos_intentos >= 5) {
+                    $bloqueo_fecha = date('Y-m-d H:i:s', time() + (15 * 60));
+                    $_SESSION['bloqueo_hasta'] = time() + (15 * 60);
+                }
+
+                $update_sql = "UPDATE usuarios SET intentos_fallidos = ?, bloqueado_hasta = ? WHERE id_usuario = ?";
+                $update_stmt = $pdo->prepare($update_sql);
+                $update_stmt->execute([$nuevos_intentos, $bloqueo_fecha, $user['id_usuario']]);
+
+                header("Location: ../login.php?error=password_incorrecto");
+                exit();
+            }
+
+        } catch (\Exception $e) {
+            header("Location: ../login.php?error=fatal");
             exit();
         }
-
-    } else {
-        // CONTRASEÑA INCORRECTA: Aumentamos el contador en la Base de Datos
-        $nuevos_intentos = $user['intentos_fallidos'] + 1;
-        $bloqueo_fecha = null;
-
-        if ($nuevos_intentos >= 5) {
-            // Generamos la fecha/hora actual mas 15 minutos en formato MySQL
-            $bloqueo_fecha = date('Y-m-d H:i:s', time() + (15 * 60));
-            $_SESSION['bloqueo_hasta'] = time() + (15 * 60); // Para la visualización inmediata del frontend
-        }
-
-        $update_sql = "UPDATE usuarios SET intentos_fallidos = ?, bloqueado_hasta = ? WHERE id_usuario = ?";
-        $update_stmt = $pdo->prepare($update_sql);
-        $update_stmt->execute([$nuevos_intentos, $bloqueo_fecha, $user['id_usuario']]);
-
-        header("Location: ../login.php?error=password_incorrecto");
-        exit();
-    }
-
-} catch (\Exception $e) {
-    header("Location: ../login.php?error=fatal");
-    exit();
-}

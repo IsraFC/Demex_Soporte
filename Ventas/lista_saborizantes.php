@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: Ventas/lista_saborizantes.php
  * DESCRIPCIÓN: Listado especializado del catálogo de Saborizantes Premium DEMEX.
- * Decodifica dinámicamente el bloque JSON de atributos e integra vista de ficha técnica en Modal.
+ * Decodifica dinámicamente el bloque JSON de atributos e integra vista de ficha técnica en Modal XL optimizado.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.2 (Inclusión de Modal Detallado con Visualización de Imagen Dinámica en img/saborizantes/)
+ * @version 1.7 (Badge de Stock con tono azul Bootstrap coincidente con Precio Público)
  */
 
 $page_title = "Catálogo de Saborizantes | CRM Ventas";
@@ -91,7 +91,6 @@ include '../includes/header.php';
                     </td>
                     <td class="text-center">
                         <div class="btn-group btn-group-sm">
-                            <!-- AGREGADO: Botón Ojo para Detalles del Saborizante -->
                             <button type="button" class="btn btn-outline-info border-0 btn-ver-detalle" 
                                     data-nombre="<?= htmlspecialchars($sab['nombre']) ?>"
                                     data-sku="<?= htmlspecialchars($sab['sku_codigo']) ?>"
@@ -121,67 +120,75 @@ include '../includes/header.php';
     </div>
 </div>
 
-<!-- ================= MODAL DETALLE DE SABORIZANTE ================= -->
+<!-- ================= MODAL DETALLE DE SABORIZANTE OPTIMIZADO ================= -->
 <div class="modal fade" id="modalDetalleSaborizante" tabindex="-1" aria-labelledby="modalDetalleSaborizanteLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
-            <div class="modal-header bg-danger text-white py-3" style="border-top-left-radius: 12px; border-top-right-radius: 12px;">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
+            <div class="modal-header bg-danger text-white py-3 px-4" style="border-top-left-radius: 14px; border-top-right-radius: 14px;">
                 <h5 class="modal-title fw-bold" id="modalDetalleSaborizanteLabel"><i class="bi bi-funnel-fill me-2"></i> Ficha Técnica de Saborizante Premium</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4 bg-white">
-                <div class="row g-4">
-                    <!-- Sección Izquierda: Imagen -->
-                    <div class="col-12 col-md-5 text-center d-flex flex-column align-items-center justify-content-center border-end border-light">
-                        <div class="p-2 border rounded bg-light shadow-sm w-100 d-flex align-items-center justify-content-center" style="height: 250px; overflow: hidden;">
-                            <img src="" id="modal_img_eq" class="img-fluid rounded" style="max-height: 100%; object-fit: contain;" alt="Fotografía del Saborizante">
+                <div class="row g-4 align-items-center">
+                    <!-- Sección Izquierda: Imagen Flotante Transparente -->
+                    <div class="col-12 col-lg-4 text-center border-end border-light pe-lg-4 d-flex align-items-center justify-content-center" style="min-height: 320px;">
+                        <div class="w-100 d-flex align-items-center justify-content-center" style="height: 280px;">
+                            <img src="" id="modal_img_eq" class="img-fluid" style="max-height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0px 8px 12px rgba(0,0,0,0.12));" alt="Fotografía del Saborizante">
                         </div>
-                        <span class="badge bg-secondary px-3 py-2 mt-3 fw-bold text-uppercase w-100" id="modal_lbl_sku" style="font-size:0.85rem;">SKU: -</span>
                     </div>
-                    <!-- Sección Derecha: Datos -->
-                    <div class="col-12 col-md-7">
-                        <h3 class="fw-bold text-danger mb-1" id="modal_lbl_nombre">-</h3>
-                        <p class="text-muted small mb-3 border-bottom pb-2" id="modal_lbl_desc">-</p>
-                        
-                        <div class="row g-2 mb-3">
-                            <div class="col-12">
-                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
-                                    <small class="text-muted d-block small text-uppercase fw-semibold">Sabor / Concentrado</small>
-                                    <span class="fw-bold text-dark" id="modal_lbl_sabor">-</span>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
-                                    <small class="text-muted d-block small text-uppercase fw-semibold">Presentación / Empaque</small>
-                                    <span class="fw-semibold text-secondary small" id="modal_lbl_peso">-</span>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
-                                    <small class="text-muted d-block small text-uppercase fw-semibold">Rendimiento Proporcional</small>
-                                    <span class="fw-semibold text-secondary small" id="modal_lbl_rendimiento">-</span>
-                                </div>
+
+                    <!-- Sección Derecha: Información Estructurada -->
+                    <div class="col-12 col-lg-8 ps-lg-4">
+                        <!-- Header del Producto -->
+                        <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 border-bottom pb-2">
+                            <h2 class="fw-bold text-dark mb-0" id="modal_lbl_nombre">-</h2>
+                            <div class="d-flex align-items-center gap-2 mt-2 mt-sm-0">
+                                <span class="badge bg-dark px-3 py-2 fw-bold text-uppercase" id="modal_lbl_sku" style="font-size:0.8rem;">SKU: -</span>
+                                <!-- MODIFICADO: Badge de Stock azul por defecto con id -->
+                                <span class="badge bg-primary px-3 py-2 fw-bold" id="modal_lbl_stock" style="font-size:0.8rem;">Stock: -</span>
                             </div>
                         </div>
 
-                        <div class="row g-2">
-                            <div class="col-4">
-                                <small class="text-muted d-block small text-uppercase fw-semibold">P. Público</small>
-                                <span class="fs-5 fw-bold text-dark" id="modal_lbl_publico">-</span>
+                        <!-- Caja Formateada y Scrollable para Descripción -->
+                        <div class="mb-3">
+                            <label class="small text-muted fw-bold text-uppercase mb-1"><i class="bi bi-file-earmark-text text-danger me-1"></i> Descripción Comercial / Modo de Preparación</label>
+                            <div class="p-3 bg-light rounded-3 border border-light-subtle shadow-sm" style="max-height: 110px; overflow-y: auto; font-size: 0.85rem; line-height: 1.6; color: #334155;" id="modal_lbl_desc">
+                                -
                             </div>
-                            <div class="col-4">
-                                <small class="text-muted d-block small text-uppercase fw-semibold">P. Distribuidor</small>
-                                <span class="fs-5 fw-bold text-danger" id="modal_lbl_distribuidor">-</span>
+                        </div>
+                        
+                        <!-- Lista Estructurada de Especificaciones -->
+                        <div class="card border-0 bg-light p-3 rounded-3 mb-3 shadow-sm">
+                            <div class="row g-2 align-items-center border-bottom pb-2 mb-2">
+                                <div class="col-4 text-muted small fw-bold text-uppercase"><i class="bi bi-droplet text-primary me-1"></i> Concentrado:</div>
+                                <div class="col-8 fw-bold text-dark small" id="modal_lbl_sabor">-</div>
                             </div>
-                            <div class="col-4 text-center">
-                                <small class="text-muted d-block small text-uppercase fw-semibold">Stock Actual</small>
-                                <span class="badge bg-success px-3 py-2 fw-bold mt-1" id="modal_lbl_stock" style="font-size:0.9rem;">-</span>
+                            <div class="row g-2 align-items-center border-bottom pb-2 mb-2">
+                                <div class="col-4 text-muted small fw-bold text-uppercase"><i class="bi bi-box-seam text-secondary me-1"></i> Empaque:</div>
+                                <div class="col-8 fw-bold text-dark small" id="modal_lbl_peso">-</div>
+                            </div>
+                            <div class="row g-2 align-items-start">
+                                <div class="col-4 text-muted small fw-bold text-uppercase"><i class="bi bi-speedometer2 text-primary me-1"></i> Rendimiento:</div>
+                                <div class="col-8 fw-semibold text-secondary small" id="modal_lbl_rendimiento" style="line-height: 1.4;">-</div>
+                            </div>
+                        </div>
+
+                        <!-- Banner de Precios con Fondo Neutro -->
+                        <div class="p-3 bg-light border rounded-3 d-flex align-items-center justify-content-around text-center shadow-sm">
+                            <div>
+                                <small class="text-muted d-block small text-uppercase fw-bold">Precio Público</small>
+                                <span class="fs-4 fw-bold text-primary" id="modal_lbl_publico">-</span>
+                            </div>
+                            <div class="border-end border-secondary border-opacity-25" style="height: 35px;"></div>
+                            <div>
+                                <small class="text-muted d-block small text-uppercase fw-bold">Precio Distribuidor</small>
+                                <span class="fs-4 fw-bold text-danger" id="modal_lbl_distribuidor">-</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer bg-light py-2">
+            <div class="modal-footer bg-light py-2 px-4 border-0">
                 <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal" style="border-radius:6px;">Cerrar Ficha</button>
             </div>
         </div>
@@ -191,6 +198,21 @@ include '../includes/header.php';
 <?php include '../includes/footer.php'; ?>
 
 <script>
+function formatearTextoDescripcion(texto) {
+    if (!texto || texto === 'Sin descripción comercial.') return 'Sin descripción comercial.';
+    
+    let formateado = texto
+        .replace(/(Cada \d+)/g, '<br>• <strong>$1</strong>')
+        .replace(/(También se puede)/g, '<br>• $1')
+        .replace(/(Contacto a un vendedor)/g, '<br>• $1')
+        .replace(/(Base para helado)/g, '<br>• $1')
+        .replace(/(Revuelve hasta)/g, '<br>• $1')
+        .replace(/(Envíos a domicilio)/g, '<br>• $1')
+        .replace(/(Tiempo de caducidad:)/g, '<br>• <strong>$1</strong>');
+        
+    return formateado;
+}
+
 $(document).ready(function() {
     const table = $('#tablaSaborizantes').DataTable({
         "searching": false,
@@ -221,7 +243,6 @@ $(document).ready(function() {
         const desc = $(this).data('desc');
         const imagen = $(this).data('imagen');
 
-        // DIRECCIONADO EXCLUSIVAMENTE HACIA LA CARPETA SABORIZANTES
         if (imagen !== '') {
             $('#modal_img_eq').attr('src', '../img/saborizantes/' + imagen);
         } else {
@@ -235,16 +256,18 @@ $(document).ready(function() {
         $('#modal_lbl_rendimiento').text(rendimiento);
         $('#modal_lbl_publico').text(publico);
         $('#modal_lbl_distribuidor').text(distribuidor);
-        $('#modal_lbl_desc').text(desc);
         
-        $('#modal_lbl_stock').text(stock).removeClass('bg-success bg-danger');
+        $('#modal_lbl_desc').html(formatearTextoDescripcion(desc));
+        
+        // MODIFICADO: Asigna color azul 'bg-primary' cuando hay stock y 'bg-danger' si está en 0
+        $('#modal_lbl_stock').text('Stock: ' + stock + ' Pz').removeClass('bg-primary bg-danger');
         if (parseInt(stock) > 0) {
-            $('#modal_lbl_stock').addClass('bg-success');
+            $('#modal_lbl_stock').addClass('bg-primary');
         } else {
             $('#modal_lbl_stock').addClass('bg-danger');
         }
 
-        $('#modalDetailSaborizante').appendTo("body").modal('show');
+        $('#modalDetalleSaborizante').appendTo("body").modal('show');
     });
 
     // === EVENTO ASÍNCRONO DE ELIMINACIÓN ===

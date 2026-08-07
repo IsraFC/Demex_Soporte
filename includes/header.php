@@ -186,6 +186,11 @@ if (!isset($modulo_actual)) {
         <div class="sidebar-menu-scroll">
             <div class="list-group list-group-flush mt-2" id="sidebar-menu-list">
 
+                <!-- 1. BOTÓN DE INICIO (HASTA ARRIBA PARA TODOS LOS USUARIOS AUTENTICADOS) -->
+                <?php if (tieneAcceso(['Administrador', 'Soporte', 'Ventas', 'Almacen'])): ?>
+                    <?php include __DIR__ . '/sidebar/menu_inicio.php'; ?>
+                <?php endif; ?>
+
                 <?php if (tieneAcceso(['Administrador', 'Soporte'])): ?>
                     <?php include __DIR__ . '/sidebar/menu_soporte.php'; ?>
                 <?php endif; ?>

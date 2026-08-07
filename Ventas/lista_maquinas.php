@@ -2,16 +2,16 @@
 /**
  * ARCHIVO: Ventas/lista_maquinas.php
  * DESCRIPCIÓN: Listado especializado del catálogo de Maquinaria DEMEX.
- * Decodifica dinámicamente el bloque JSON de atributos e integra vista de ficha técnica en Modal.
+ * Decodifica dinámicamente el bloque JSON de atributos e integra vista de ficha técnica en Modal XL optimizado.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.4 (Inclusión de Modal Detallado con Visualización de Imagen Dinámica)
+ * @version 1.5 (Rediseño visual de Ficha Técnica: Imagen flotante, Tabla de Especificaciones y Colores Neutros)
  */
 
 $page_title = "Catálogo de Maquinaria | CRM Ventas";
 require_once '../config/db.php';
 
-// Filtramos estrictamente por la categoría 1 que corresponde a 'Máquinas'
+// Filtramos strictly por la categoría 1 que corresponde a 'Máquinas'
 $sql = "SELECT p.*, c.nombre_categoria 
         FROM productos p
         INNER JOIN categorias_productos c ON p.id_categoria = c.id_categoria
@@ -58,7 +58,6 @@ include '../includes/header.php';
                 <?php 
                 foreach ($maquinas as $maq): 
                     $attrs = json_decode($maq['atributos_especificos'], true) ?? [];
-                    // Validamos si tiene imagen personalizada cargada en el JSON
                     $img_name = !empty($attrs['imagen']) ? $attrs['imagen'] : '';
                 ?>
                 <tr id="fila-producto-<?= $maq['id_producto'] ?>">
@@ -97,9 +96,7 @@ include '../includes/header.php';
                         </span>
                     </td>
                     <td class="text-center">
-                        <!-- Botones de Acción Modificados -->
                         <div class="btn-group btn-group-sm">
-                            <!-- AGREGADO: Botón Ojo para Detalles Técnicos -->
                             <button type="button" class="btn btn-outline-info border-0 btn-ver-detalle" 
                                     data-nombre="<?= htmlspecialchars($maq['nombre']) ?>"
                                     data-sku="<?= htmlspecialchars($maq['sku_codigo']) ?>"
@@ -110,7 +107,7 @@ include '../includes/header.php';
                                     data-publico="$<?= number_format($maq['precio_publico'], 2) ?>"
                                     data-distribuidor="$<?= number_format($maq['precio_distribuidor'], 2) ?>"
                                     data-stock="<?= $maq['stock'] ?>"
-                                    data-desc="<?= htmlspecialchars($maq['descripcion'] ?? 'Sin descripción.') ?>"
+                                    data-desc="<?= htmlspecialchars($maq['descripcion'] ?? 'Sin descripción comercial.') ?>"
                                     data-imagen="<?= $img_name ?>"
                                     title="Ver Detalles Completos e Imagen">
                                 <i class="bi bi-eye fs-5"></i>
@@ -130,74 +127,78 @@ include '../includes/header.php';
     </div>
 </div>
 
-<!-- ================= MODAL DETALLE DE PRODUCTO (ESTILO CRM CLEAN) ================= -->
-<div class="modal fade" id="modalDetalleMaquina" transatlantic="true"          tabindex="-1" aria-labelledby="modalDetalleMaquinaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
-            <!-- ================= MODAL DETALLE DE PRODUCTO (CORREGIDO Y BLINDADO CONTRA CONGELAMIENTO) ================= -->
-                <div class="modal fade" id="modalDetalleMaquina" tabindex="-1" aria-labelledby="modalDetalleMaquinaLabel" aria-hidden="true" data-bs-backdrop="true">
-                <h5 class="modal-title fw-bold" id="modalDetalleMaquinaLabel"><i class="bi bi-cpu-fill me-2"></i> Ficha Técnica Comercial</h5>
+<!-- ================= MODAL DETALLE DE MAQUINARIA OPTIMIZADO ================= -->
+<div class="modal fade" id="modalDetalleMaquina" tabindex="-1" aria-labelledby="modalDetalleMaquinaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
+            <div class="modal-header bg-danger text-white py-3 px-4" style="border-top-left-radius: 14px; border-top-right-radius: 14px;">
+                <h5 class="modal-title fw-bold" id="modalDetalleMaquinaLabel"><i class="bi bi-cpu-fill me-2"></i> Ficha Técnica Comercial de Maquinaria</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4 bg-white">
-                <div class="row g-4">
-                    <!-- Sección Izquierda: Imagen del Equipo -->
-                    <div class="col-12 col-md-5 text-center d-flex flex-column align-items-center justify-content-center border-end border-light">
-                        <div class="p-2 border rounded bg-light shadow-sm w-100 d-flex align-items-center justify-content-center" style="height: 250px; overflow: hidden;">
-                            <img src="" id="modal_img_eq" class="img-fluid rounded" style="max-height: 100%; object-fit: contain;" alt="Fotografía del Insumo">
+                <div class="row g-4 align-items-center">
+                    <!-- Sección Izquierda: Imagen Flotante Transparente -->
+                    <div class="col-12 col-lg-4 text-center border-end border-light pe-lg-4 d-flex align-items-center justify-content-center" style="min-height: 320px;">
+                        <div class="w-100 d-flex align-items-center justify-content-center" style="height: 280px;">
+                            <img src="" id="modal_img_eq" class="img-fluid" style="max-height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0px 8px 12px rgba(0,0,0,0.12));" alt="Fotografía del Equipo">
                         </div>
-                        <span class="badge bg-secondary px-3 py-2 mt-3 fw-bold text-uppercase w-100" id="modal_lbl_sku" style="font-size:0.85rem;">SKU: -</span>
                     </div>
+
                     <!-- Sección Derecha: Información Estructurada -->
-                    <div class="col-12 col-md-7">
-                        <h3 class="fw-bold text-danger mb-1" id="modal_lbl_nombre">-</h3>
-                        <p class="text-muted small mb-3 border-bottom pb-2" id="modal_lbl_desc">-</p>
-                        
-                        <div class="row g-2 mb-3">
-                            <div class="col-6">
-                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
-                                    <small class="text-muted d-block small text-uppercase fw-semibold">Línea</small>
-                                    <span class="fw-bold text-dark" id="modal_lbl_linea">-</span>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
-                                    <small class="text-muted d-block small text-uppercase fw-semibold">Tipo Helado</small>
-                                    <span class="fw-bold text-dark" id="modal_lbl_tipo">-</span>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
-                                    <small class="text-muted d-block small text-uppercase fw-semibold">Voltaje</small>
-                                    <span class="fw-semibold text-secondary small" id="modal_lbl_voltaje">-</span>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="p-2 bg-light rounded border-start border-3 border-danger">
-                                    <small class="text-muted d-block small text-uppercase fw-semibold">Capacidad</small>
-                                    <span class="fw-semibold text-secondary small" id="modal_lbl_capacidad">-</span>
-                                </div>
+                    <div class="col-12 col-lg-8 ps-lg-4">
+                        <!-- Header del Producto -->
+                        <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 border-bottom pb-2">
+                            <h2 class="fw-bold text-dark mb-0" id="modal_lbl_nombre">-</h2>
+                            <div class="d-flex align-items-center gap-2 mt-2 mt-sm-0">
+                                <span class="badge bg-dark px-3 py-2 fw-bold text-uppercase" id="modal_lbl_sku" style="font-size:0.8rem;">SKU: -</span>
+                                <span class="badge bg-primary px-3 py-2 fw-bold" id="modal_lbl_stock" style="font-size:0.8rem;">Stock: -</span>
                             </div>
                         </div>
 
-                        <div class="row g-2">
-                            <div class="col-4">
-                                <small class="text-muted d-block small text-uppercase fw-semibold">P. Público</small>
-                                <span class="fs-5 fw-bold text-dark" id="modal_lbl_publico">-</span>
+                        <!-- Caja Formateada y Scrollable para Descripción -->
+                        <div class="mb-3">
+                            <label class="small text-muted fw-bold text-uppercase mb-1"><i class="bi bi-file-earmark-text text-danger me-1"></i> Descripción Comercial / Especificaciones</label>
+                            <div class="p-3 bg-light rounded-3 border border-light-subtle shadow-sm" style="max-height: 110px; overflow-y: auto; font-size: 0.85rem; line-height: 1.6; color: #334155;" id="modal_lbl_desc">
+                                -
                             </div>
-                            <div class="col-4">
-                                <small class="text-muted d-block small text-uppercase fw-semibold">P. Distribuidor</small>
-                                <span class="fs-5 fw-bold text-danger" id="modal_lbl_distribuidor">-</span>
+                        </div>
+                        
+                        <!-- Lista Estructurada de Especificaciones Técnicas -->
+                        <div class="card border-0 bg-light p-3 rounded-3 mb-3 shadow-sm">
+                            <div class="row g-2 align-items-center border-bottom pb-2 mb-2">
+                                <div class="col-4 text-muted small fw-bold text-uppercase"><i class="bi bi-cpu text-danger me-1"></i> Línea del Equipo:</div>
+                                <div class="col-8 fw-bold text-dark small" id="modal_lbl_linea">-</div>
                             </div>
-                            <div class="col-4 text-center">
-                                <small class="text-muted d-block small text-uppercase fw-semibold">Disponibles</small>
-                                <span class="badge bg-success px-3 py-2 fw-bold mt-1" id="modal_lbl_stock" style="font-size:0.9rem;">-</span>
+                            <div class="row g-2 align-items-center border-bottom pb-2 mb-2">
+                                <div class="col-4 text-muted small fw-bold text-uppercase"><i class="bi bi-cup-straw text-secondary me-1"></i> Tipo de Helado:</div>
+                                <div class="col-8 fw-bold text-dark small" id="modal_lbl_tipo">-</div>
+                            </div>
+                            <div class="row g-2 align-items-center border-bottom pb-2 mb-2">
+                                <div class="col-4 text-muted small fw-bold text-uppercase"><i class="bi bi-lightning-charge text-warning me-1"></i> Voltaje / Corriente:</div>
+                                <div class="col-8 fw-bold text-dark small" id="modal_lbl_voltaje">-</div>
+                            </div>
+                            <div class="row g-2 align-items-start">
+                                <div class="col-4 text-muted small fw-bold text-uppercase"><i class="bi bi-speedometer2 text-primary me-1"></i> Capacidad Producción:</div>
+                                <div class="col-8 fw-semibold text-secondary small" id="modal_lbl_capacidad" style="line-height: 1.4;">-</div>
+                            </div>
+                        </div>
+
+                        <!-- Banner de Precios Comercial -->
+                        <div class="p-3 bg-light border rounded-3 d-flex align-items-center justify-content-around text-center shadow-sm">
+                            <div>
+                                <small class="text-muted d-block small text-uppercase fw-bold">Precio Público</small>
+                                <span class="fs-4 fw-bold text-primary" id="modal_lbl_publico">-</span>
+                            </div>
+                            <div class="border-end border-secondary border-opacity-25" style="height: 35px;"></div>
+                            <div>
+                                <small class="text-muted d-block small text-uppercase fw-bold">Precio Distribuidor</small>
+                                <span class="fs-4 fw-bold text-danger" id="modal_lbl_distribuidor">-</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer bg-light py-2">
+            <div class="modal-footer bg-light py-2 px-4 border-0">
                 <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal" style="border-radius:6px;">Cerrar Ficha</button>
             </div>
         </div>
@@ -207,6 +208,20 @@ include '../includes/header.php';
 <?php include '../includes/footer.php'; ?>
 
 <script>
+function formatearTextoDescripcion(texto) {
+    if (!texto || texto === 'Sin descripción comercial.' || texto === 'Sin descripción.') return 'Sin descripción comercial.';
+    
+    let formateado = texto
+        .replace(/(LÍNEA \w+)/gi, '<strong>$1</strong>')
+        .replace(/(HELADO \w+)/gi, '<strong>$1</strong>')
+        .replace(/(\(\d+ LTS? x HR\))/gi, '<br>• $1')
+        .replace(/(cilindros de)/gi, '<br>• $1')
+        .replace(/(CON COMPRESOR)/gi, '<br>• $1')
+        .replace(/(CON TOLVAS)/gi, '<br>• $1');
+        
+    return formateado;
+}
+
 $(document).ready(function() {
     const table = $('#tablaMaquinas').DataTable({
         "searching": false,      
@@ -224,9 +239,8 @@ $(document).ready(function() {
         "ordering": true
     });
 
-    // === LÓGICA REACTIVA PARA CARGAR EL MODAL COMERCIAL ===
+    // === LÓGICA REACTIVA PARA EL MODAL DE DETALLES ===
     $(document).on('click', '.btn-ver-detalle', function() {
-        // Capturamos la información contenida en los atributos data
         const nombre = $(this).data('nombre');
         const sku = $(this).data('sku');
         const linea = $(this).data('linea');
@@ -239,15 +253,12 @@ $(document).ready(function() {
         const desc = $(this).data('desc');
         const imagen = $(this).data('imagen');
 
-        // Seteamos la ruta de la imagen. Si está vacía, jala una silueta por defecto de Bootstrap Icons
         if (imagen !== '') {
             $('#modal_img_eq').attr('src', '../img/maquinas/' + imagen);
         } else {
-            // Imagen Placeholder limpia si no subieron foto
             $('#modal_img_eq').attr('src', 'https://placehold.co/400x400/f8f9fa/6c757d?text=Sin+Imagen+Oficial');
         }
 
-        // Inyectamos los textos en las etiquetas correspondientes del Modal
         $('#modal_lbl_nombre').text(nombre);
         $('#modal_lbl_sku').text('SKU: ' + sku);
         $('#modal_lbl_linea').text(linea);
@@ -256,17 +267,16 @@ $(document).ready(function() {
         $('#modal_lbl_capacidad').text(capacidad);
         $('#modal_lbl_publico').text(publico);
         $('#modal_lbl_distribuidor').text(distribuidor);
-        $('#modal_lbl_desc').text(desc);
         
-        // Formateamos visualmente el badge de stock
-        $('#modal_lbl_stock').text(stock).removeClass('bg-success bg-danger');
+        $('#modal_lbl_desc').html(formatearTextoDescripcion(desc));
+        
+        $('#modal_lbl_stock').text('Stock: ' + stock + ' Eq').removeClass('bg-primary bg-danger');
         if (parseInt(stock) > 0) {
-            $('#modal_lbl_stock').addClass('bg-success');
+            $('#modal_lbl_stock').addClass('bg-primary');
         } else {
             $('#modal_lbl_stock').addClass('bg-danger');
         }
 
-        // Desplegamos el modal en caliente
         $('#modalDetalleMaquina').appendTo("body").modal('show');
     });
 

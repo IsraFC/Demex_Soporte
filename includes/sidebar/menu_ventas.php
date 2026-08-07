@@ -32,5 +32,5 @@ global $link_prefix_ventas, $pagina_actual_php, $en_ventas;
 </div>
 
 <a href="<?= $link_prefix_ventas ?>dashboard_marketing.php" class="sidebar-link <?= ($pagina_actual_php === 'dashboard_marketing.php' && $en_ventas) ? 'active-page no-anim' : '' ?>">
-    <div class="sidebar-icon"><i class="bi bi-pie-chart"></i></div> <span>Métricas Marketing</span>
+    <div class="sidebar-icon"><i class="bi bi-pie-chart"></i></div> <span>Métricas de Ventas</span>
 </a>
