@@ -1,9 +1,10 @@
 <?php
 /**
  * ARCHIVO: Almacen/actions/abrir_modal_entrega.php
- * DESCRIPCIÓN: Formulario dinámico de asignación con datalist, soporte de cliente nuevo y radio buttons de vigencia.
+ * DESCRIPCIÓN: Formulario dinámico de asignación comercial. La serie ya viene grabada en el equipo.
  * @project Almacén Técnico DEMEX
- * @version 2.3 - Radio Buttons de Opción Múltiple para Garantías
+ * @version 6.4 - Serie Fija de Solo Lectura
+ * @author Israel Fernández Carrera
  */
 
 require_once '../../config/db.php';
@@ -32,32 +33,35 @@ try {
 }
 
 $fecha_hoy = date('Y-m-d');
+$no_serie_equipo = !empty($equipo['no_serie']) ? htmlspecialchars($equipo['no_serie']) : 'SIN SERIE';
 ?>
 
 <form id="formProcesarEntrega" novalidate>
     <div class="modal-body p-4">
         
-        <div class="bg-light p-3 mb-3 rounded-4 border-start border-success border-4 small shadow-sm">
+        <div class="bg-light p-3 mb-3 rounded-4 border-start border-success border-4 shadow-sm">
             <span class="d-block text-secondary text-uppercase fw-bold" style="font-size: 10px;">Maquinaria Lista para Despliegue</span>
             <div class="fw-bold text-dark fs-6 mt-1">Modelo: <?= htmlspecialchars($equipo['modelo']) ?></div>
-            <div class="text-muted" style="font-size: 11px;">
-                Nº Serie: <code class="text-danger fw-bold"><?= htmlspecialchars($equipo['no_serie']) ?></code> | Lote: <?= htmlspecialchars($equipo['contenedor']) ?>
+            <div class="text-muted mt-1" style="font-size: 12px;">
+                Nº Serie Grabado: <code class="fw-bold text-danger fs-6 me-2"><?= $no_serie_equipo ?></code> | Contenedor: <span class="fw-bold text-dark"><?= htmlspecialchars($equipo['contenedor']) ?></span>
             </div>
         </div>
 
         <input type="hidden" name="id_almacen" value="<?= $id ?>">
-        <input type="hidden" name="no_serie" value="<?= htmlspecialchars($equipo['no_serie']) ?>">
         <input type="hidden" name="modelo" value="<?= htmlspecialchars($equipo['modelo']) ?>">
+        <input type="hidden" name="no_serie" value="<?= $no_serie_equipo ?>">
         <input type="hidden" name="fecha_termino" id="entrega_fecha_termino">
 
-        <div class="form-check form-switch mb-3 bg-light p-2 rounded-pill ps-5 border shadow-sm">
-            <input class="form-check-input" type="checkbox" role="switch" id="switchClienteNuevo" name="es_cliente_nuevo" value="1">
-            <label class="form-check-label small fw-bold text-danger text-uppercase" style="font-size: 11px;" for="switchClienteNuevo">¿Es un Cliente Nuevo?</label>
+        <div class="form-check form-switch bg-light py-2 pe-3 ps-5 rounded-pill border shadow-sm mb-3">
+            <input class="form-check-input ms-n4" type="checkbox" role="switch" id="switchClienteNuevo" name="es_cliente_nuevo" value="1" style="cursor: pointer;">
+            <label class="form-check-label small fw-bold text-danger text-uppercase ms-2" style="font-size: 11px; cursor: pointer;" for="switchClienteNuevo">
+                ¿Es un Cliente Nuevo?
+            </label>
         </div>
 
         <div id="wrapperClienteExistente">
             <div class="mb-3">
-                <label class="form-label small fw-bold text-secondary text-uppercase" style="font-size: 11px;">Buscar o Seleccionar Cliente</label>
+                <label class="form-label small fw-bold text-secondary text-uppercase" style="font-size: 11px;">Buscar o Seleccionar Cliente *</label>
                 <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm mb-2">
                     <span class="input-group-text border-0 bg-transparent text-muted"><i class="bi bi-person-search"></i></span>
                     <input type="text" class="form-control bg-transparent border-0 fw-bold text-dark p-1" id="buscador_cliente_datalist" placeholder="Da clic para ver la lista o escribe para buscar..." list="lista_clientes_maestra" style="font-size: 14px;">
@@ -107,15 +111,11 @@ $fecha_hoy = date('Y-m-d');
                 <div class="d-flex gap-3 p-1">
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="plazo_anios_radio" id="plazo_1_anio" value="1" checked>
-                        <label class="form-check-label small fw-bold text-dark" for="plazo_1_anio">
-                            1 Año
-                        </label>
+                        <label class="form-check-label small fw-bold text-dark" for="plazo_1_anio">1 Año</label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="plazo_anios_radio" id="plazo_2_anios" value="2">
-                        <label class="form-check-label small fw-bold text-dark" for="plazo_2_anios">
-                            2 Años
-                        </label>
+                        <label class="form-check-label small fw-bold text-dark" for="plazo_2_anios">2 Años</label>
                     </div>
                 </div>
             </div>
@@ -132,10 +132,8 @@ $fecha_hoy = date('Y-m-d');
 </form>
 
 <script>
-// Función matemática adaptada para leer los Radio Buttons activos
 function calcularFechaVencimiento() {
     let inputInicio = document.getElementById('entrega_fecha_inicio').value;
-    // Seleccionamos el radio button que esté checkeado actualmente
     let radioActivo = document.querySelector('input[name="plazo_anios_radio"]:checked');
     let plazoAnios = radioActivo ? parseInt(radioActivo.value, 10) : 1;
     let inputTermino = document.getElementById('entrega_fecha_termino');
@@ -149,16 +147,13 @@ function calcularFechaVencimiento() {
     }
 }
 
-// Disparadores automáticos al cambiar de fecha o de Radio Button
 document.getElementById('entrega_fecha_inicio')?.addEventListener('change', calcularFechaVencimiento);
 document.querySelectorAll('input[name="plazo_anios_radio"]').forEach(radio => {
     radio.addEventListener('change', calcularFechaVencimiento);
 });
 
-// Inicializamos el cálculo al vuelo
 calcularFechaVencimiento();
 
-// Mapeo del ID de cliente datalist
 document.getElementById('buscador_cliente_datalist')?.addEventListener('input', function() {
     let valorInput = this.value;
     let opciones = document.getElementById('lista_clientes_maestra').options;
@@ -172,7 +167,6 @@ document.getElementById('buscador_cliente_datalist')?.addEventListener('input', 
     }
 });
 
-// Switch cliente nuevo
 document.getElementById('switchClienteNuevo')?.addEventListener('change', function() {
     let exist = document.getElementById('wrapperClienteExistente');
     let nuevo = document.getElementById('wrapperClienteNuevo');
@@ -190,13 +184,12 @@ document.getElementById('switchClienteNuevo')?.addEventListener('change', functi
     }
 });
 
-// Envío del formulario
 document.getElementById('formProcesarEntrega')?.addEventListener('submit', function(e) {
     e.preventDefault();
     let esNuevo = document.getElementById('switchClienteNuevo').checked;
     
     if (!esNuevo && !document.getElementById('entrega_id_cliente').value) {
-        Swal.fire({ icon: 'warning', title: 'Cliente Inválido', text: 'Debes seleccionar un cliente válido de la lista o escribir un nombre que coincida.', confirmButtonColor: '#dc3545' });
+        Swal.fire({ icon: 'warning', title: 'Cliente Inválido', text: 'Debes seleccionar un cliente válido de la lista.', confirmButtonColor: '#dc3545' });
         return false;
     }
     
@@ -213,10 +206,7 @@ document.getElementById('formProcesarEntrega')?.addEventListener('submit', funct
 
     Swal.fire({ title: 'Procesando despliegue...', text: 'Registrando cliente y activando póliza.', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
-    fetch('actions/procesar_entrega_final.php', {
-        method: 'POST',
-        body: new FormData(this)
-    })
+    fetch('actions/procesar_entrega_final.php', { method: 'POST', body: new FormData(this) })
     .then(response => response.json())
     .then(data => {
         Swal.close();
@@ -224,16 +214,34 @@ document.getElementById('formProcesarEntrega')?.addEventListener('submit', funct
             const modalEl = document.getElementById('modalAsignarCliente');
             const modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) modalInstance.hide();
+
             Swal.fire({ icon: 'success', title: 'Despliegue Exitoso', text: data.message, timer: 2000, showConfirmButton: false });
-            table.ajax.reload(null, false);
-            actualizarKPIs();
+
+            if (typeof table !== 'undefined') table.ajax.reload(null, false);
+            
+            $('#tablaLotes tr.shown').each(function() {
+                var row = table.row(this);
+                if (row.child.isShown()) {
+                    $.ajax({
+                        url: 'actions/obtener_desglose_lote.php',
+                        method: 'GET',
+                        data: { id_lote: row.data().id_lote },
+                        success: function (html) { row.child(html).show(); }
+                    });
+                }
+            });
+
+            if (typeof actualizarKPIs === 'function') {
+                actualizarKPIs();
+            }
+
         } else {
             Swal.fire({ icon: 'error', title: 'Falla Operativa', text: data.message, confirmButtonColor: '#dc3545' });
         }
     })
     .catch(() => {
         Swal.close();
-        Swal.fire({ icon: 'error', title: 'Error de Red', text: 'Ocurrió una anomalía de comunicación con el procesador.', confirmButtonColor: '#dc3545' });
+        Swal.fire({ icon: 'error', title: 'Error de Red', text: 'Ocurrió un error en la comunicación con el servidor.', confirmButtonColor: '#dc3545' });
     });
 });
 </script>

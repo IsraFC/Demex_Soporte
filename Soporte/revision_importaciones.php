@@ -1,9 +1,10 @@
 <?php
 /**
  * ARCHIVO: Soporte/revision_importaciones.php
- * DESCRIPCIÓN: Panel de Control de Laboratorio Técnico para revisión de stock nuevo de importación.
+ * DESCRIPCIÓN: Laboratorio Técnico Agrupado por Lotes con Desplegable de Unidades.
  * @project Soporte Técnico DEMEX
- * @version 1.1 (KPIs Asíncronos sin Recarga de Página)
+ * @version 3.0 - Vista por Lotes con Subtabla Child Rows
+ * @author Israel Fernández Carrera
  */
 
 require_once '../config/db.php';
@@ -17,10 +18,20 @@ $modulo_actual = 'soporte';
 include '../includes/header.php';
 ?>
 
+<style>
+    td.details-control { cursor: pointer; text-align: center; }
+    .subtabla-lote {
+        background-color: #f8f9fa !important;
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+    }
+</style>
+
 <div class="row mb-4 align-items-center animate__animated animate__fadeIn">
     <div class="col-md-6">
         <h1 class="fw-bold text-danger mb-0"><i class="bi bi-boxes me-2"></i>Laboratorio de Lotes</h1>
-        <p class="text-muted small mb-0">Revisión técnica, calibración mecánica e inspección de maquinaria nueva de importación.</p>
+        <p class="text-muted small mb-0">Revisión técnica, calibración mecánica e inspección de maquinaria por contenedor.</p>
     </div>
     <div class="col-md-6 text-md-end mt-3 mt-md-0">
         <div class="d-inline-flex gap-2">
@@ -41,15 +52,8 @@ include '../includes/header.php';
         <div class="col-md-4">
             <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
                 <span class="input-group-text border-0 bg-transparent"><i class="bi bi-search text-danger"></i></span>
-                <input type="text" id="customSearch" class="form-control bg-transparent border-0 small" placeholder="Serie, Contenedor o Modelo...">
+                <input type="text" id="customSearch" class="form-control bg-transparent border-0 small" placeholder="Buscar Contenedor o Tipo...">
             </div>
-        </div>
-        <div class="col-md-4">
-            <select id="filterEstatus" class="form-select border-0 bg-light fw-bold text-muted shadow-sm" style="font-size: 14px;">
-                <option value="">Filtrar Estatus Técnico</option>
-                <option value="DISPONIBLE PARA SOPORTE">DISPONIBLE PARA SOPORTE (POR RECIBIR)</option>
-                <option value="EN REVISIÓN SOPORTE">EN REVISIÓN SOPORTE (EN PROCESO)</option>
-            </select>
         </div>
     </div>
 </div>
@@ -59,17 +63,15 @@ include '../includes/header.php';
         <table id="tablaRevisiones" class="table table-hover align-middle w-100">
             <thead class="table-light text-uppercase small fw-bold" style="font-size: 11px; letter-spacing: 0.5px;">
                 <tr>
-                    <th>Contenedor</th>
-                    <th>Modelo Oficial</th>
-                    <th>Nº Serie Único</th>
+                    <th width="30" class="text-center"></th>
+                    <th>Contenedor / Lote</th>
                     <th>Tipo Destino</th>
-                    <th>Estatus Logístico</th>
                     <th>Arribo Bodega</th>
-                    <th class="text-center" style="width: 150px;">Firma de Fase</th>
+                    <th class="text-center">Total en Taller</th>
+                    <th>Estatus en Laboratorio</th>
                 </tr>
             </thead>
-            <tbody class="small fw-semibold text-dark">
-            </tbody>
+            <tbody class="small fw-semibold text-dark"></tbody>
         </table>
     </div>
 </div>
@@ -79,7 +81,6 @@ include '../includes/header.php';
 <script>
     var table;
 
-    // CORRECCIÓN FLUIDA: Consulta los nuevos números por AJAX sin recargar la pantalla
     function recargarKPILaboratorio() {
         $.ajax({
             url: 'actions/obtener_conteos_laboratorio.php',
@@ -101,64 +102,61 @@ include '../includes/header.php';
                 "serverSide": true,
                 "ajax": {
                     "url": "actions/obtener_revisiones_datatable.php",
-                    "type": "POST",
-                    "data": function(d) {
-                        d.filterEstatus = $('#filterEstatus').val();
-                    }
+                    "type": "POST"
                 },
                 "columns": [
-                    { "data": "contenedor", "className": "fw-bold text-secondary" },
-                    { "data": "modelo", "className": "fw-bold text-dark" },
-                    { "data": "no_serie", "render": function(data) { return `<span class="fw-bold text-danger text-nowrap">${data}</span>`; } },
-                    { "data": "tipo" },
-                    { 
-                        "data": "estatus",
-                        "render": function(data) {
-                            let badge = (data === 'DISPONIBLE PARA SOPORTE') ? 'bg-warning text-dark' : 'bg-primary text-white';
-                            return `<span class="badge ${badge}" style="font-size: 0.65rem; padding: 0.35rem 0.5rem;">${data}</span>`;
-                        }
-                    },
-                    { "data": "fecha_ingreso_contenedor" },
                     {
-                        "data": null,
+                        "className": 'details-control',
                         "orderable": false,
-                        "className": "text-center",
-                        "render": function(data, type, row) {
-                            if (row.estatus === 'DISPONIBLE PARA SOPORTE') {
-                                return `<button type="button" class="btn btn-primary btn-xs rounded-pill px-3 fw-bold shadow-sm" style="font-size: 11px;" onclick="ejecutarCambioFase(${row.id}, 'EN REVISIÓN SOPORTE', 'fecha_entrega_soporte')">
-                                            <i class="bi bi-box-arrow-in-right me-1"></i> Recibir
-                                        </button>`;
-                            } else {
-                                return `<button type="button" class="btn btn-success btn-xs rounded-pill px-3 fw-bold shadow-sm" style="font-size: 11px;" onclick="ejecutarCambioFase(${row.id}, 'REINGRESO A ALMACÉN', 'fecha_reingreso_almacen')">
-                                            <i class="bi bi-send-check me-1"></i> Liberar
-                                        </button>`;
-                            }
-                        }
-                    }
+                        "data": null,
+                        "defaultContent": '<button class="btn btn-sm btn-outline-danger border-0"><i class="bi bi-plus-circle-fill fs-5"></i></button>'
+                    },
+                    { "data": "contenedor", "className": "fw-bold text-danger fs-6" },
+                    { "data": "tipo", "render": function(d) { return `<span class="badge bg-light text-dark border">${d}</span>`; } },
+                    { "data": "fecha_ingreso" },
+                    { "data": "total_taller", "className": "text-center fw-bold fs-6" },
+                    { "data": "desglose_estatus" }
                 ],
-                "language": {
-                    "sProcessing":     "Buscando en inventario...",
-                    "sLengthMenu":     "Mostrar _MENU_ registros",
-                    "sZeroRecords":    "No hay maquinaria en tránsito en este momento",
-                    "sInfo":           "Mostrando _START_ al _END_ de _TOTAL_",
-                    "sInfoEmpty":      "Mostrando 0 al 0 de 0",
-                    "sSearch":         "Buscar:",
-                    "oPaginate": { "sFirst": "Primero", "sLast": "Último", "sNext": "Sig", "sPrevious": "Ant" }
-                },
+                "language": { "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json" },
                 "dom": 'rtip',
-                "pageLength": 13,
-                "order": [[5, "desc"]]
+                "pageLength": 10,
+                "order": [[3, "desc"]]
             });
 
             $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
-            $('#filterEstatus').on('change', function() { table.draw(); });
+
+            // DESPLEGABLE CHILD ROWS
+            $('#tablaRevisiones tbody').on('click', 'td.details-control', function () {
+                var tr = $(this).closest('tr');
+                var row = table.row(tr);
+                var btn = $(this).find('button i');
+
+                if (row.child.isShown()) {
+                    row.child.hide();
+                    tr.removeClass('shown');
+                    btn.removeClass('bi-dash-circle-fill').addClass('bi-plus-circle-fill');
+                } else {
+                    btn.removeClass('bi-plus-circle-fill').addClass('bi-dash-circle-fill');
+                    row.child('<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-danger" role="status"></div> Cargando modelos en taller...</div>').show();
+                    tr.addClass('shown');
+
+                    $.ajax({
+                        url: 'actions/obtener_desglose_soporte.php',
+                        method: 'GET',
+                        data: { id_lote: row.data().id_lote },
+                        success: function (html) {
+                            row.child(html).show();
+                        }
+                    });
+                }
+            });
         }
     });
 
     function ejecutarCambioFase(id, nuevoEstatus, campoFecha) {
         let textoAlerta = (nuevoEstatus === 'EN REVISIÓN SOPORTE') ? 
-            'Se estampará el inicio de pruebas de laboratorio en taller.' : 
-            'Se certificará el control de calidad regresando la maquinaria a Almacén.';
+            'Se iniciarán las pruebas de laboratorio y calibración para 1 unidad.' : 
+            'Se certificará el control de calidad regresando 1 unidad a Almacén.';
 
         Swal.fire({
             title: '¿Confirmar actualización?',
@@ -184,18 +182,31 @@ include '../includes/header.php';
                 .then(data => {
                     Swal.close();
                     if (data.success) {
-                        Swal.fire({ icon: 'success', title: '¡Hecho!', text: data.message, timer: 1500, showConfirmButton: false });
+                        Swal.fire({ icon: 'success', title: '¡Fase Actualizada!', text: data.message, timer: 1500, showConfirmButton: false });
                         
-                        // CORRECCIÓN: Actualiza la tabla y los contadores de forma asíncrona y fluida
+                        // Refrescar tabla y subtabla
                         table.ajax.reload(null, false);
                         recargarKPILaboratorio();
+
+                        $('#tablaRevisiones tr.shown').each(function() {
+                            var row = table.row(this);
+                            if (row.child.isShown()) {
+                                $.ajax({
+                                    url: 'actions/obtener_desglose_soporte.php',
+                                    method: 'GET',
+                                    data: { id_lote: row.data().id_lote },
+                                    success: function (html) { row.child(html).show(); }
+                                });
+                            }
+                        });
+
                     } else {
                         Swal.fire({ icon: 'error', title: 'Falla', text: data.message, confirmButtonColor: '#dc3545' });
                     }
                 })
                 .catch(() => {
                     Swal.close();
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'Colapso de red en el servidor local.', confirmButtonColor: '#dc3545' });
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Error de comunicación con el servidor.', confirmButtonColor: '#dc3545' });
                 });
             }
         });
