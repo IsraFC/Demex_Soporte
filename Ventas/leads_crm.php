@@ -2,11 +2,10 @@
 /**
  * ARCHIVO: leads_crm.php
  * DESCRIPCIÓN: Panel de Control de Leads CRM con Motor de Búsqueda Asíncrono.
- * Integra animaciones intermitentes en semáforos, filtros avanzados de DataTables y visor modal blindado.
- * ORDENAMIENTO: Clasificación por Prioridad Estricta de Semáforo (Urgente > Atención > En Curso > Al día).
+ * Integra botón de registro manual de prospectos, animaciones en semáforos y filtros avanzados.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 7.1 (Corrección estricta de invocación a modal de cierre comercial)
+ * @version 7.3 (Corrección estricta de cruce de IDs en cotizaciones y botones de acción)
  */
 
 $page_title = "Panel de Seguimiento | CRM Ventas";
@@ -26,7 +25,7 @@ include '../includes/header.php';
 <div class="row mb-4 align-items-center">
     <div class="col-md-5">
         <h1 class="fw-bold text-danger mb-0"><i class="bi bi-funnel"></i> Control de Prospectos a Clientes</h1>
-        <p class="text-muted small">Prospectos capturados desde el formulario público de la página web.</p>
+        <p class="text-muted small">Base unificada de prospectos capturados en línea y dados de alta en mostrador.</p>
     </div>
     <div class="col-md-7 text-md-end">
         <div class="d-inline-flex gap-2">
@@ -52,24 +51,24 @@ include '../includes/header.php';
 
 <div class="card-main mb-4 py-3 shadow-sm border-top border-4 border-danger bg-white rounded">
     <div class="row g-0 align-items-center px-3 justify-content-between">
-        <div class="col-auto" style="width: 30%;">
+        <div class="col-auto" style="width: 22%;">
             <div class="input-group border rounded-pill px-3 py-1 bg-light shadow-sm">
                 <span class="input-group-text bg-transparent border-0"><i class="bi bi-search text-danger"></i></span>
-                <input type="text" id="customSearch" class="form-control bg-transparent border-0" placeholder="Buscar Prospecto o Correo...">
+                <input type="text" id="customSearch" class="form-control bg-transparent border-0" placeholder="Buscar Prospecto...">
             </div>
         </div>
         <div class="col-auto">
-            <select id="filterCanal" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 220px;">
+            <select id="filterCanal" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 180px;">
                 <option value="">Todos los Canales</option>
                 <option value="Página Web">Página Web</option>
+                <option value="WhatsApp">WhatsApp</option>
                 <option value="Facebook">Facebook</option>
                 <option value="YouTube">YouTube</option>
-                <option value="WhatsApp">WhatsApp</option>
                 <option value="Recomendación">Recomendación</option>
             </select>
         </div>
         <div class="col-auto">
-            <select id="filterEquipo" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 220px;">
+            <select id="filterEquipo" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 190px;">
                 <option value="">Todos los Equipos</option>
                 <?php foreach ($maquinas_reales as $maquina): ?>
                     <option value="<?= htmlspecialchars($maquina) ?>"><?= htmlspecialchars($maquina) ?></option>
@@ -89,6 +88,13 @@ include '../includes/header.php';
                 <input class="form-check-input" type="checkbox" id="btnFiltrarEnCurso" style="cursor:pointer;">
                 <label class="form-check-label small fw-bold text-muted" style="cursor:pointer;" for="btnFiltrarEnCurso">Solo Cotizaciones En Curso</label>
             </div>
+        </div>
+
+        <!-- BOTÓN NUEVO PROSPECTO -->
+        <div class="col-auto">
+            <a href="registrar_prospecto.php" class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm py-2">
+                <i class="bi bi-person-plus-fill me-1"></i> Registrar Prospecto
+            </a>
         </div>
     </div>
 </div>
@@ -111,12 +117,21 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
+                // Subconsulta optimizada: vincula únicamente la última cotización emitida de cada prospecto
                 $sql = "SELECT f.*, p.id_prospecto, p.status_comercial, p.fecha_ultimo_contacto,
                                c.id_cotizacion, c.status_cotizacion, c.fecha_emision AS cotizacion_fecha,
                                c.fecha_vencimiento, c.fecha_recordatorio
                         FROM formulario f
                         INNER JOIN prospectos p ON f.id_formulario = p.id_formulario
-                        LEFT JOIN cotizacion c ON p.id_prospecto = c.id_prospecto
+                        LEFT JOIN (
+                            SELECT c1.*
+                            FROM cotizacion c1
+                            INNER JOIN (
+                                SELECT id_prospecto, MAX(id_cotizacion) AS max_cotiz
+                                FROM cotizacion
+                                GROUP BY id_prospecto
+                            ) c2 ON c1.id_prospecto = c2.id_prospecto AND c1.id_cotizacion = c2.max_cotiz
+                        ) c ON p.id_prospecto = c.id_prospecto
                         ORDER BY 
                             CASE 
                                 WHEN p.status_comercial = 'Venta Cerrada' THEN 4
@@ -132,6 +147,7 @@ include '../includes/header.php';
                 $stmt = $pdo->query($sql);
                 while ($lead = $stmt->fetch()):
                     $estatus_real_cotizacion = $lead['status_cotizacion'];
+                    $id_cotiz_val = !empty($lead['id_cotizacion']) ? (string)$lead['id_cotizacion'] : '0';
                 ?>
                 <tr class="row-lead-item" 
                     data-origen="<?= htmlspecialchars($lead['canal_origen']) ?>" 
@@ -168,7 +184,7 @@ include '../includes/header.php';
                     <td class="text-center col-status-badge"></td>
                     
                     <td class="text-center col-cotizacion-badge" 
-                        data-tiene-cotizacion="<?= ($lead['id_cotizacion'] > 0) ? '1' : '0' ?>"
+                        data-tiene-cotizacion="<?= ($id_cotiz_val !== '0') ? '1' : '0' ?>"
                         data-status-cotiz="<?= htmlspecialchars($estatus_real_cotizacion ?? '') ?>">
                     </td>
 
@@ -181,7 +197,7 @@ include '../includes/header.php';
                     <td class="text-center">
                         <div class="btn-group btn-group-sm col-acciones-comerciales" 
                              data-id-prospecto="<?= $lead['id_prospecto'] ?>" 
-                             data-id-cotizacion="<?= htmlspecialchars($lead['id_cotizacion'] ?? '0') ?>"
+                             data-id-cotizacion="<?= $id_cotiz_val ?>"
                              data-status-venta="<?= $lead['status_comercial'] ?>">
                         </div>
                     </td>
@@ -196,7 +212,7 @@ include '../includes/header.php';
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content shadow border-0" style="border-radius: 16px;">
             <div class="modal-header bg-danger text-white" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
-                <h5 class="modal-title fw-bold"><i class="bi bi-check-circle-fill me-2"></i> Desgloce de cierre de Venta</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-check-circle-fill me-2"></i> Desglose de cierre de Venta</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="formConfirmarVenta">
@@ -246,8 +262,8 @@ $(document).ready(function() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('msg') === 'success') {
         Swal.fire({
-            title: '¡Cambios Guardados!',
-            text: 'La cotización y el expediente del lead se actualizaron exitosamente.',
+            title: '¡Operación Exitosa!',
+            text: 'El prospecto se registró correctamente en el sistema.',
             icon: 'success',
             confirmButtonColor: '#198754',
             confirmButtonText: 'Entendido',
@@ -256,20 +272,8 @@ $(document).ready(function() {
         }).then(() => {
             window.history.replaceState({}, document.title, window.location.pathname);
         });
-    } else if (urlParams.get('msg') === 'error') {
-        const descError = urlParams.get('desc') || 'No se pudo procesar la actualización.';
-        Swal.fire({
-            title: 'Error de Actualización',
-            text: decodeURIComponent(descError),
-            icon: 'error',
-            confirmButtonColor: '#dc3545',
-            confirmButtonText: 'Revisar'
-        }).then(() => {
-            window.history.replaceState({}, document.title, window.location.pathname);
-        });
     }
 
-    // === MOTOR DE ALERTAS PROACTIVAS DE RECORDATORIOS (LEADS) ===
     const d = new Date();
     const hoyStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     let leadsPendientesHoy = [];
@@ -288,7 +292,7 @@ $(document).ready(function() {
     if (leadsPendientesHoy.length > 0) {
         Swal.fire({
             title: `<i class="bi bi-bell-fill text-danger animate__animated animate__swing animate__infinite" style="display:inline-block;"></i> Tienes ${leadsPendientesHoy.length} seguimiento(s) hoy`,
-            html: `<div class="text-start mt-2 small text-muted">Debes dar seguimiento hoy a los siguientes prospectos a clientes:</div>
+            html: `<div class="text-start mt-2 small text-muted">Debes dar seguimiento hoy a los siguientes prospectos:</div>
                    <div class="text-start mt-3 p-3 bg-light rounded border border-dark" style="max-height: 200px; overflow-y: auto; font-size: 0.9rem; line-height: 1.5;">
                      ${leadsPendientesHoy.join('<br>')}
                    </div>`,
@@ -303,9 +307,9 @@ $(document).ready(function() {
         });
     }
 
-function calcularSemaforosComerciales() {
+    function calcularSemaforosComerciales() {
         let countEnCurso = 0, countAtencion = 0, countUrgentes = 0;
-        const ahora = new Date().getTime(); // Corrección para la variable de tiempo
+        const ahora = new Date().getTime();
 
         $('.col-semaforo').each(function() {
             const statusVenta = $(this).data('status-venta');
@@ -318,9 +322,9 @@ function calcularSemaforosComerciales() {
             const contenedorStatusBadge = fila.find('.col-status-badge');
             const contenedorCotizBadge = fila.find('.col-cotizacion-badge');
             
-            const idProspecto = contenedorAcciones.data('id-prospecto');
-            // BLINDAJE: Si no hay cotización, forzamos que sea 0 o vacío de forma segura
-            const idCotizacion = contenedorAcciones.data('id-cotizacion') || '0';
+            // Extracción estricta de atributos por cada fila individual
+            const idProspecto = String(contenedorAcciones.attr('data-id-prospecto') || '');
+            const idCotizacion = String(contenedorAcciones.attr('data-id-cotizacion') || '0');
 
             let statusBadgeHtml = '';
             if (statusVenta === 'Venta Cerrada') {
@@ -347,18 +351,18 @@ function calcularSemaforosComerciales() {
             }
             if (contenedorCotizBadge.html() !== cotizBadgeHtml) contenedorCotizBadge.html(cotizBadgeHtml);
 
-            // === BLINDAJE CRÍTICO AQUÍ: Manejo de botones sin romper el HTML ===
+            // Generación de botones con verificación estricta de cotización por fila
             let botonesHtml = '';
             if (statusVenta === 'Venta Cerrada') {
                 botonesHtml = `<button type="button" onclick="verDetallesCotizacion(${idCotizacion})" class="btn btn-outline-info border-0" title="Visualizar Detalle Cotización"><i class="bi bi-eye-fill fs-5"></i></button>`;
-            } else if (statusVenta === 'Cotizado' && idCotizacion !== '0' && idCotizacion !== 0) {
+            } else if (statusVenta === 'Cotizado' && idCotizacion !== '0' && idCotizacion !== '') {
                 botonesHtml = `<button type="button" onclick="verDetallesCotizacion(${idCotizacion})" class="btn btn-outline-info border-0" title="Visualizar Detalle Cotización"><i class="bi bi-eye-fill fs-5"></i></button>
                                <a href="editar_cotizacion.php?id_cotizacion=${idCotizacion}" class="btn btn-outline-warning border-0" title="Editar Cotización"><i class="bi bi-pencil-square fs-5"></i></a>
                                <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperationComercial(${idProspecto})" title="Cerrar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>`;
             } else {
-                // Si está consultado o por alguna razón no tiene cotización, siempre le damos el botón de crear
                 botonesHtml = `<a href="cotizaciones.php?id_prospecto=${idProspecto}" class="btn btn-outline-danger border-0" title="Generar Cotización"><i class="bi bi-file-earmark-plus-fill fs-5"></i></a>`;
             }
+            
             if (contenedorAcciones.html() !== botonesHtml) contenedorAcciones.html(botonesHtml);
 
             if (statusVenta === 'Venta Cerrada') {
@@ -432,8 +436,6 @@ function calcularSemaforosComerciales() {
         e.preventDefault();
         const idProspecto = $('#liberar_id_prospecto').val();
         const fechaCompra = $('#liberar_fecha_compra').val();
-        
-        // CORREGIDO: Cambiado a #liberar_observaciones para que haga match estricto con el id del textarea
         const observaciones = $('#liberar_observaciones').val();
 
         $.ajax({
@@ -473,12 +475,20 @@ function cerrarOperationComercial(idProspecto) {
     $('#formConfirmarVenta')[0].reset();
     $('#liberar_id_prospecto').val(idProspecto);
     $('#liberar_fecha_compra').val(new Date().toISOString().split('T')[0]);
-    
-    // CORREGIDO: Empujamos el modal al body antes de mostrarlo para que el fondo opaco no tape la pantalla
     $('#modalLiberarVenta').appendTo("body").modal('show');
 }
 
 function verDetallesCotizacion(idCotizacion) {
+    if (!idCotizacion || idCotizacion === '0' || idCotizacion === 0) {
+        Swal.fire({
+            title: 'Sin Cotización',
+            text: 'Este prospecto aún no cuenta con una cotización registrada.',
+            icon: 'info',
+            confirmButtonColor: '#dc3545'
+        });
+        return;
+    }
+
     $_cuerpo = $('#cuerpoModalCotizacion');
     $_cuerpo.html(`
         <div class="text-center py-4">

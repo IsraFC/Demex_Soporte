@@ -1,48 +1,69 @@
 <?php
 /**
  * ARCHIVO: cotizaciones.php
- * DESCRIPCIÓN: Formulario de Configuración Comercial de Cotizaciones.
- * Carga directa y reactiva basada en el origen del flujo (Leads o Recompras).
- * MODIFICACIÓN: Soporte de Precio Base Editable, Toggle de IVA, Fecha de Vencimiento Dinámica y Agenda de Semáforo.
+ * DESCRIPCIÓN: Formulario Universal de Configuración Comercial de Cotizaciones.
+ * Carga directa desde la tabla 'productos' agrupada por categorías comerciales.
+ * Reactividad automática entre tipo de cliente (Público/Distribuidor), 'precio_base_origen'
+ * y asignación dinámica de Unidad de Medida (Pieza, Kilo, Costal).
+ * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 7.2 (Corrección de mapeo estricto para columna rfc_receptor)
+ * @version 8.6 (Unidad de medida reactiva por categoría)
  */
 
 $page_title = "Generador de Cotizaciones | CRM Ventas";
 require_once '../config/db.php';
 
-// Catálogo estricto de los 8 modelos de máquinas reales
-$maquinas_reales = [
-    'DEMEX 313',
-    'DEMEX 313T',
-    'DEMEX 513',
-    'DEMEX 613',
-    'DEMEX 1020',
-    'DEMEX 125',
-    'SPICE MT15',
-    'SPICE MV89'
-];
+// 1. Consulta dinámica de todos los productos activos agrupados por categoría
+$sql_productos = "SELECT p.id_producto, p.nombre, p.sku_codigo, p.descripcion, 
+                         p.precio_publico, p.precio_distribuidor, p.stock, 
+                         p.atributos_especificos, c.nombre_categoria, c.id_categoria
+                  FROM productos p
+                  INNER JOIN categorias_productos c ON p.id_categoria = c.id_categoria
+                  ORDER BY c.id_categoria ASC, p.nombre ASC";
 
-// Matriz de precios oficiales (Público y Distribuidor)
-$catalogo_precios = [
-        'SPICE MT15'  => ['publico' => 45885.00,  'distribuidor' => 38900.00],
-        'SPICE MV89'  => ['publico' => 49335.00,  'distribuidor' => 41800.00],
-        'DEMEX 313T'  => ['publico' => 50000.00,  'distribuidor' => 41500.00],
-        'DEMEX 313'   => ['publico' => 66000.00,  'distribuidor' => 55000.00],
-        'DEMEX 513'   => ['publico' => 78000.00,  'distribuidor' => 64000.00],
-        'DEMEX 613'   => ['publico' => 88000.00,  'distribuidor' => 74000.00],
-        'DEMEX 125'   => ['publico' => 98000.00,  'distribuidor' => 82000.00],
-        'DEMEX 1020'  => ['publico' => 150000.00, 'distribuidor' => 130000.00]
-];
+$stmt_prod = $pdo->query($sql_productos);
+$todos_los_productos = $stmt_prod->fetchAll(PDO::FETCH_ASSOC);
 
-// Detección de Prospecto enlazado si viene de la Bandeja de Leads
+// Agrupación para los optgroup en HTML y mapa JS
+$productos_agrupados = [];
+$productos_js_map = [];
+
+foreach ($todos_los_productos as $item) {
+    $cat_nombre = $item['nombre_categoria'];
+    $productos_agrupados[$cat_nombre][] = $item;
+    
+    $atributos_decoded = json_decode($item['atributos_especificos'] ?? '[]', true) ?: [];
+
+    // Mapeo automático de unidad según el id o nombre de la categoría
+    $cat_id = (int)$item['id_categoria'];
+    $nombre_cat_lower = strtolower($cat_nombre);
+    
+    $unidad_medida = 'Pieza';
+    if ($cat_id === 3 || strpos($nombre_cat_lower, 'saborizante') !== false) {
+        $unidad_medida = 'Kilo';
+    } elseif ($cat_id === 2 || strpos($nombre_cat_lower, 'base') !== false) {
+        $unidad_medida = 'Costal';
+    } elseif ($cat_id === 1 || $cat_id === 4 || strpos($nombre_cat_lower, 'maquina') !== false || strpos($nombre_cat_lower, 'refaccion') !== false) {
+        $unidad_medida = 'Pieza';
+    }
+    
+    $productos_js_map[$item['id_producto']] = [
+        'id_producto'         => (int)$item['id_producto'],
+        'nombre'              => $item['nombre'],
+        'unidad'              => $unidad_medida,
+        'precio_publico'      => (float)$item['precio_publico'],
+        'precio_distribuidor' => (float)$item['precio_distribuidor'],
+        'descripcion'         => $item['descripcion'] ?? '',
+        'atributos'           => $atributos_decoded
+    ];
+}
+
+// 2. Detección de Prospecto o Cliente Recurrente
 $id_prospecto = isset($_GET['id_prospecto']) ? intval($_GET['id_prospecto']) : 0;
-
-// --- DETECCIÓN DE CLIENTE RECURRENTE (RECOMPRA) ---
 $id_cliente_recompra = isset($_GET['cliente_recompra']) ? intval($_GET['cliente_recompra']) : 0;
 
 $cliente_nombre = "";
-$maquina_interes = "";
+$producto_interes_nombre = "";
 $cliente_rfc = ""; 
 
 if ($id_prospecto > 0) {
@@ -56,11 +77,10 @@ if ($id_prospecto > 0) {
     
     if ($lead_data) {
         $cliente_nombre = $lead_data['nombre'];
-        $maquina_interes = $lead_data['maquina_interes'];
+        $producto_interes_nombre = $lead_data['maquina_interes'];
     }
 } 
 elseif ($id_cliente_recompra > 0) {
-    // CORREGIDO: Cambiamos 'rfc' por 'rfc_receptor' de acuerdo a tu estructura real en la tabla de clientes
     $sql_rec = "SELECT nombre_cliente, rfc_receptor FROM clientes WHERE id_cliente = :id_cliente LIMIT 1";
     $stmt_rec = $pdo->prepare($sql_rec);
     $stmt_rec->execute([':id_cliente' => $id_cliente_recompra]);
@@ -68,7 +88,7 @@ elseif ($id_cliente_recompra > 0) {
 
     if ($client_data) {
         $cliente_nombre = $client_data['nombre_cliente'];
-        $cliente_rfc = $client_data['rfc_receptor'] ?? ''; // CORREGIDO: Mapeo exacto
+        $cliente_rfc = $client_data['rfc_receptor'] ?? '';
     }
 }
 
@@ -77,17 +97,22 @@ if (empty($cliente_nombre)) {
     exit();
 }
 
-// Variables de tiempo calculadas para la sugerencia por defecto de la UI
 $fecha_hoy = date('Y-m-d');
 $fecha_vencimiento_sugerida = date('Y-m-d', strtotime('+15 days'));
 
+$modulo_actual = 'ventas';
 include '../includes/header.php';
 ?>
 
 <div class="row mb-4 align-items-center">
-    <div class="col-md-12">
+    <div class="col-md-7">
         <h1 class="fw-bold text-danger mb-0"><i class="bi bi-file-earmark-pdf"></i> Generador de Cotizaciones</h1>
-        <p class="text-muted small">Configuración formal de precios, especificaciones and condiciones comerciales.</p>
+        <p class="text-muted small">Configuración comercial de máquinas, insumos, saborizantes y refacciones.</p>
+    </div>
+    <div class="col-md-5 text-md-end mt-2 mt-md-0">
+        <a href="leads_crm.php" class="btn btn-secondary py-2 px-3 fw-bold shadow-sm" style="border-radius: 8px;">
+            <i class="bi bi-arrow-left-short fs-5"></i> Regresar a Prospectos
+        </a>
     </div>
 </div>
 
@@ -102,11 +127,10 @@ include '../includes/header.php';
         <div class="row g-3 mb-3">
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold text-dark small">Cliente / Razón Social <span class="text-danger">*</span></label>
-                <input type="text" class="form-control fw-bold bg-light" id="txt_cliente_fiscal" name="cliente" value="<?= htmlspecialchars($cliente_nombre) ?>" placeholder="Se auto-rellenará..." readonly required>
+                <input type="text" class="form-control fw-bold bg-light" id="txt_cliente_fiscal" name="cliente" value="<?= htmlspecialchars($cliente_nombre) ?>" readonly required>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold text-dark small">RFC Receptor</label>
-                <!-- Muestra correctamente la variable $cliente_rfc ya corregida -->
                 <input type="text" class="form-control text-uppercase" name="rfc_receptor" placeholder="XAXX010101000" maxlength="13" value="<?= htmlspecialchars($cliente_rfc) ?>">
             </div>
             <div class="col-12 col-md-4">
@@ -126,19 +150,25 @@ include '../includes/header.php';
             </div>
             <div class="col-12 col-md-3">
                 <label class="form-label fw-semibold text-dark small">Unidad de Medida</label>
-                <input type="text" class="form-control" name="unidad" value="Pieza" readonly style="background-color: #f8f9fa;">
+                <input type="text" class="form-control fw-semibold" name="unidad" id="unidad" value="Pieza" readonly style="background-color: #f8f9fa;">
             </div>
         </div>
 
         <div class="row g-3 mb-3 border-top pt-3">
             <div class="col-12 col-md-6">
-                <label class="form-label fw-semibold text-dark small">Selección del Modelo de Máquina <span class="text-danger">*</span></label>
-                <select class="form-select" id="maquina_select" name="maquina" required>
-                    <option value="" selected disabled>Selecciona un modelo...</option>
-                    <?php foreach ($maquinas_reales as $maquina): ?>
-                        <option value="<?= htmlspecialchars($maquina) ?>" <?= ($maquina_interes === $maquina) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($maquina) ?>
-                        </option>
+                <label class="form-label fw-semibold text-dark small">Selección del Producto (Catálogo DEMEX) <span class="text-danger">*</span></label>
+                <select class="form-select" id="producto_select" name="id_producto" required>
+                    <option value="" selected disabled>Selecciona un producto del catálogo...</option>
+                    <?php foreach ($productos_agrupados as $categoria => $items): ?>
+                        <optgroup label="<?= htmlspecialchars($categoria) ?>">
+                            <?php foreach ($items as $prod): 
+                                $seleccionado = (trim($producto_interes_nombre) !== '' && stripos($prod['nombre'], trim($producto_interes_nombre)) !== false);
+                            ?>
+                                <option value="<?= $prod['id_producto'] ?>" <?= $seleccionado ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($prod['nombre']) ?> (SKU: <?= htmlspecialchars($prod['sku_codigo']) ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </optgroup>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -158,6 +188,7 @@ include '../includes/header.php';
                     <span class="input-group-text bg-white text-muted">$</span>
                     <input type="number" class="form-control fw-bold text-dark" id="precio_base_origen" name="precio_base_origen" step="0.01" required>
                 </div>
+                <small class="text-muted" style="font-size: 0.72rem;">Jalado de la BD según tipo de cliente. Editable.</small>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label fw-semibold text-dark small">Descuento Especial</label>
@@ -184,34 +215,27 @@ include '../includes/header.php';
             <div class="col-12 col-md-6">
                 <label class="form-label fw-bold text-dark small" for="fecha_recordatorio"><i class="bi bi-bell-fill text-warning me-1"></i> Planificar Recordatorio (Semáforo) <span class="text-danger">*</span></label>
                 <input type="date" class="form-control" id="fecha_recordatorio" name="fecha_recordatorio" value="<?= $fecha_hoy ?>" min="<?= $fecha_hoy ?>" required>
-                <small class="text-muted" style="font-size: 0.75rem;">La fecha exacta en la que el sistema activará las alertas comerciales en el dashboard.</small>
+                <small class="text-muted" style="font-size: 0.75rem;">Fecha en la que el sistema activará las alertas comerciales en el panel.</small>
+            </div>
+        </div>
+
+        <!-- ESPECIFICACIONES TÉCNICAS / DESCRIPCIÓN -->
+        <div class="row g-3 mb-4 border-top pt-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold text-dark small">Especificaciones Técnicas / Descripción Incluida</label>
+                <textarea class="form-control small text-muted" id="especificion_cotizada" name="especificion_cotizada" style="background-color: #f8f9fa; height: 180px; resize: none;" placeholder="Se auto-rellenará con la descripción del producto seleccionado..." required></textarea>
             </div>
         </div>
 
         <div class="row g-3 mb-4 border-top pt-3">
-            <div class="col-12 col-md-6">
-                <label class="form-label fw-semibold text-dark small">Especificaciones Técnicas Incluidas</label>
-                <textarea class="form-control small text-muted" id="especificion_cotizada" name="especificion_cotizada" style="background-color: #f8f9fa; height: 320px; resize: none;" placeholder="Se auto-rellenarán según la máquina seleccionada..." required></textarea>
-            </div>
-
-            <div class="col-12 col-md-6 d-flex align-items-center justify-content-center">
-                <div class="p-3 text-center rounded shadow-sm bg-light border w-100" style="min-height: 320px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fafafa;">
-                    <small class="text-muted d-block mb-3 fw-semibold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.8px;">Vista Previa del Equipo</small>
-                    <img id="img_maquina_preview" src="../img/maquinas/default.png" alt="Previsualización" class="img-fluid rounded animate__animated animate__fadeIn" style="max-height: 260px; width: auto; object-fit: contain; display: none;">
-                    <div id="img_placeholder" class="text-muted small py-4"><i class="bi bi-image fs-2 d-block mb-2 text-danger"></i>Selecciona un modelo para ver su imagen</div>
-                </div>
-            </div>
-        </div>
-
-       <div class="row g-3 mb-4 border-top pt-3">
             <div class="col-12">
                 <h6 class="fw-bold text-danger mb-2"><i class="bi bi-bank me-2"></i> Datos Bancarios y Fiscales</h6>
-                <p class="text-muted small mb-3">Establece las condiciones de pago y cuentas oficiales corporativas que se imprimirán de forma visual en la cotización.</p>
+                <p class="text-muted small mb-3">Condiciones de pago y cuentas oficiales corporativas que se imprimirán en la cotización.</p>
             </div>
             
             <div class="col-12 col-md-4">
                 <div class="mb-3">
-                    <label class="form-label fw-semibold text-dark small">Conditions Comerciales Base</label>
+                    <label class="form-label fw-semibold text-dark small">Condiciones Comerciales Base</label>
                     <textarea class="form-control small text-muted" name="condicion_comercial_bancos" rows="2" style="background-color: #f8f9fa; height: 74px; resize: none;" required>Precios de promoción para pagos por transferencia o efectivo.&#10;No incluyen el envío.</textarea>
                 </div>
                 <div class="mb-0">
@@ -269,6 +293,10 @@ include '../includes/header.php';
                         <span>Precio Unitario Base:</span>
                         <span id="lbl_base_unitario">$0.00</span>
                     </div>
+                    <div class="d-flex justify-content-between mb-2 small text-muted">
+                        <span>Unidades a Cotizar:</span>
+                        <span id="lbl_cantidad_desglose" class="fw-bold text-dark">1 Pieza(s)</span>
+                    </div>
                     <div class="d-flex justify-content-between mb-2 small text-danger fw-semibold">
                         <span>Descuento Otorgado:</span>
                         <span id="lbl_descuento_monto">-$0.00</span>
@@ -308,49 +336,54 @@ include '../includes/header.php';
 <?php include '../includes/footer.php'; ?>
 
 <script>
-const matrizPrecios = <?= json_encode($catalogo_precios) ?>;
-
-const especificacionesMaquinas = {
-    'SPICE MT15': "LÍNEA SPICE - HELADO SUAVE (25 LTS x HR)\n• Dimensiones: 75 x 56 x 78 cm | Peso: 95 kg\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.0 KW | Corriente: 110V/60Hz\n• Componentes: Cilindros de 1.8 LT x 2 | Depósito de Alimentación: 5 LT x 2 | Motor: 1.0 HP\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Display y Control de Sistema Automático Digital, Sistema Contador de Helados, Reductor de Velocidad Hidráulico.\n• Refrigeración: Compresor de 1.0 HP (R410A) | Condensador: Aire/Chico R134A | Compresor de Preenfriado de 1/8 HP R134A | Regulador de temperatura de Modo Nocturno.\n• Requisito: Uso recomendado de regulador de corriente de 4 KVA, dejar libre espacio de ventilación de 40 cm a los lados y 15 cm atrás.",
-    'SPICE MV89': "LÍNEA SPICE - HELADO SUAVE (25 LTS x HR)\n• Dimensiones: 75 x 56 x 138 cm | Peso: 120 kg\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.0 KW | Corriente de Entrada: Monofásica 110V/60Hz\n• Componentes: Cilindros de 1.8 L x 2 | Depósito de Alimentación: 5L x 2 | Motor de 1.0 HP\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Display y Control de Sistema Automático Digital, Sistema Contador de Helados.\n• Refrigeración: Compresor de 1.0 HP (R410A) | Condensador de Aire/Mediano R134A | Compresor de Preenfriado de 1/8 HP R134A | Regulador de temperatura de Modo Nocturno.\n• Requisito: Uso recomendado de regulador de corriente de 4 KVA, dejar libre espacio de ventilación de 40 cm a los lados y 15 cm atrás.",
-    'DEMEX 313T': "HELADO SUAVE (33 LTS x HR)\n• Dimensiones: 67 x 55 x 83 CM | Peso Neto: 115 KG\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.7 KW/HR | Corriente de Entrada: Monofásica 110V/60 HZ\n• Componentes: Cilindros de 2 Litros x 2 | Depósito de Alimentación: 5 Litros x 2 | Motor de 1.5 HP | Micromotor 1400 RPM 120 Watts\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático, Sistema Contador de Helados.\n• Refrigeración: Compresor Panasonic 1.0 HP (R410) | Condensador: Aire / Mediano | Compresor de Preenfriado de 1/8 HP R134A | Regulador de Temperatura de Modo Nocturno.\n• Requisito: Uso recomendado de regulador de corriente de 4 KVA, dejar libre espacio de ventilación de 40 cm a los lados y 15 cm atrás.",
-    'DEMEX 313': "HELADO SUAVE (35 LTS x HR)\n• Dimensiones: 67 x 55 x 138 CM | Peso Neto: 144 KG\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.7 KW/HR | Corriente de Entrada: Monofásica 110V/60 HZ\n• Componentes: Cilindros de 2 Litros x 2 | Depósito de Alimentación: 5 Litros x 2 | Motor de 1.5 HP | Micromotor 1400 RPM 120 Watts\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático, Sistema Contador de Helados.\n• Refrigeración: Compresor Panasonic 1.0 HP (R410A) | Condensador: Aire / Grande | Compresor de Preenfriado de 1/8 HP R134A | Regulador de Temperatura de Modo Nocturno.\n• Requisito: Uso recomendado de regulador de corriente de 4 KVA, dejar libre espacio de ventilación de 40 cm a los lados y 15 cm atrás.",
-    'DEMEX 513': "HELADO SUAVE (35 LTS x HR)\n• Dimensiones: 77 x 60 x 146 CM | Peso Neto: 160 KG\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 2.7 KW/HR | Corriente de Entrada: Monofásica 110V/60 HZ\n• Componentes: Cilindros de 2 Litros x 2 | Depósito de Alimentación: 12 Litros x 2 | Motor de 1.5 HP | Micromotor 1400 RPM 120 Watts\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático, Sistema Contador de Helados.\n• Refrigeración: Compresor Panasonic 1.0 HP (R410A) | Condensador: Aire / Extra Grande | Compresor de Preenfriado de 1/8 HP R134A | Regulador de Temperatura de Modo Nocturno.\n• Requisito: Dejar libre espacio de ventilación de 40 cm por ambos lados y 15 cm en la parte trasera.",
-    'DEMEX 613': "HELADO SUAVE (46-52 LTS x HR)\n• Dimensiones: 77 x 60 x 146 CM | Peso Neto: 175 KG\n• Fabricada en Acero Inoxidable\n• Potencia Energética: 3.7 KW/HR | Corriente de Entrada: Bifásica 220V/60HZ\n• Componentes: Cilindros de 2 Litros x 2 | Depósito de Alimentación: 12 Litros x 2 | Motor de 1.5 HP | Micromotor 1400 RPM 120 Watts\n• Características: Modo Nocturno o Preenfriado, Bomba de Aire con Niveles, Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático, Sistema Contador de Helados.\n• Refrigeración: Compresor Panasonic 3.0 HP (R410A) | Condensador: Aire / Extra Grande | Compresor de Enfriado de 1/8 HP R134A | Regulador de Temperatura de Preenfriado de Modo Nocturno.\n• Requisito: Dejar libre espacio de ventilación de 40 cm por ambos lados y 15 cm en la parte trasera.",
-    'DEMEX 125': "HELADO DURO (PRODUCCIÓN CADA 9-11 MIN. TODO EL DÍA)\n• Dimensiones: 70 x 56 x 132 CM | Peso Neto: 180 KG\n• Fabricada en Acero Inoxidable | Batidor de Acero Inoxidable\n• Potencia Energética: 3.4 KW/HR | Corriente de Entrada: Monofásica 110V/60HZ\n• Componentes: Cilindro de 13.5 Litros | Motor de 1.5 HP | Micromotor 110V/60Hz 1450 RPM 150 Watts\n• Características: Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático.\n• Refrigeración: Compresor Panasonic 1.0 HP x 2 (R410A) | Condensador: Aire.\n• Requisito: Se recomienda conectar ampliamente a una pastilla (Brake) de 40 Amperes.",
-    'DEMEX 1020': "HELADO DURO (PRODUCCIÓN CADA 8-10 MIN. TODO EL DÍA)\n• Dimensiones: 70 x 60 x 149 CM | Peso Neto: 200 KG\n• Fabricada en Acero Inoxidable | Batidor de Acero Inoxidable\n• Potencia Energética: 5.1 KW/HR | Corriente de Entrada: Bifásica 220V/60HZ\n• Componentes: Cilindros de 20 Litros | Motor de 2.0 HP | Micromotor 220V/60Hz 1400 RPM 120 Watts\n• Características: Tarjeta Electrónica Programable, Reductor de Velocidad Hidráulico, Display y Control de Sistema Automático Digital, Sistema de Lavado Automático.\n• Refrigeración: Compresores Panasonic 2.3 HP x 2 (R410A) | Condensadores: 2 (1 x Compresor) | Condensación: Aire.\n• Requisito: Se recomienda conectar ampliamente a una pastilla (Brake) de 30 Amperes Bifásica."
-};
+const catalogoProductos = <?= json_encode($productos_js_map) ?>;
 
 function calcularFlujoComercial(triggeredByManualInput = false) {
-    const modeloTexto = $('#maquina_select').val();
+    const idProd = $('#producto_select').val();
     const tipoCliente = $('#tipo_cliente').val();
     const pctDesc = parseFloat($('#descuento_porcentaje').val()) || 0;
     const flete = parseFloat($('#costo_envio').val()) || 0;
     const cantidad = parseInt($('#cantidad').val()) || 1;
     const conIva = $('#toggle_iva').is(':checked');
 
-    if (!modeloTexto || !matrizPrecios[modeloTexto]) {
+    if (!idProd || !catalogoProductos[idProd]) {
         $('#precio_base_origen').val('');
         $('#especificion_cotizada').val('');
+        $('#unidad').val('Pieza');
         $('#lbl_base_unitario, #lbl_descuento_monto, #lbl_flete_monto, #lbl_subtotal, #lbl_iva, #lbl_total').text('$0.00');
-        $('#img_maquina_preview').hide();
-        $('#img_placeholder').show();
+        $('#lbl_cantidad_desglose').text('0 Piezas');
         return;
     }
 
-    let precioBaseOriginalSinIva = parseFloat($('#precio_base_origen').val());
-    
-    if (!triggeredByManualInput || isNaN(precioBaseOriginalSinIva) || precioBaseOriginalSinIva <= 0) {
-        const precioConIvaLista = (tipoCliente === 'Publico General') ? matrizPrecios[modeloTexto]['publico'] : matrizPrecios[modeloTexto]['distribuidor'];
-        precioBaseOriginalSinIva = precioConIvaLista / 1.16;
-        $('#precio_base_origen').val(precioBaseOriginalSinIva.toFixed(2));
+    const prodInfo = catalogoProductos[idProd];
+    let precioBaseOriginal = parseFloat($('#precio_base_origen').val());
+
+    // Actualizar la unidad de medida según la categoría del producto
+    const unidadMedida = prodInfo.unidad || 'Pieza';
+    $('#unidad').val(unidadMedida);
+
+    // Asigna el precio correspondiente de la BD si cambió el producto o tipo de cliente
+    if (!triggeredByManualInput || isNaN(precioBaseOriginal) || precioBaseOriginal <= 0) {
+        precioBaseOriginal = (tipoCliente === 'Publico General') ? prodInfo.precio_publico : prodInfo.precio_distribuidor;
+        $('#precio_base_origen').val(precioBaseOriginal.toFixed(2));
     }
 
-    $('#especificion_cotizada').val(especificacionesMaquinas[modeloTexto] || "");
+    // Carga de ficha técnica o descripción
+    let fichaTexto = prodInfo.descripcion || "";
+    if (prodInfo.atributos && typeof prodInfo.atributos === 'object') {
+        const specs = Object.entries(prodInfo.atributos)
+            .filter(([k]) => k !== 'imagen' && k !== 'foto')
+            .map(([k, v]) => `• ${k.charAt(0).toUpperCase() + k.slice(1)}: ${v}`)
+            .join('\n');
+        if (specs) {
+            fichaTexto += (fichaTexto ? "\n\n" : "") + specs;
+        }
+    }
+    $('#especificion_cotizada').val(fichaTexto);
 
-    const montoDescuentoUnitario = precioBaseOriginalSinIva * (pctDesc / 100);
-    const precioPactadoUnitario = precioBaseOriginalSinIva - montoDescuentoUnitario;
-    
+    // Operaciones matemáticas
+    const montoDescuentoUnitario = precioBaseOriginal * (pctDesc / 100);
+    const precioPactadoUnitario = precioBaseOriginal - montoDescuentoUnitario;
     const subtotalPactadoAcumulado = (precioPactadoUnitario * cantidad) + flete;
     
     const ivaCalculado = conIva ? (subtotalPactadoAcumulado * 0.16) : 0;
@@ -360,38 +393,17 @@ function calcularFlujoComercial(triggeredByManualInput = false) {
 
     const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-    $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginalSinIva));
+    $('#lbl_base_unitario').text(formatoMXN.format(precioBaseOriginal));
+    $('#lbl_cantidad_desglose').text(`${cantidad} ${unidadMedida}(s)`);
     $('#lbl_descuento_monto').text('-' + formatoMXN.format(montoDescuentoUnitario * cantidad));
     $('#lbl_flete_monto').text(formatoMXN.format(flete));
     $('#lbl_subtotal').text(formatoMXN.format(subtotalPactadoAcumulado));
     $('#lbl_iva').text(formatoMXN.format(ivaCalculado));
     $('#lbl_total').text(formatoMXN.format(totalNeto));
-
-    const imagenesMaquinas = {
-        'SPICE MT15': 'spice_mt15.png',
-        'SPICE MV89': 'spice_mv89.png',
-        'DEMEX 313T': 'demex_313t.png',
-        'DEMEX 313':  'demex_313.png',
-        'DEMEX 513':  'demex_513.png',
-        'DEMEX 613':  'demex_613.png',
-        'DEMEX 125':  'demex_125.png',
-        'DEMEX 1020': 'demex_1020.png'
-    };
-
-    if (imagenesMaquinas[modeloTexto]) {
-        $('#img_maquina_preview').attr('src', '../img/maquinas/' + imagenesMaquinas[modeloTexto]).show();
-        $('#img_placeholder').hide();
-    } else {
-        $('#img_maquina_preview').hide();
-        $('#img_placeholder').show();
-    }
 }
 
 $(document).ready(function() {
-    const precioPrevio = parseFloat($('#precio_base_origen').val());
-    const modoInicial = (!isNaN(precioPrevio) && precioPrevio > 0);
-
-    $('#maquina_select, #tipo_cliente').on('change', function() {
+    $('#producto_select, #tipo_cliente').on('change', function() {
         calcularFlujoComercial(false);
     });
     
@@ -410,7 +422,9 @@ $(document).ready(function() {
     $('#fecha_vencimiento').on('change', function() {
         $('#fecha_recordatorio').attr('max', this.value);
     });
-    
-    calcularFlujoComercial(modoInicial);
+
+    if ($('#producto_select').val()) {
+        calcularFlujoComercial(false);
+    }
 });
 </script>

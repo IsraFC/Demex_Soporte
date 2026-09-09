@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: actions/liberar_recompra.php
  * DESCRIPCIÓN: Controlador asíncrono (AJAX JSON) para liberar una recompra comercial.
- * Registra exclusivamente la venta en el histórico mercantil de la empresa.
+ * Registra la venta en el histórico mercantil vinculado al catálogo de productos.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 3.0 (Procesador Exclusivo de Facturación Comercial)
+ * @version 4.0 (Catálogo Universal de Productos)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -32,7 +32,7 @@ if ($id_cotizacion <= 0) {
 try {
     $pdo->beginTransaction();
 
-    // 1. Extraer los montos y datos de la cotización
+    // 1. Extraer montos y datos de la cotización
     $sql_cot = "SELECT * FROM cotizacion WHERE id_cotizacion = :id_cotizacion LIMIT 1";
     $stmt_cot = $pdo->prepare($sql_cot);
     $stmt_cot->execute([':id_cotizacion' => $id_cotizacion]);
@@ -42,26 +42,45 @@ try {
         throw new Exception("La cotización objetivo no existe en el sistema.");
     }
 
-    $id_cliente  = $cot_data['id_cliente'];
-    $id_maquina  = $cot_data['id_maquina'];
-    $cantidad    = intval($cot_data['cantidad']);
-    $precio_neto = floatval($cot_data['precio_pactado']);
-    $costo_envio = floatval($cot_data['costo_envio']);
+    $id_cliente   = $cot_data['id_cliente'];
+    // Soporte para id_producto o fallback a id_maquina
+    $id_producto  = intval($cot_data['id_producto'] ?? ($cot_data['id_maquina'] ?? 0));
+    $cantidad     = intval($cot_data['cantidad']);
+    $precio_neto  = floatval($cot_data['precio_pactado']);
+    $costo_envio  = floatval($cot_data['costo_envio']);
 
     // 2. Cambiar el estatus comercial de la cotización
     $sql_up_cot = "UPDATE cotizacion SET estatus_seguimiento = 'Liberada' WHERE id_cotizacion = :id_cotizacion";
     $stmt_up_cot = $pdo->prepare($sql_up_cot);
     $stmt_up_cot->execute([':id_cotizacion' => $id_cotizacion]);
 
-    // 3. Inyectar exclusivamente al histórico contable mercantil (Ventas)
-    $sql_historial = "INSERT INTO ventas_historial (id_cliente, id_cotizacion_origen, id_maquina, cantidad, precio_pactado_neto, costo_envio, fecha_compra, observaciones_venta, fecha_registro_sistema) 
-                      VALUES (:id_cliente, :id_cotizacion, :id_maquina, :cantidad, :precio_pactado_neto, :costo_envio, :fecha_compra, :observaciones, NOW())";
+    // 3. Detectar nombre de columna en ventas_historial (id_producto o id_maquina)
+    $columna_prod = 'id_producto';
+    try {
+        $checkCol = $pdo->query("SHOW COLUMNS FROM ventas_historial LIKE 'id_producto'")->fetch();
+        if (!$checkCol) {
+            $columna_prod = 'id_maquina';
+        }
+    } catch (\Exception $e) {
+        $columna_prod = 'id_producto';
+    }
+
+    // 4. Inyectar al histórico contable mercantil
+    $sql_historial = "INSERT INTO ventas_historial (
+                        id_cliente, id_cotizacion_origen, {$columna_prod}, 
+                        cantidad, precio_pactado_neto, costo_envio, 
+                        fecha_compra, observaciones_venta, fecha_registro_sistema
+                      ) VALUES (
+                        :id_cliente, :id_cotizacion, :id_producto, 
+                        :cantidad, :precio_pactado_neto, :costo_envio, 
+                        :fecha_compra, :observaciones, NOW()
+                      )";
     
     $stmt_hist = $pdo->prepare($sql_historial);
     $stmt_hist->execute([
         ':id_cliente'           => $id_cliente,
-        ':id_cotizacion'         => $id_cotizacion,
-        ':id_maquina'           => $id_maquina,
+        ':id_cotizacion'        => $id_cotizacion,
+        ':id_producto'          => $id_producto,
         ':cantidad'             => $cantidad,
         ':precio_pactado_neto'  => $precio_neto,
         ':costo_envio'          => $costo_envio,

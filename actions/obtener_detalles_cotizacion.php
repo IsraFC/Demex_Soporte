@@ -2,10 +2,11 @@
 /**
  * ARCHIVO: actions/obtener_detalles_cotizacion.php
  * DESCRIPCIÓN: Retorna la estructura HTML detallada de una cotización para el modal dinámico.
- * MODIFICACIÓN: Adaptado para soportar tanto Leads Nuevos (Formularios) como Clientes Recurrentes (Cartera/Soporte).
+ * MODIFICACIÓN: Adaptado para el catálogo universal 'productos' usando 'c.id_producto'.
+ * Soporta Leads Nuevos (Formularios) y Clientes Recurrentes (Cartera/Soporte).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 2.0 (Nombre de Asesor Fijo Estándar y Apertura de PDF en la misma ventana)
+ * @version 2.1 (Migración a id_producto y Catálogo Central)
  */
 
 // Subir dos niveles para encontrar correctamente la configuración de la BD
@@ -19,14 +20,14 @@ if ($id_cotizacion <= 0) {
 }
 
 try {
-    // Consulta unificada modificada: se remueven columnas de apellidos por unificación de nombre
-    $sql = "SELECT c.*, m.modelo AS maquina_modelo,
+    // Consulta adaptada: c.id_producto e INNER JOIN con la tabla productos
+    $sql = "SELECT c.*, p.nombre AS maquina_modelo,
                    f.nombre AS lead_nombre, f.correo AS lead_correo, f.telefono AS lead_telefono,
                    cl.nombre_cliente, cl.correo AS cliente_correo, cl.telefono AS cliente_telefono
             FROM cotizacion c
-            INNER JOIN maquinaria m ON c.id_maquina = m.id_maquina
-            LEFT JOIN prospectos p ON c.id_prospecto = p.id_prospecto
-            LEFT JOIN formulario f ON p.id_formulario = f.id_formulario
+            INNER JOIN productos p ON c.id_producto = p.id_producto
+            LEFT JOIN prospectos p_lead ON c.id_prospecto = p_lead.id_prospecto
+            LEFT JOIN formulario f ON p_lead.id_formulario = f.id_formulario
             LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
             WHERE c.id_cotizacion = ? LIMIT 1";
             
@@ -83,7 +84,7 @@ try {
                 <table class="table table-sm table-borderless small">
                     <tr>
                         <td class="text-muted fw-bold" width="40%">Cliente:</td>
-                        <td class="fw-bold"><?= htmlspecialchars($nombre_completo) ?></td>
+                        <td class="fw-bold"><?= htmlspecialchars($nombre_completo ?? 'N/D') ?></td>
                     </tr>
                     <tr>
                         <td class="text-muted fw-bold">RFC Receptor:</td>
@@ -102,7 +103,7 @@ try {
                     </tr>
                     <tr>
                         <td class="text-muted fw-bold">Teléfono:</td>
-                        <td><?= htmlspecialchars($telefono_display) ?></td>
+                        <td><?= htmlspecialchars($telefono_display ?? 'N/D') ?></td>
                     </tr>
                     <tr>
                         <td class="text-muted fw-bold">Ubicación Entrega:</td>
@@ -127,7 +128,7 @@ try {
                 
                 <div class="bg-white p-3 border rounded shadow-sm">
                     <div class="d-flex justify-content-between mb-1 small">
-                        <span class="text-muted">Equipo de Interés:</span>
+                        <span class="text-muted">Producto / Equipo:</span>
                         <span class="badge bg-success-subtle text-success fw-bold"><?= htmlspecialchars($cot['maquina_modelo']) ?></span>
                     </div>
                     <div class="d-flex justify-content-between mb-1 small">
