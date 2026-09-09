@@ -4,9 +4,10 @@
  * DESCRIPCIÓN: Panel de Control de Recompras CRM con Vista Anidada Jerárquica.
  * Agrupa las cotizaciones por Cliente Único y despliega sub-tablas con transiciones fluidas.
  * ORDENAMIENTO: Clasificación por Prioridad de Alerta Master (Urgente > Pendiente > En Curso > Cerrado).
+ * MODIFICACIÓN: Migrado a 'id_producto' y unión con la tabla central 'productos'.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 8.5 (Transiciones Fluidas, Badges Master Clientes y Ordenamiento Inteligente)
+ * @version 8.7 (Catálogo Universal de Productos y Corrección de Subconsultas SQL)
  */
 
 $page_title = "Pipeline de Recompras | CRM Ventas";
@@ -17,7 +18,8 @@ require_once '../config/db.php';
  */
 $total_recompras = $pdo->query("SELECT COUNT(*) FROM cotizacion WHERE id_cliente IS NOT NULL")->fetchColumn();
 
-$maquinas_reales = ['DEMEX 313', 'DEMEX 313T', 'DEMEX 513', 'DEMEX 613', 'DEMEX 1020', 'DEMEX 125', 'SPICE MT15', 'SPICE MV89'];
+// Consulta dinámica de todos los productos para el filtro
+$productos_catalogo = $pdo->query("SELECT DISTINCT p.nombre FROM productos p INNER JOIN cotizacion c ON p.id_producto = c.id_producto WHERE c.id_cliente IS NOT NULL ORDER BY p.nombre ASC")->fetchAll(PDO::FETCH_COLUMN);
 
 $modulo_actual = 'ventas';
 include '../includes/header.php';
@@ -39,7 +41,7 @@ include '../includes/header.php';
         color: #6c757d;
     }
     .sub-table-wrapper {
-        display: none; /* Se maneja la animación fluida por JS slideDown */
+        display: none;
     }
     .sub-table-container {
         background-color: #f8f9fa;
@@ -91,9 +93,9 @@ include '../includes/header.php';
         </div>
         <div class="col-auto">
             <select id="filterEquipo" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 240px;">
-                <option value="">Todos los Equipos Cotizados</option>
-                <?php foreach ($maquinas_reales as $maquina): ?>
-                    <option value="<?= htmlspecialchars($maquina) ?>"><?= htmlspecialchars($maquina) ?></option>
+                <option value="">Todos los Productos Cotizados</option>
+                <?php foreach ($productos_catalogo as $prod_nom): ?>
+                    <option value="<?= htmlspecialchars($prod_nom) ?>"><?= htmlspecialchars($prod_nom) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
@@ -116,7 +118,7 @@ include '../includes/header.php';
             <thead class="table-light">
                 <tr class="text-uppercase small fw-bold text-muted">
                     <th style="width: 45px;"></th>
-                    <th>Razon Social / Cliente</th>
+                    <th>Razón Social / Cliente</th>
                     <th>Canal Perfil</th>
                     <th>Contacto Directo</th>
                     <th>Ubicación</th>
@@ -126,7 +128,6 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                // MODIFICADO: Estructura SQL con cálculo del índice de prioridad para ordenación nativa del listado master
                 $sql_clientes = "SELECT c.id_cliente, c.nombre_cliente, c.correo, c.telefono, c.ubicacion, c.tipo_cliente,
                                         COUNT(cot.id_cotizacion) as total_activas,
                                         MIN(CASE 
@@ -145,9 +146,10 @@ include '../includes/header.php';
                 while ($cli = $stmt_cli->fetch(PDO::FETCH_ASSOC)):
                     $id_cliente = $cli['id_cliente'];
 
-                    $sql_sub_cot = "SELECT cot.*, m.modelo AS maquina_nombre 
+                    // CORREGIDO: Adaptado a c.id_producto y tabla productos
+                    $sql_sub_cot = "SELECT cot.*, p.nombre AS maquina_nombre 
                                     FROM cotizacion cot
-                                    INNER JOIN maquinaria m ON cot.id_maquina = m.id_maquina
+                                    INNER JOIN productos p ON cot.id_producto = p.id_producto
                                     WHERE cot.id_cliente = :id_cliente
                                     ORDER BY 
                                         CASE 
@@ -184,7 +186,6 @@ include '../includes/header.php';
                     <td class="small text-secondary">
                         <i class="bi bi-geo-alt-fill text-muted me-1"></i><?= htmlspecialchars(!empty($cli['ubicacion']) ? $cli['ubicacion'] : 'Sin registrar') ?>
                     </td>
-                    <!-- NUEVO: Celda Master de Identificación Comercial Inmediata al Entrar -->
                     <td class="text-center col-master-badge-alerta"></td>
                     <td class="text-center">
                         <span class="badge bg-danger rounded-pill px-3 py-1.5 fw-bold" style="font-size: 0.8rem;"><?= $cli['total_activas'] ?> Docs</span>
@@ -206,11 +207,11 @@ include '../includes/header.php';
             <form id="formConfirmarRecompra">
                 <input type="hidden" id="liberar_id_cotizacion" name="id_cotizacion">
                 <div class="modal-body p-4">
-                    <p class="text-muted small mb-3">La recompra se autorizará de forma inmediata y se inyectará al historial de facturación del cliente en la cartera.</p>
+                    <p class="text-muted small mb-3">La recompra se autorizará de forma inmediata y se inyectará al historial de compras del cliente.</p>
                     <div class="bg-light p-3 rounded mb-3 border">
                         <div class="small"><strong>Cliente:</strong> <span id="lbl_lib_cliente"></span></div>
-                        <div class="small"><strong>Maquinaria:</strong> <span id="lbl_lib_maquina"></span></div>
-                        <div class="small"><strong>Cantidad Total:</strong> <span id="lbl_lib_cantidad"></span> pieza(s)</div>
+                        <div class="small"><strong>Producto / Equipo:</strong> <span id="lbl_lib_maquina"></span></div>
+                        <div class="small"><strong>Cantidad Total:</strong> <span id="lbl_lib_cantidad"></span></div>
                     </div>
                     <div class="mb-0">
                         <label class="form-label fw-semibold text-dark small">Observaciones Especiales del Cierre</label>
@@ -255,7 +256,7 @@ function formatChildRow(d) {
                             <tr style="font-size:0.75rem;">
                                 <th>Fecha Emisión</th>
                                 <th>Fecha Vencimiento</th>
-                                <th>Equipo Cotizado</th>
+                                <th>Producto Cotizado</th>
                                 <th class="text-center">Estatus Seg.</th>
                                 <th class="text-center">Estatus Promoción</th>
                                 <th class="text-center">Semáforo</th>
@@ -265,8 +266,8 @@ function formatChildRow(d) {
                         <tbody>`;
     
     d.forEach(function(cot) {
-        let fEmision = cot.fecha_emision.split('-').reverse().join('/');
-        let fVence = cot.fecha_vencimiento.split('-').reverse().join('/');
+        let fEmision = cot.fecha_emision ? cot.fecha_emision.split('-').reverse().join('/') : 'N/D';
+        let fVence = cot.fecha_vencimiento ? cot.fecha_vencimiento.split('-').reverse().join('/') : 'N/D';
         
         let badgeSeg = `<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600;">${cot.estatus_seguimiento}</span>`;
         if (cot.estatus_seguimiento === 'Liberada') badgeSeg = `<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600;">Liberada</span>`;
@@ -283,14 +284,14 @@ function formatChildRow(d) {
             btnAcciones = `<div class="btn-group btn-group-sm">
                             <button type="button" onclick="verDetallesCotizacion(${cot.id_cotizacion})" class="btn btn-outline-info border-0" title="Ver Detalle"><i class="bi bi-eye-fill fs-5"></i></button>
                             <a href="editar_cotizacion.php?id_cotizacion=${cot.id_cotizacion}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square fs-5"></i></a>
-                            <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperacionRecompra(${cot.id_cotizacion}, '${escape(cot.cliente_nombre || '')}', '${escape(cot.maquina_nombre)}', ${cot.cantidad})" title="Liberar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>
+                            <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperacionRecompra(${cot.id_cotizacion}, '${escape(cot.cliente_nombre || '')}', '${escape(cot.maquina_nombre)}', '${cot.cantidad} ${cot.unidad || 'Pza(s)'}')" title="Liberar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>
                            </div>`;
         }
 
         html += `<tr class="sub-row-cot-item" data-recordatorio="${cot.fecha_recordatorio}" data-status-cotiz="${cot.status_cotizacion}" data-status-seg="${cot.estatus_seguimiento}" data-equipo="${cot.maquina_nombre}">
                     <td class="fw-semibold text-secondary">${fEmision}</td>
                     <td class="text-muted fw-semibold">${fVence}</td>
-                    <td class="fw-bold text-dark">${cot.maquina_nombre} <span class="text-muted small">(${cot.cantidad} Pz)</span></td>
+                    <td class="fw-bold text-dark">${cot.maquina_nombre} <span class="text-muted small">(${cot.cantidad} ${cot.unidad || 'Pza'})</span></td>
                     <td class="text-center">${badgeSeg}</td>
                     <td class="text-center">${badgeCot}</td>
                     <td class="text-center sub-col-semaforo"></td>
@@ -311,8 +312,7 @@ $(document).ready(function() {
         Swal.fire({ title: '¡Cambios Guardados!', text: 'La cotización de recompra y el expediente se actualizaron exitosamente.', icon: 'success', confirmButtonColor: '#198754' });
     }
 
-    // === MODIFICADO: PROCESADOR CENTRAL DE ETIQUETAS MASTER, KPIs Y ALERTAS ===
-function procesarKPIsYAlertas() {
+    function procesarKPIsYAlertas() {
         const d = new Date();
         const hoyStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
         
@@ -342,7 +342,6 @@ function procesarKPIsYAlertas() {
                 }
             });
 
-            // MODIFICADO: Remoción de parpadeos. Etiqueta unificada azul con ícono de info para seguimientos activos
             if (!tieneActivas) {
                 contenedorBadgeMaster.html('<span class="badge px-3 py-1.5" style="background-color: #E8F5E9; color: #2E7D32; font-weight:700;"><i class="bi bi-check-circle-fill me-1"></i> Cerrado</span>');
             } else {
@@ -369,19 +368,17 @@ function procesarKPIsYAlertas() {
         }
     }
 
-    // Configuración nativa del DataTables ordenando rigurosamente por el data-attribute de prioridad
     var table = $('#tablaRecompras').DataTable({
         "language": { "emptyTable": "No hay datos", "info": "Mostrando _START_ a _END_ de _TOTAL_", "paginate": { "next": "Sig.", "previous": "Ant." } },
         "dom": 'rtip', 
         "pageLength": 10, 
         "responsive": true, 
         "ordering": true,
-        "order": [[5, 'asc']] // Ordena automáticamente por la columna del badge de Alerta Prioritaria
+        "order": [[5, 'asc']]
     });
 
     procesarKPIsYAlertas();
 
-    // MODIFICADO: Animación fluida slideDown/slideUp al presionar el acordeón
     $('#tablaRecompras tbody').on('click', 'td.details-control', function () {
         var tr = $(this).closest('tr');
         var row = table.row(tr);
@@ -398,7 +395,6 @@ function procesarKPIsYAlertas() {
             tr.addClass('shown');
             $(this).html('<i class="bi bi-dash-circle-fill"></i>');
             
-            // Animación suave de apertura
             tr.next().find('.sub-table-wrapper').slideDown(250);
             
             const d = new Date();

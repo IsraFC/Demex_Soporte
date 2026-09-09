@@ -3,9 +3,10 @@
  * ARCHIVO: Ventas/generar_pdf_cotizacion.php
  * DESCRIPCIÓN: Compilador y renderizador en formato de Cotización Real Impresible.
  * Integra el panel superior con el diseño y la paleta roja oficial del sistema de DEMEX Central (.btn-danger).
+ * MODIFICACIÓN: Adaptado a la tabla unificada 'productos' y columna 'id_producto'.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 8.3 (RFC Dinámico y Dirección de Entrega Opcional Blindada)
+ * @version 8.4 (Catálogo Central Unificado de Productos)
  */
 
 $page_title = "Propuesta Comercial Generada | CRM Ventas";
@@ -19,9 +20,9 @@ if ($id_cotizacion === 0) {
     exit();
 }
 
-// CORREGIDO: Modificamos la consulta SQL unificada para extraer la información de clientes (Cartera) o leads (Formulario)
+// CORREGIDO: Consulta adaptada a 'c.id_producto' y unión con la tabla 'productos'
 $sql = "SELECT c.*, 
-               m.modelo AS maquina_nombre,
+               p.nombre AS maquina_nombre,
                f.nombre AS lead_cliente_nombre,
                f.telefono AS lead_cliente_telefono,
                f.correo AS lead_cliente_correo,
@@ -30,10 +31,10 @@ $sql = "SELECT c.*,
                cl.correo AS cartera_cliente_correo,
                u.nombre AS asesor_nombre
         FROM cotizacion c
-        INNER JOIN maquinaria m ON c.id_maquina = m.id_maquina
+        INNER JOIN productos p ON c.id_producto = p.id_producto
         INNER JOIN usuarios u ON c.id_usuario = u.id_usuario
-        LEFT JOIN prospectos p ON c.id_prospecto = p.id_prospecto
-        LEFT JOIN formulario f ON p.id_formulario = f.id_formulario
+        LEFT JOIN prospectos pr ON c.id_prospecto = pr.id_prospecto
+        LEFT JOIN formulario f ON pr.id_formulario = f.id_formulario
         LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
         WHERE c.id_cotizacion = :id_cotizacion LIMIT 1";
 
@@ -46,7 +47,7 @@ if (!$cotizacion) {
     exit();
 }
 
-// CORREGIDO: Definición limpia y dinámica del cliente/canal para evitar cruces con tipos de clientes
+// Definición limpia y dinámica del cliente/canal para evitar cruces con tipos de clientes
 $nombre_cliente_final   = !empty($cotizacion['id_cliente']) ? $cotizacion['cartera_cliente_nombre'] : ($cotizacion['lead_cliente_nombre'] ?? 'Público General');
 $telefono_cliente_final = !empty($cotizacion['id_cliente']) ? $cotizacion['cartera_cliente_telefono'] : ($cotizacion['lead_cliente_telefono'] ?? '');
 $correo_cliente_final   = !empty($cotizacion['id_cliente']) ? $cotizacion['cartera_cliente_correo'] : ($cotizacion['lead_cliente_correo'] ?? '');
@@ -57,8 +58,8 @@ if (!empty($cotizacion['id_cliente']) && intval($cotizacion['id_cliente']) > 0) 
     $url_regresar = "recompras_crm.php";
 }
 
-// --- CORREGIDO: PROCESADOR DE DESEMPAQUETADO BANCARIO Y OBSERVACIONES ORIGINALES ---
-$notas_limpias = $cotizacion['notes']; // Se inicializa con el valor crudo de la celda de la base de datos
+// PROCESADOR DE DESEMPAQUETADO BANCARIO Y OBSERVACIONES ORIGINALES
+$notas_limpias = $cotizacion['notes'];
 $bancos = [
     'condicion' => "Precios de promoción para pagos por transferencia o efectivo.\nNo incluyen el envío.",
     'b1_nom'    => "BANORTE", 'b1_cta' => "0434571284", 'b1_clabe' => "072 650 00434571284 8",
@@ -68,7 +69,7 @@ $incluye_iva = 1;
 
 if (strpos($cotizacion['notes'], '|||') !== false) {
     $partes_notas = explode('|||', $cotizacion['notes']);
-    $notas_limpias = trim($partes_notas[0]); // Captura de forma limpia el texto de las observaciones escritas a mano
+    $notas_limpias = trim($partes_notas[0]);
     $json_desencriptado = json_decode(base64_decode($partes_notas[1]), true);
     if ($json_desencriptado) {
         $bancos = $json_desencriptado;
@@ -165,7 +166,7 @@ include '../includes/header.php';
                 <p class="text-muted small m-0" style="font-size: 0.82rem; line-height: 1.4;">
                     RFC: DEM160408QF8 | Tel. 2228892629<br>
                     San Andrés Cholula, Puebla, México<br>
-                    Atendido por: <span class="fw-semibold text-dark">Nadia Torres Fernández</span>
+                    Atendido por: <span class="fw-semibold text-dark"><?= htmlspecialchars($cotizacion['asesor_nombre'] ?? 'Nadia Torres Fernández') ?></span>
                 </p>
             </div>
             <div class="col-5 text-end">
@@ -187,14 +188,12 @@ include '../includes/header.php';
                         <span class="text-dark fw-bold fs-6"><?= htmlspecialchars($nombre_cliente_final) ?></span>
                         
                         <small class="text-muted d-block mt-2">Dirección de Destino:</small>
-                        <!-- MODIFICADO: Valida si la dirección de entrega existe, si no, coloca un texto corporativo gris -->
                         <span class="text-muted d-block shadow-none" style="line-height: 1.3;">
                             <?= !empty($cotizacion['direccion_entrega']) ? nl2br(htmlspecialchars($cotizacion['direccion_entrega'])) : '<em>Dirección por confirmar / Entrega en Sucursal Central</em>' ?>
                         </span>
                     </div>
                     <div class="col-5">
                         <small class="text-muted d-block">RFC Receptor:</small>
-                        <!-- MODIFICADO: Valida si el RFC viene vacío de la base de datos para inyectar el genérico de inmediato -->
                         <span class="text-uppercase text-dark fw-bold d-block mb-2">
                             <?= !empty($cotizacion['rfc_receptor']) ? htmlspecialchars($cotizacion['rfc_receptor']) : 'XAXX010101000' ?>
                         </span>
@@ -229,7 +228,7 @@ include '../includes/header.php';
                                 <td class="text-center fw-bold fs-6"><?= $cotizacion['cantidad'] ?>.00</td>
                                 <td class="text-center text-uppercase text-muted" style="font-size: 0.78rem;"><?= htmlspecialchars($cotizacion['unidad']) ?></td>
                                 <td>
-                                    <strong class="text-dark text-uppercase">MÁQUINA DE HELADO MODELO <?= htmlspecialchars($cotizacion['maquina_nombre']) ?></strong>
+                                    <strong class="text-dark text-uppercase"><?= htmlspecialchars($cotizacion['maquina_nombre']) ?></strong>
                                     <div class="text-muted mt-1" style="font-size: 0.78rem; white-space: pre-wrap; line-height: 1.4;"><?= htmlspecialchars($cotizacion['especificacion_cotizada']) ?></div>
                                 </td>
                                 <td class="text-end fw-semibold">$<?= number_format($cotizacion['precio_pactado'], 2, '.', ',') ?></td>
@@ -243,11 +242,11 @@ include '../includes/header.php';
 
         <div class="row align-items-start mt-2">
             <div class="col-7" style="font-size: 0.72rem; color: #555; line-height: 1.4;">
-                <div class="fw-bold text-uppercase text-secondary mb-1" style="letter-spacing: 0.3px;">Condiciones Comercial y de Garantía:</div>
+                <div class="fw-bold text-uppercase text-secondary mb-1" style="letter-spacing: 0.3px;">Condiciones Comerciales y de Garantía:</div>
                 <div class="p-2 border rounded bg-light mb-2 text-muted">
                     <ul class="mb-0 ps-3">
                         <?= implode('', array_map(function($linea) { return "<li>" . htmlspecialchars(trim($linea)) . "</li>"; }, explode("\n", $bancos['condicion']))) ?>
-                        <li>Garantía de 1 año integral contra cualquier defectuación de fábrica (excepto consumibles).</li>
+                        <li>Garantía de 1 año integral contra cualquier defecto de fábrica (excepto consumibles).</li>
                         <li>Garantía de 2 años en componentes críticos (compresor principal y tarjetas electrónicas).</li>
                         <li>Precios cotizados en Pesos Mexicanos ($ MXN) con vigencia ligada a la fecha de vencimiento.</li>
                     </ul>

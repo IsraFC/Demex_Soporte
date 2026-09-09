@@ -2,7 +2,7 @@
 /**
  * @file actions/procesar_cotizacion.php
  * @package Portal_Demex
- * @version 7.2 - Soporte para RFC Opcional Genérico Automatizado y Dirección Abierta
+ * @version 8.0 - Soporte Universal para Productos (Máquinas, Insumos, Saborizantes y Refacciones)
  * @brief Controlador encargado de registrar las cotizaciones y avanzar el estatus comercial del prospecto o cliente.
  */
 
@@ -25,7 +25,15 @@ $id_usuario = $_SESSION['id_usuario'] ?? 1;
 $id_prospecto        = isset($_POST['id_prospecto']) ? intval($_POST['id_prospecto']) : 0;
 $id_cliente_recompra = isset($_POST['id_cliente_recompra']) ? intval($_POST['id_cliente_recompra']) : 0;
 
-// MODIFICADO: Si el RFC viene vacío del formulario, asignamos rigurosamente el genérico oficial por seguridad
+// Captura de producto directo del nuevo catálogo universal
+$id_producto         = isset($_POST['id_producto']) ? intval($_POST['id_producto']) : 0;
+
+if ($id_producto <= 0) {
+    header("Location: ../Ventas/cotizaciones.php?error=producto_no_seleccionado");
+    exit();
+}
+
+// Si el RFC viene vacío del formulario, asignamos el genérico oficial
 $rfc_limpio          = strtoupper(trim($_POST['rfc_receptor'] ?? ''));
 $rfc_receptor        = !empty($rfc_limpio) ? $rfc_limpio : 'XAXX010101000';
 
@@ -41,18 +49,17 @@ $descuento_porcentaje= isset($_POST['descuento_porcentaje']) ? intval($_POST['de
 $costo_envio         = floatval($_POST['costo_envio'] ?? 0);
 
 $especificacion_cotizada = trim($_POST['especificion_cotizada'] ?? '');
-$notes_original          = trim($_POST['notas'] ?? '');
-$maquina_seleccionada    = trim($_POST['maquina'] ?? '');
+$notes_original          = trim($_POST['notes'] ?? ($_POST['notas'] ?? ''));
 
 // Captura del Toggle Button del IVA (1 = Incluye, 0 = Exento)
 $incluye_iva_switch      = isset($_POST['incluye_iva']) ? intval($_POST['incluye_iva']) : 1;
 
-// NUEVO: Captura de Fechas Manuales desde el Formulario
+// Captura de Fechas Manuales desde el Formulario
 $fecha_emision        = date('Y-m-d');
 $fecha_vencimiento    = !empty($_POST['fecha_vencimiento']) ? trim($_POST['fecha_vencimiento']) : date('Y-m-d', strtotime('+15 days'));
 $fecha_recordatorio   = !empty($_POST['fecha_recordatorio']) ? trim($_POST['fecha_recordatorio']) : $fecha_emision;
 
-// --- CAPTURA Y EMPAQUETADO DE BLOQUE BANCARIO EDITABLE ---
+// CAPTURA Y EMPAQUETADO DE BLOQUE BANCARIO EDITABLE
 $condicion_comercial = trim($_POST['condicion_comercial_bancos'] ?? 'Precios de promoción para pagos por transferencia o efectivo.');
 $banco_1_nombre      = trim($_POST['banco_1_nombre'] ?? 'BANORTE');
 $banco_1_cuenta      = trim($_POST['banco_1_cuenta'] ?? '0434571284');
@@ -62,7 +69,7 @@ $banco_2_cuenta      = trim($_POST['banco_2_cuenta'] ?? '7213722');
 $banco_2_clabe       = trim($_POST['banco_2_clabe'] ?? '002 650 70107213722 1');
 $banco_2_sucursal    = trim($_POST['banco_2_sucursal'] ?? '7010');
 
-// Agregamos el parámetro 'incluye_iva' al paquete estructurado JSON para que persista en el PDF
+// Agregamos el parámetro 'incluye_iva' al paquete estructurado JSON para el PDF
 $datos_bancos_empaquetados = base64_encode(json_encode([
     'condicion'   => $condicion_comercial,
     'b1_nom'      => $banco_1_nombre,
@@ -75,38 +82,34 @@ $datos_bancos_empaquetados = base64_encode(json_encode([
     'incluye_iva' => $incluye_iva_switch
 ]));
 
-// Unimos las notas de la vendedora con el bloque de bancos usando un divisor único (|||)
+// Unimos las notas con el bloque de bancos usando el delimitador corporativo (|||)
 $notes_final = $notes_original . "|||" . $datos_bancos_empaquetados;
 
-// RECÁLCULO MATEMÁTICO COMERCIAL DEL LADO DEL SERVIDOR (Respetando el precio base enviado)
+// RECÁLCULO MATEMÁTICO COMERCIAL DEL LADO DEL SERVIDOR
 $monto_descuento_unitario = $precio_base_origen * ($descuento_porcentaje / 100);
 $precio_pactado_unitario  = $precio_base_origen - $monto_descuento_unitario;
 
-// NUEVO: Validación dinámica de estatus en base a la fecha actual real
+// Validación dinámica de estatus en base a la fecha actual real
 $status_cotizacion = ($fecha_vencimiento < $fecha_emision) ? 'Vencida' : 'Vigente';
 
 try {
-    // 1. Buscamos el ID de la maquinaria
-    $sql_maquina = "SELECT id_maquina FROM maquinaria WHERE modelo = ? LIMIT 1";
-    $stmt_maq = $pdo->prepare($sql_maquina);
-    $stmt_maq->execute([$maquina_seleccionada]);
-    $maquinaria_row = $stmt_maq->fetch();
-
-    if (!$maquinaria_row) {
-        header("Location: ../Ventas/cotizaciones.php?error=maquina_no_existente");
+    // 1. Verificamos que el producto exista en el catálogo general
+    $sql_check = "SELECT id_producto FROM productos WHERE id_producto = ? LIMIT 1";
+    $stmt_check = $pdo->prepare($sql_check);
+    $stmt_check->execute([$id_producto]);
+    if (!$stmt_check->fetch()) {
+        header("Location: ../Ventas/cotizaciones.php?error=producto_no_existente");
         exit();
     }
 
-    $id_maquina_real = $maquinaria_row['id_maquina'];
-
-    // 2. Insertamos la cotización incluyendo los nuevos campos relacionales de control de tiempos
+    // 2. Insertamos la cotización usando la columna renombrada 'id_producto'
     $sql_cotizacion = "INSERT INTO cotizacion (
-        id_prospecto, id_cliente, id_maquina, id_usuario, rfc_receptor, 
+        id_prospecto, id_cliente, id_producto, id_usuario, rfc_receptor, 
         direccion_entrega, sucursal, cantidad, unidad, tipo_cliente, 
         precio_base_origen, precio_pactado, especificacion_cotizada, 
         costo_envio, notes, fecha_emision, fecha_vencimiento, status_cotizacion, fecha_recordatorio
     ) VALUES (
-        :id_prospecto, :id_cliente, :id_maquina, :id_usuario, :rfc_receptor, 
+        :id_prospecto, :id_cliente, :id_producto, :id_usuario, :rfc_receptor, 
         :direccion_entrega, :sucursal, :cantidad, :unidad, :tipo_cliente, 
         :precio_base_origen, :precio_pactado, :especificacion_cotizada, 
         :costo_envio, :notes, :fecha_emision, :fecha_vencimiento, :status_cotizacion, :fecha_recordatorio
@@ -117,7 +120,7 @@ try {
     $stmt->execute([
         ':id_prospecto'            => $id_prospecto > 0 ? $id_prospecto : null,
         ':id_cliente'              => $id_cliente_recompra > 0 ? $id_cliente_recompra : null,
-        ':id_maquina'              => $id_maquina_real,
+        ':id_producto'             => $id_producto,
         ':id_usuario'              => $id_usuario,
         ':rfc_receptor'            => $rfc_receptor,
         ':direccion_entrega'       => $direccion_entrega,
@@ -138,7 +141,7 @@ try {
 
     $id_cotizacion_generada = $pdo->lastInsertId();
 
-    // 3. CONTROL DE FLUJO DE REDIRECCIÓN INTELIGENTE (Redirección unificada directa a visualizador PDF)
+    // 3. Control de flujo y avance del estatus comercial del prospecto
     if ($id_cliente_recompra > 0 && $id_prospecto <= 0) {
         header("Location: ../Ventas/generar_pdf_cotizacion.php?id_cotizacion=" . $id_cotizacion_generada . "&msg=success_recompra");
         exit();

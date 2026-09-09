@@ -2,10 +2,11 @@
 /**
  * ARCHIVO: Ventas/historial_compras.php
  * DESCRIPCIÓN: Historial Cronológico y Expediente de Adquisiciones por Cliente.
- * Centraliza las métricas de inversión (CLV del cliente), cantidad de equipos y el desglose de documentos.
+ * Centraliza las métricas de inversión (CLV del cliente), cantidad de productos y el desglose de documentos.
+ * MODIFICACIÓN: Botón de retorno incorporado en el encabezado principal y catálogo universal de productos.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.0 (Vista Independiente Dedicada)
+ * @version 2.1 (Botón de Regreso Superior Incorporado)
  */
 
 $page_title = "Historial de Compras | CRM Ventas";
@@ -19,7 +20,7 @@ if ($id_cliente <= 0) {
     exit();
 }
 
-// 1. Obtener los datos base del cliente (Estructura limpia sin apellidos)
+// 1. Obtener datos base del cliente
 $sql_cliente = "SELECT * FROM clientes WHERE id_cliente = :id_cliente LIMIT 1";
 $stmt_cli = $pdo->prepare($sql_cliente);
 $stmt_cli->execute([':id_cliente' => $id_cliente]);
@@ -30,8 +31,9 @@ if (!$cliente) {
     exit();
 }
 
-// 2. KPIs individuales del Cliente (Equipos comprados e Inversión acumulada)
-$sql_kpis = "SELECT COUNT(id_venta) AS total_equipos,
+// 2. KPIs individuales del Cliente (Unidades compradas e Inversión acumulada)
+$sql_kpis = "SELECT COUNT(id_venta) AS total_adquisiciones,
+                    IFNULL(SUM(cantidad), 0) AS total_piezas,
                     IFNULL(SUM(precio_pactado_neto * cantidad), 0) AS inversion_total,
                     MAX(fecha_compra) AS ultima_fecha
              FROM ventas_historial 
@@ -39,6 +41,17 @@ $sql_kpis = "SELECT COUNT(id_venta) AS total_equipos,
 $stmt_kpis = $pdo->prepare($sql_kpis);
 $stmt_kpis->execute([':id_cliente' => $id_cliente]);
 $kpis = $stmt_kpis->fetch(PDO::FETCH_ASSOC);
+
+// 3. Detectar nombre de columna de producto en ventas_historial
+$col_prod = 'id_producto';
+try {
+    $checkCol = $pdo->query("SHOW COLUMNS FROM ventas_historial LIKE 'id_producto'")->fetch();
+    if (!$checkCol) {
+        $col_prod = 'id_maquina';
+    }
+} catch (\Exception $e) {
+    $col_prod = 'id_producto';
+}
 
 $modulo_actual = 'ventas';
 include '../includes/header.php';
@@ -51,16 +64,20 @@ include '../includes/header.php';
         <h4 class="fw-bold text-dark mt-2 mb-0"><?= htmlspecialchars($cliente['nombre_cliente']) ?></h4>
         <span class="badge text-uppercase text-muted border bg-white mt-1"><?= htmlspecialchars($cliente['tipo_cliente'] ?? 'Publico General') ?></span>
     </div>
-    <div class="col-md-6 text-md-end">
-        <div class="d-inline-flex gap-2">
+    <div class="col-md-6 text-md-end mt-3 mt-md-0">
+        <div class="d-inline-flex align-items-center gap-2">
             <div class="p-2 bg-white shadow-sm rounded border-start border-danger border-4 text-center" style="min-width: 120px;">
-                <span class="d-block fw-bold fs-5 text-danger"><?= $kpis['total_equipos'] ?></span>
-                <small class="text-muted" style="font-size: 0.65rem; font-weight: 700;">EQUIPOS ADQUIRIDOS</small>
+                <span class="d-block fw-bold fs-5 text-danger"><?= $kpis['total_piezas'] ?></span>
+                <small class="text-muted" style="font-size: 0.65rem; font-weight: 700;">ARTÍCULOS ADQUIRIDOS</small>
             </div>
             <div class="p-2 bg-white shadow-sm rounded border-start border-success border-4 text-center" style="min-width: 160px;">
                 <span class="d-block fw-bold fs-5 text-success">$<?= number_format($kpis['inversion_total'], 2, '.', ',') ?></span>
                 <small class="text-muted" style="font-size: 0.65rem; font-weight: 700;">INVERSIÓN TOTAL</small>
             </div>
+            <!-- BOTÓN SUPERIOR DE REGRESO -->
+            <a href="clientes.php" class="btn btn-secondary py-2 px-3 fw-bold shadow-sm d-inline-flex align-items-center" style="border-radius: 8px;">
+                <i class="bi bi-arrow-left-short fs-5"></i> Regresar a Clientes
+            </a>
         </div>
     </div>
 </div>
@@ -94,7 +111,8 @@ include '../includes/header.php';
             <thead class="table-light">
                 <tr class="text-uppercase small fw-bold text-muted">
                     <th>Fecha Compra</th>
-                    <th>Modelo de Máquina</th>
+                    <th>Producto / Equipo</th>
+                    <th>Categoría</th>
                     <th class="text-center">Cant.</th>
                     <th class="text-end">P. Unitario Neto</th>
                     <th class="text-end">Importe Neto</th>
@@ -104,10 +122,14 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                // Consultamos el historial unido con la tabla de maquinaria
-                $sql_list = "SELECT vh.*, m.modelo AS modelo_nombre 
+                // Consultamos el historial unido con la tabla unificada productos
+                $sql_list = "SELECT vh.*, 
+                                    p.nombre AS producto_nombre, 
+                                    p.sku_codigo,
+                                    cp.nombre_categoria
                              FROM ventas_historial vh
-                             LEFT JOIN maquinaria m ON vh.id_maquina = m.id_maquina
+                             LEFT JOIN productos p ON vh.{$col_prod} = p.id_producto
+                             LEFT JOIN categorias_productos cp ON p.id_categoria = cp.id_categoria
                              WHERE vh.id_cliente = :id_cliente
                              ORDER BY vh.fecha_compra DESC, vh.id_venta DESC";
                 
@@ -116,18 +138,29 @@ include '../includes/header.php';
                 
                 while ($item = $stmt_list->fetch(PDO::FETCH_ASSOC)):
                     $subtotal_neto = $item['precio_pactado_neto'] * $item['cantidad'];
+                    $nombre_item = !empty($item['producto_nombre']) ? $item['producto_nombre'] : 'Producto no identificado';
                 ?>
                 <tr>
                     <td class="small fw-semibold text-secondary"><?= date('d/m/Y', strtotime($item['fecha_compra'])) ?></td>
-                    <td><span class="badge bg-light text-dark border fw-bold"><?= htmlspecialchars($item['modelo_nombre']) ?></span></td>
+                    <td>
+                        <span class="fw-bold text-dark"><?= htmlspecialchars($nombre_item) ?></span>
+                        <?php if (!empty($item['sku_codigo'])): ?>
+                            <br><small class="text-muted" style="font-size:0.7rem;">SKU: <?= htmlspecialchars($item['sku_codigo']) ?></small>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-muted border px-2 py-1" style="font-size: 0.72rem;">
+                            <?= htmlspecialchars($item['nombre_categoria'] ?? 'General') ?>
+                        </span>
+                    </td>
                     <td class="text-center fw-bold"><?= $item['cantidad'] ?></td>
                     <td class="text-end fw-semibold">$<?= number_format($item['precio_pactado_neto'], 2, '.', ',') ?></td>
                     <td class="text-end fw-bold text-dark">$<?= number_format($subtotal_neto, 2, '.', ',') ?></td>
-                    <td class="small text-muted" style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= htmlspecialchars($item['observaciones_venta']) ?>">
-                        <?= htmlspecialchars($item['observaciones_venta']) ?>
+                    <td class="small text-muted" style="max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= htmlspecialchars($item['observaciones_venta'] ?? '') ?>">
+                        <?= htmlspecialchars($item['observaciones_venta'] ?? '') ?>
                     </td>
                     <td class="text-center">
-                        <?php if ($item['id_cotizacion_origen'] > 0): ?>
+                        <?php if (!empty($item['id_cotizacion_origen']) && $item['id_cotizacion_origen'] > 0): ?>
                             <a href="generar_pdf_cotizacion.php?id_cotizacion=<?= $item['id_cotizacion_origen'] ?>" class="btn btn-sm btn-outline-danger border-0" title="Ver Cotización Original">
                                 <i class="bi bi-file-pdf fs-5"></i>
                             </a>
