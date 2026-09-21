@@ -3,10 +3,10 @@
  * ARCHIVO: Ventas/clientes.php
  * DESCRIPCIÓN: Panel de Control y Dashboard Simplificado de Clientes CRM.
  * Gestiona el catálogo unificado de clientes, perfiles e integración a recompras comerciales.
- * MODIFICACIÓN: Migrado al catálogo central 'productos' y blindaje de errores fatales en servidor.
+ * MODIFICACIÓN: Sintaxis corregida y soporte para catálogo universal 'productos'.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 2.0 (Catálogo Universal y Compatibilidad Linux)
+ * @version 2.1 (Sintaxis blindada y compatibilidad)
  */
 
 $page_title = "Catálogo Histórico de Clientes | CRM Ventas";
@@ -39,7 +39,7 @@ try {
     // Productos para el filtro
     $productos_catalogo =$pdo->query("SELECT DISTINCT nombre FROM productos ORDER BY nombre ASC")->fetchAll(PDO::FETCH_COLUMN) ?: [];
 } catch (\Exception $e) {
-    // Evitar que una falla en KPIs suspenda la vista completa
+    // Evita romper la vista si la tabla productos o ventas_historial tiene variaciones
 }
 
 $modulo_actual = 'ventas';
@@ -128,7 +128,7 @@ include '../includes/header.php';
             <tbody>
                 <?php
                 try {
-                    // Consulta adaptada: une con 'productos' usando la columna detectada ($col_prod)$sql = "SELECT c.*, 
+                    $sql = "SELECT c.*, 
                                    hist.ultima_fecha_compra, 
                                    COALESCE(hist.equipos_ventas, 0) AS total_equipos, 
                                    hist.maquinas_ventas AS maquinas_compradas
@@ -139,7 +139,7 @@ include '../includes/header.php';
                                        COUNT(vh.id_venta) AS equipos_ventas,
                                        GROUP_CONCAT(DISTINCT p.nombre SEPARATOR ' | ') AS maquinas_ventas
                                 FROM ventas_historial vh
-                                LEFT JOIN productos p ON vh.{$col_prod} = p.id_producto
+                                LEFT JOIN productos p ON vh." . $col_prod . " = p.id_producto
                                 GROUP BY vh.id_cliente
                             ) hist ON c.id_cliente = hist.id_cliente
                             ORDER BY 
