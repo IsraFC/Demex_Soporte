@@ -3,23 +3,44 @@
  * ARCHIVO: Ventas/clientes.php
  * DESCRIPCIÓN: Panel de Control y Dashboard Simplificado de Clientes CRM.
  * Gestiona el catálogo unificado de clientes, perfiles e integración a recompras comerciales.
+ * MODIFICACIÓN: Sintaxis corregida y soporte para catálogo universal 'productos'.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 1.6 (Botón de eliminación asíncrona de cliente incorporado)
+ * @version 2.1 (Sintaxis blindada y compatibilidad)
  */
 
 $page_title = "Catálogo Histórico de Clientes | CRM Ventas";
 require_once '../config/db.php';
 
+// Detectar nombre de columna de producto en ventas_historial
+$col_prod = 'id_producto';
+try {
+    $checkCol =$pdo->query("SHOW COLUMNS FROM ventas_historial LIKE 'id_producto'")->fetch();
+    if (!$checkCol) {$col_prod = 'id_maquina';
+    }
+} catch (\Exception $e) {$col_prod = 'id_producto';
+}
+
 /**
  * KPIs - INDICADORES CLAVE DE RENDIMIENTO (PHP Base Unificado)
  */
-$total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn();
-$clv_total = $pdo->query("SELECT IFNULL(SUM(precio_pactado_neto * cantidad), 0) FROM ventas_historial")->fetchColumn();
-$clientes_frecuentes = $pdo->query("SELECT COUNT(*) FROM (SELECT id_cliente FROM ventas_historial GROUP BY id_cliente HAVING COUNT(id_venta) >= 6) AS frecuentes")->fetchColumn();
-$clientes_riesgo = $pdo->query("SELECT COUNT(DISTINCT id_cliente) FROM clientes WHERE id_cliente NOT IN (SELECT DISTINCT id_cliente FROM ventas_historial WHERE fecha_compra >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH))")->fetchColumn();
+$total_clientes = 0;
+$clv_total = 0;
+$clientes_frecuentes = 0;
+$clientes_riesgo = 0;
+$productos_catalogo = [];
 
-$maquinas_reales = ['DEMEX 313', 'DEMEX 313T', 'DEMEX 513', 'DEMEX 613', 'DEMEX 1020', 'DEMEX 125', 'SPICE MT15', 'SPICE MV89'];
+try {
+    $total_clientes =$pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn() ?: 0;
+    $clv_total =$pdo->query("SELECT IFNULL(SUM(precio_pactado_neto * cantidad), 0) FROM ventas_historial")->fetchColumn() ?: 0;
+    $clientes_frecuentes =$pdo->query("SELECT COUNT(*) FROM (SELECT id_cliente FROM ventas_historial GROUP BY id_cliente HAVING COUNT(id_venta) >= 6) AS frecuentes")->fetchColumn() ?: 0;
+    $clientes_riesgo =$pdo->query("SELECT COUNT(DISTINCT id_cliente) FROM clientes WHERE id_cliente NOT IN (SELECT DISTINCT id_cliente FROM ventas_historial WHERE fecha_compra >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH))")->fetchColumn() ?: 0;
+
+    // Productos para el filtro
+    $productos_catalogo =$pdo->query("SELECT DISTINCT nombre FROM productos ORDER BY nombre ASC")->fetchAll(PDO::FETCH_COLUMN) ?: [];
+} catch (\Exception $e) {
+    // Evita romper la vista si la tabla productos o ventas_historial tiene variaciones
+}
 
 $modulo_actual = 'ventas';
 include '../includes/header.php';
@@ -69,9 +90,9 @@ include '../includes/header.php';
         </div>
         <div class="col-auto">
             <select id="filterMaquina" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 200px;">
-                <option value="">Máquina Comprada</option>
-                <?php foreach ($maquinas_reales as $maquina): ?>
-                    <option value="<?= htmlspecialchars($maquina) ?>"><?= htmlspecialchars($maquina) ?></option>
+                <option value="">Producto Comprado</option>
+                <?php foreach ($productos_catalogo as$prod): ?>
+                    <option value="<?= htmlspecialchars($prod) ?>"><?= htmlspecialchars($prod) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
@@ -106,25 +127,28 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                $sql = "SELECT c.*, hist.ultima_fecha_compra, COALESCE(hist.equipos_ventas, 0) AS total_equipos, hist.maquinas_ventas AS maquinas_compradas
-                        FROM clientes c
-                        LEFT JOIN (
-                            SELECT id_cliente,
-                                   MAX(fecha_compra) AS ultima_fecha_compra,
-                                   COUNT(id_venta) AS equipos_ventas,
-                                   GROUP_CONCAT(DISTINCT m.modelo SEPARATOR ' | ') AS maquinas_ventas
-                            FROM ventas_historial vh
-                            LEFT JOIN maquinaria m ON vh.id_maquina = m.id_maquina
-                            GROUP BY id_cliente
-                        ) hist ON c.id_cliente = hist.id_cliente
-                        ORDER BY 
-                            CASE WHEN c.id_prospecto_origen IS NOT NULL THEN 1 ELSE 2 END ASC,
-                            hist.ultima_fecha_compra DESC, 
-                            c.id_cliente DESC";
-                
-                $stmt = $pdo->query($sql);
-                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)):
-                    $fecha_compra_formato = !empty($row['ultima_fecha_compra']) ? date('d/m/Y', strtotime($row['ultima_fecha_compra'])) : '<em>Ninguna</em>';
+                try {
+                    $sql = "SELECT c.*, 
+                                   hist.ultima_fecha_compra, 
+                                   COALESCE(hist.equipos_ventas, 0) AS total_equipos, 
+                                   hist.maquinas_ventas AS maquinas_compradas
+                            FROM clientes c
+                            LEFT JOIN (
+                                SELECT vh.id_cliente,
+                                       MAX(vh.fecha_compra) AS ultima_fecha_compra,
+                                       COUNT(vh.id_venta) AS equipos_ventas,
+                                       GROUP_CONCAT(DISTINCT p.nombre SEPARATOR ' | ') AS maquinas_ventas
+                                FROM ventas_historial vh
+                                LEFT JOIN productos p ON vh." . $col_prod . " = p.id_producto
+                                GROUP BY vh.id_cliente
+                            ) hist ON c.id_cliente = hist.id_cliente
+                            ORDER BY 
+                                CASE WHEN c.id_prospecto_origen IS NOT NULL THEN 1 ELSE 2 END ASC,
+                                hist.ultima_fecha_compra DESC, 
+                                c.id_cliente DESC";
+                    
+                    $stmt = $pdo->query($sql);
+                    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)):$fecha_compra_formato = !empty($row['ultima_fecha_compra']) ? date('d/m/Y', strtotime($row['ultima_fecha_compra'])) : '<em>Ninguna</em>';
                 ?>
                 <tr id="fila-cliente-<?= $row['id_cliente'] ?>" class="row-cliente-item" data-equipos-count="<?= $row['total_equipos'] ?>">
                     <td>
@@ -144,7 +168,7 @@ include '../includes/header.php';
                         <?php endif; ?>
                     </td>
                     <td class="small text-secondary">
-                        <i class="bi bi-geo-alt-fill text-muted me-1"></i><?= htmlspecialchars(!empty($row['ubicacion']) ? $row['ubicacion'] : 'Sin registrar') ?>
+                        <i class="bi bi-geo-alt-fill text-muted me-1"></i><?= htmlspecialchars(!empty($row['ubicacion']) ?$row['ubicacion'] : 'Sin registrar') ?>
                     </td>
                     <td class="text-center small fw-semibold text-secondary"><?= $fecha_compra_formato ?></td>
                     
@@ -152,7 +176,7 @@ include '../includes/header.php';
                     
                     <td class="text-center">
                         <div class="btn-group btn-group-sm">
-                            <a href="historial_compras.php?id_cliente=<?= $row['id_cliente'] ?>" class="btn btn-outline-dark border-0" title="Ver Historial de Flota e Inversiones">
+                            <a href="historial_compras.php?id_cliente=<?= $row['id_cliente'] ?>" class="btn btn-outline-dark border-0" title="Ver Historial de Compras">
                                 <i class="bi bi-clock-history fs-5"></i>
                             </a>
                             <a href="editar_cliente.php?id_cliente=<?= $row['id_cliente'] ?>" class="btn btn-outline-warning border-0" title="Editar Información del Cliente">
@@ -161,14 +185,18 @@ include '../includes/header.php';
                             <a href="cotizaciones.php?id_prospecto=0&cliente_recompra=<?= $row['id_cliente'] ?>" class="btn btn-outline-primary border-0" title="Generar Nueva Cotización (Recompra)">
                                 <i class="bi bi-file-earmark-plus-fill fs-5"></i>
                             </a>
-                            <!-- BOTÓN ELIMINAR CLIENTE -->
                             <button type="button" class="btn btn-outline-danger border-0 btn-eliminar-cliente" data-id="<?= $row['id_cliente'] ?>" data-nombre="<?= htmlspecialchars($row['nombre_cliente']) ?>" title="Eliminar Cliente">
                                 <i class="bi bi-trash fs-5"></i>
                             </button>
                         </div>
                     </td>
                 </tr>
-                <?php endwhile; ?>
+                <?php 
+                    endwhile; 
+                } catch (\Exception $e) {
+                    echo '<tr><td colspan="5" class="text-center py-4"><div class="alert alert-danger mb-0"><i class="bi bi-exclamation-octagon-fill me-2"></i>Error al consultar clientes: ' . htmlspecialchars($e->getMessage()) . '</div></td></tr>';
+                }
+                ?>
             </tbody>
         </table>
     </div>
@@ -182,7 +210,7 @@ $(document).ready(function() {
         "language": { "emptyTable": "No hay datos", "info": "Mostrando _START_ a _END_ de _TOTAL_", "infoEmpty": "0 registros", "infoFiltered": "(filtrado de _MAX_)", "zeroRecords": "Sin coincidencias", "paginate": { "next": "Sig.", "previous": "Ant." } },
         "dom": 'rtip', 
         "pageLength": 10, 
-        "responsive": true,
+        "responsive": true, 
         "ordering": false 
     });
 
@@ -202,7 +230,6 @@ $(document).ready(function() {
         table.draw();
     });
 
-    // === EVENTO ASÍNCRONO DE ELIMINACIÓN DE CLIENTE ===
     $(document).on('click', '.btn-eliminar-cliente', function() {
         const idCliente = $(this).data('id');
         const nombreCliente = $(this).data('nombre');
