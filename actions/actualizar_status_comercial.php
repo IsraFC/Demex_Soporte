@@ -2,10 +2,10 @@
 /**
  * ARCHIVO: actions/actualizar_status_comercial.php
  * DESCRIPCIÓN: Procesador asíncrono para actualizar el estatus comercial y migrar el prospecto ganado a cartera de clientes.
- * MODIFICACIÓN: Migrado al catálogo universal 'productos' y compatibilidad dinámica con ventas_historial.
+ * MODIFICACIÓN: Compatible con cotizaciones unitarias y multipartida (Bases y Saborizantes en ventas_historial).
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 4.0 (Catálogo Universal de Productos)
+ * @version 9.0 (Migración Multipartida a Historial de Ventas)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -63,22 +63,17 @@ try {
         $datos_venta = $stmt_cot->fetch(PDO::FETCH_ASSOC);
 
         if ($datos_venta) {
-            $nombre_cliente    = $datos_venta['nombre'];
-            $telefono          = $datos_venta['telefono'];
-            $correo            = $datos_venta['correo'];
-            $ubicacion         = $datos_venta['estado_region'];
-            
-            // Detección universal del producto (id_producto o fallback a id_maquina)
-            $id_producto       = intval($datos_venta['id_producto'] ?? ($datos_venta['id_maquina'] ?? 0));
-            $cantidad          = intval($datos_venta['cantidad'] ?? 1);
-            $precio_pactado    = floatval($datos_venta['precio_pactado'] ?? 0);
-            $costo_envio       = floatval($datos_venta['costo_envio'] ?? 0);
-            $id_cotizacion     = intval($datos_venta['id_cotizacion']);
-            $tipo_cliente      = !empty($datos_venta['tipo_cliente']) ? $datos_venta['tipo_cliente'] : 'Publico General';
-            
-            // Sanitización estricta de RFC
-            $rfc_crudo         = strtoupper(trim($datos_venta['rfc_receptor'] ?? ''));
-            $rfc_receptor      = !empty($rfc_crudo) ? $rfc_crudo : 'XAXX010101000';
+            $nombre_cliente = $datos_venta['nombre'];
+            $telefono       = $datos_venta['telefono'];
+            $correo         = $datos_venta['correo'];
+            $ubicacion      = $datos_venta['estado_region'];
+            $id_cotizacion  = intval($datos_venta['id_cotizacion']);
+            $tipo_cliente   = !empty($datos_venta['tipo_cliente']) ? $datos_venta['tipo_cliente'] : 'Publico General';
+            $costo_envio    = floatval($datos_venta['costo_envio'] ?? 0);
+
+            // Sanitización de RFC
+            $rfc_crudo    = strtoupper(trim($datos_venta['rfc_receptor'] ?? ''));
+            $rfc_receptor = !empty($rfc_crudo) ? $rfc_crudo : 'XAXX010101000';
 
             // 3. Verificar si el cliente ya existe en el catálogo unificado
             $sql_check = "SELECT id_cliente FROM clientes WHERE nombre_cliente = ? LIMIT 1";
@@ -109,7 +104,12 @@ try {
                 $col_prod = 'id_producto';
             }
 
-            // 5. Inyectar en el historial de ventas
+            // 5. Consultar partidas asociadas en cotizacion_detalle
+            $sql_det = "SELECT * FROM cotizacion_detalle WHERE id_cotizacion = ? ORDER BY id_detalle ASC";
+            $stmt_det = $pdo->prepare($sql_det);
+            $stmt_det->execute([$id_cotizacion]);
+            $partidas_detalle = $stmt_det->fetchAll(PDO::FETCH_ASSOC);
+
             $sql_historial = "INSERT INTO ventas_historial (
                                 id_cliente, id_cotizacion_origen, {$col_prod}, 
                                 cantidad, precio_pactado_neto, costo_envio, 
@@ -119,18 +119,43 @@ try {
                                 :cantidad, :precio_pactado_neto, :costo_envio, 
                                 :fecha_compra, :observaciones, NOW()
                               )";
-            
             $stmt_hist = $pdo->prepare($sql_historial);
-            $stmt_hist->execute([
-                ':id_cliente'           => $id_cliente,
-                ':id_cotizacion'        => $id_cotizacion,
-                ':id_producto'          => $id_producto,
-                ':cantidad'             => $cantidad,
-                ':precio_pactado_neto'  => $precio_pactado,
-                ':costo_envio'          => $costo_envio,
-                ':fecha_compra'         => $fecha_compra,
-                ':observaciones'        => $observaciones
-            ]);
+
+            if (!empty($partidas_detalle)) {
+                // Cotización Multipartida: inyecta cada insumo/partida individual
+                $flete_asignado = false;
+                foreach ($partidas_detalle as $partida) {
+                    // El flete se carga a la primera partida para no duplicar el monto logístico
+                    $flete_item = !$flete_asignado ? $costo_envio : 0.00;
+                    $flete_asignado = true;
+
+                    $stmt_hist->execute([
+                        ':id_cliente'           => $id_cliente,
+                        ':id_cotizacion'        => $id_cotizacion,
+                        ':id_producto'          => $partida['id_producto'],
+                        ':cantidad'             => $partida['cantidad'],
+                        ':precio_pactado_neto'  => $partida['precio_pactado'],
+                        ':costo_envio'          => $flete_item,
+                        ':fecha_compra'         => $fecha_compra,
+                        ':observaciones'        => $observaciones
+                    ]);
+                }
+            } else {
+                // Cotización Clásica de Maquinaria única
+                $id_prod_unico = intval($datos_venta['id_producto'] ?? ($datos_venta['id_maquina'] ?? 0));
+                if ($id_prod_unico > 0) {
+                    $stmt_hist->execute([
+                        ':id_cliente'           => $id_cliente,
+                        ':id_cotizacion'        => $id_cotizacion,
+                        ':id_producto'          => $id_prod_unico,
+                        ':cantidad'             => intval($datos_venta['cantidad'] ?? 1),
+                        ':precio_pactado_neto'  => floatval($datos_venta['precio_pactado'] ?? 0),
+                        ':costo_envio'          => $costo_envio,
+                        ':fecha_compra'         => $fecha_compra,
+                        ':observaciones'        => $observaciones
+                    ]);
+                }
+            }
         }
     }
 
