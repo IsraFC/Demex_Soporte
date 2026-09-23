@@ -3,25 +3,29 @@
  * ARCHIVO: leads_crm.php
  * DESCRIPCIÓN: Panel de Control de Leads CRM con Vista Anidada Jerárquica.
  * Agrupa las cotizaciones por Prospecto Único y despliega sub-tablas con transiciones fluidas.
- * ORDENAMIENTO: Clasificación por Prioridad de Alerta Master (Urgente > Pendiente > En Curso > Venta Cerrada).
- * MODIFICACIÓN: Soporte para Maquinaria y Lotes de Materia Prima en subtablas y catálogo universal.
+ * COMPATIBILIDAD: Corregida cláusula GROUP BY para MySQL 8.0 (Ubuntu Server) y ONLY_FULL_GROUP_BY.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 9.5 (Vista Anidada Jerárquica Master-Detail en Prospectos)
+ * @version 9.6 (Compatibilidad Estricta MySQL 8.0)
  */
 
 $page_title = "Panel de Seguimiento | CRM Ventas";
 require_once '../config/db.php';
 
-$total_leads = $pdo->query("SELECT COUNT(*) FROM prospectos")->fetchColumn() ?: 0;
+try {
+    $total_leads = $pdo->query("SELECT COUNT(*) FROM prospectos")->fetchColumn() ?: 0;
 
-$sql_filtro_prod = "SELECT DISTINCT p.nombre 
-                    FROM productos p 
-                    INNER JOIN categorias_productos c ON p.id_categoria = c.id_categoria 
-                    WHERE c.id_categoria != 4 
-                      AND c.nombre_categoria NOT LIKE '%refaccion%'
-                    ORDER BY c.id_categoria ASC, p.nombre ASC";
-$productos_filtro = $pdo->query($sql_filtro_prod)->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $sql_filtro_prod = "SELECT DISTINCT p.nombre 
+                        FROM productos p 
+                        INNER JOIN categorias_productos c ON p.id_categoria = c.id_categoria 
+                        WHERE c.id_categoria != 4 
+                          AND c.nombre_categoria NOT LIKE '%refaccion%'
+                        ORDER BY c.id_categoria ASC, p.nombre ASC";
+    $productos_filtro = $pdo->query($sql_filtro_prod)->fetchAll(PDO::FETCH_COLUMN) ?: [];
+} catch (\Exception $e) {
+    $total_leads = 0;
+    $productos_filtro = [];
+}
 
 $modulo_actual = 'ventas';
 include '../includes/header.php';
@@ -158,13 +162,11 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                // Consulta agrupada por prospecto único
+                // Consulta compatible con MySQL 8.0 (se elimina el GROUP BY problemático con subquery para contar)
                 $sql_prospectos = "SELECT f.*, p.id_prospecto, p.status_comercial, p.fecha_ultimo_contacto,
-                                          COUNT(c.id_cotizacion) AS total_cotizaciones
+                                          (SELECT COUNT(*) FROM cotizacion c WHERE c.id_prospecto = p.id_prospecto) AS total_cotizaciones
                                    FROM prospectos p
                                    INNER JOIN formulario f ON p.id_formulario = f.id_formulario
-                                   LEFT JOIN cotizacion c ON p.id_prospecto = c.id_prospecto
-                                   GROUP BY p.id_prospecto
                                    ORDER BY f.fecha_registro DESC";
                 
                 $stmt_p = $pdo->query($sql_prospectos);
@@ -333,7 +335,6 @@ include '../includes/header.php';
 <script>
 const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-// Renderizado de la Subtabla Anidada de Cotizaciones
 function formatChildRow(d, idProspecto) {
     if (!d || d.length === 0) {
         return `<div class="sub-table-wrapper p-3 bg-light text-center small text-muted">
@@ -427,7 +428,6 @@ $(document).ready(function() {
             }
 
             if (subCots.length === 0) {
-                // Sin cotización: evalúa inactividad desde primer contacto
                 const fConsulta = new Date(fechaConsultaStr);
                 const diasInactivo = Math.floor((ahora - fConsulta.getTime()) / (1000 * 60 * 60 * 24));
                 if (diasInactivo > 5) {
@@ -440,7 +440,6 @@ $(document).ready(function() {
                     countEnCurso++;
                 }
             } else {
-                // Con cotizaciones: toma la alerta de mayor severidad
                 let esUrgente = false;
                 let esAtencion = false;
 
@@ -502,7 +501,6 @@ $(document).ready(function() {
         "drawCallback": function() { procesarKPIsYSemaforos(); }
     });
 
-    // Control del botón [+] para desplegar subtabla
     $('#tablaLeads tbody').on('click', 'td.details-control', function () {
         var tr = $(this).closest('tr');
         var row = table.row(tr);
@@ -558,7 +556,6 @@ $(document).ready(function() {
 
     procesarKPIsYSemaforos();
 
-    // Confirmación y Cierre de Venta
     $('#formConfirmarVenta').on('submit', function(e) {
         e.preventDefault();
         const idProspecto = $('#liberar_id_prospecto').val();
