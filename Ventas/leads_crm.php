@@ -3,10 +3,10 @@
  * ARCHIVO: leads_crm.php
  * DESCRIPCIÓN: Panel de Control de Leads CRM con Vista Anidada Jerárquica.
  * Agrupa las cotizaciones por Prospecto Único y despliega sub-tablas con transiciones fluidas.
- * COMPATIBILIDAD: Corregida cláusula GROUP BY para MySQL 8.0 (Ubuntu Server) y ONLY_FULL_GROUP_BY.
+ * MODIFICACIÓN: Botón de escudo en tabla master en azul institucional y modal corporativo en rojo oficial DEMEX.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 9.6 (Compatibilidad Estricta MySQL 8.0)
+ * @version 10.2 (Escudo Master Azul + Modal Rojo DEMEX)
  */
 
 $page_title = "Panel de Seguimiento | CRM Ventas";
@@ -162,18 +162,19 @@ include '../includes/header.php';
             </thead>
             <tbody>
                 <?php
-                // Consulta compatible con MySQL 8.0 (se elimina el GROUP BY problemático con subquery para contar)
                 $sql_prospectos = "SELECT f.*, p.id_prospecto, p.status_comercial, p.fecha_ultimo_contacto,
+                                          cl.id_cliente, cl.nombre_cliente,
                                           (SELECT COUNT(*) FROM cotizacion c WHERE c.id_prospecto = p.id_prospecto) AS total_cotizaciones
                                    FROM prospectos p
                                    INNER JOIN formulario f ON p.id_formulario = f.id_formulario
+                                   LEFT JOIN clientes cl ON p.id_prospecto = cl.id_prospecto_origen
                                    ORDER BY f.fecha_registro DESC";
                 
                 $stmt_p = $pdo->query($sql_prospectos);
                 while ($lead = $stmt_p->fetch(PDO::FETCH_ASSOC)):
                     $id_prospecto = (int)$lead['id_prospecto'];
+                    $id_cliente_asociado = (int)($lead['id_cliente'] ?? 0);
 
-                    // Consulta de todas las cotizaciones de este prospecto
                     $sql_sub = "SELECT c.*, 
                                        prod.nombre AS producto_nombre,
                                        (SELECT COUNT(*) FROM cotizacion_detalle cd WHERE cd.id_cotizacion = c.id_cotizacion) AS total_partidas
@@ -185,8 +186,13 @@ include '../includes/header.php';
                     $stmt_sub->execute([':id_prospecto' => $id_prospecto]);
                     $sub_cotizaciones = $stmt_sub->fetchAll(PDO::FETCH_ASSOC);
 
-                    // Formatear nombres legibles de cada cotización en subtabla
+                    $tiene_cotizaciones = count($sub_cotizaciones) > 0;
+                    $tiene_pendientes = false;
                     foreach ($sub_cotizaciones as &$sc) {
+                        if ($sc['estatus_seguimiento'] !== 'Liberada' && $sc['estatus_seguimiento'] !== 'Cancelada') {
+                            $tiene_pendientes = true;
+                        }
+
                         if (!empty($sc['producto_nombre'])) {
                             $sc['item_descripcion'] = $sc['producto_nombre'];
                         } elseif ((int)$sc['total_partidas'] > 0) {
@@ -196,6 +202,12 @@ include '../includes/header.php';
                         }
                     }
                     unset($sc);
+
+                    if (!$tiene_cotizaciones) {
+                        $tiene_pendientes = true;
+                    }
+
+                    $esta_totalmente_cerrado = ($lead['status_comercial'] === 'Venta Cerrada' && !$tiene_pendientes);
 
                     $interes_crudo = trim($lead['maquina_interes'] ?? '');
                     $badge_interes = '';
@@ -268,10 +280,20 @@ include '../includes/header.php';
 
                     <td class="text-center col-semaforo-master"></td>
 
+                    <!-- ACCIÓN MASTER: Botón de escudo en azul institucional si ya está cerrado; botón rojo para cotizar si tiene pendientes -->
                     <td class="text-center">
-                        <a href="cotizaciones.php?id_prospecto=<?= $id_prospecto ?>" class="btn btn-sm btn-outline-danger border-0" title="Nueva Cotización">
-                            <i class="bi bi-file-earmark-plus-fill fs-5"></i>
-                        </a>
+                        <?php if ($esta_totalmente_cerrado): ?>
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-primary border-0" 
+                                    onclick="abrirModalProspectoCerrado(<?= $id_cliente_asociado ?>, '<?= htmlspecialchars(addslashes($lead['nombre'])) ?>', '<?= date('d/m/Y', strtotime($lead['fecha_registro'])) ?>')" 
+                                    title="Prospecto en Cartera de Clientes">
+                                <i class="bi bi-shield-fill-check fs-5 text-primary"></i>
+                            </button>
+                        <?php else: ?>
+                            <a href="cotizaciones.php?id_prospecto=<?= $id_prospecto ?>" class="btn btn-sm btn-outline-danger border-0" title="Nueva Cotización">
+                                <i class="bi bi-file-earmark-plus-fill fs-5"></i>
+                            </a>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endwhile; ?>
@@ -312,7 +334,7 @@ include '../includes/header.php';
     </div>
 </div>
 
-<!-- MODAL VISUALIZAR DETALLES -->
+<!-- MODAL VISUALIZAR DETALLES TÉCNICOS -->
 <div class="modal fade" id="modalDetallesCotizacion" tabindex="-1" aria-hidden="true" data-bs-backdrop="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content shadow border-0" style="border-radius: 12px;">
@@ -330,12 +352,90 @@ include '../includes/header.php';
     </div>
 </div>
 
+<!-- MODAL INFORMATIVO CORPORATIVO: PALETA ROJA OFICIAL DEMEX -->
+<div class="modal fade" id="modalProspectoYaCliente" tabindex="-1" aria-hidden="true" data-bs-backdrop="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden; border-top: 4px solid #dc3545 !important;">
+            
+            <!-- HEADER SOBRIO Y LIMPIO -->
+            <div class="modal-header bg-white border-bottom px-4 py-3 align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="d-inline-flex align-items-center justify-content-center bg-danger-subtle text-danger rounded-circle" style="width: 32px; height: 32px;">
+                        <i class="bi bi-shield-check fs-6"></i>
+                    </span>
+                    <div>
+                        <h6 class="modal-title fw-bold text-dark mb-0" style="font-size: 0.95rem; letter-spacing: -0.2px;">Expediente en Cartera Activa</h6>
+                        <small class="text-muted" style="font-size: 0.72rem;">Control de Ciclo de Vida del Prospecto DEMEX</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="font-size: 0.8rem;"></button>
+            </div>
+
+            <!-- BODY EJECUTIVO EN ROJO INSTITUCIONAL -->
+            <div class="modal-body p-4 bg-white">
+                <!-- TARJETA PRINCIPAL DEL CLIENTE -->
+                <div class="d-flex align-items-center gap-3 p-3 rounded-3 border bg-light bg-opacity-50 mb-3">
+                    <div class="d-flex align-items-center justify-content-center bg-danger text-white rounded-3 shadow-sm flex-shrink-0" style="width: 52px; height: 52px; background: linear-gradient(135deg, #dc3545 0%, #a71d2a 100%) !important;">
+                        <i class="bi bi-person-badge fs-3"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-1 mb-1">
+                            <h5 class="fw-bold text-dark mb-0 text-truncate" id="lbl_modal_nombre_cliente" style="font-size: 1.15rem; letter-spacing: -0.3px;">Nombre del Prospecto</h5>
+                        </div>
+                        <div class="d-inline-flex align-items-center gap-1.5 px-2 py-0.5 rounded-pill bg-danger-subtle text-danger border border-danger-subtle" style="font-size: 0.72rem; font-weight: 600;">
+                            <i class="bi bi-patch-check-fill"></i> Cliente Formal DEMEX Central
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CALLOUT INFORMATIVO DE PROCESO CONCLUIDO -->
+                <div class="p-3 rounded-3 mb-3" style="background-color: #fff8f8; border: 1px solid #fed7d7; border-left: 4px solid #dc3545;">
+                    <div class="d-flex gap-2">
+                        <i class="bi bi-info-circle-fill text-danger flex-shrink-0 mt-0.5" style="font-size: 0.95rem;"></i>
+                        <div>
+                            <span class="d-block fw-bold text-dark mb-1" style="font-size: 0.82rem;">Ciclo de Prospección Concluido</span>
+                            <p class="text-secondary small mb-0" style="font-size: 0.78rem; line-height: 1.45;">
+                                Este registro completó satisfactoriamente su proceso comercial y ya no admite cotizaciones iniciales en esta bandeja. Para generar nuevas propuestas, acuerdos o recompras, gestione su cuenta desde el padrón general de clientes.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- METADATOS TÉCNICOS EN TABLERO -->
+                <div class="row g-2 p-2.5 rounded-3 bg-light border" style="font-size: 0.75rem;">
+                    <div class="col-6 border-end pe-2">
+                        <span class="text-muted text-uppercase d-block fw-semibold" style="font-size: 0.65rem; letter-spacing: 0.5px;">Fecha Registro Lead:</span>
+                        <span class="text-dark fw-bold" id="lbl_modal_fecha_registro">--/--/----</span>
+                    </div>
+                    <div class="col-6 ps-3">
+                        <span class="text-muted text-uppercase d-block fw-semibold" style="font-size: 0.65rem; letter-spacing: 0.5px;">Estatus Operativo:</span>
+                        <span class="fw-bold text-success d-inline-flex align-items-center gap-1">
+                            <span class="rounded-circle bg-success d-inline-block" style="width: 7px; height: 7px;"></span> En Cartera / Sin Pendientes
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FOOTER CORPORATIVO CON BOTÓN ROJO DEMEX Y ENLACE A CLIENTES.PHP -->
+            <div class="modal-footer bg-light bg-opacity-75 border-top px-4 py-3 d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-secondary btn-sm px-3 fw-semibold shadow-sm" data-bs-dismiss="modal" style="border-radius: 7px; font-size: 0.82rem;">
+                    <i class="bi bi-arrow-left me-1"></i> Cerrar
+                </button>
+                <a href="clientes.php" id="btn_modal_ir_clientes" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-1.5" style="border-radius: 7px; font-size: 0.84rem; background-color: #dc3545; border-color: #dc3545;">
+                    <i class="bi bi-people-fill"></i> Ir al Módulo de Clientes <i class="bi bi-arrow-right small ms-0.5"></i>
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
 <?php include '../includes/footer.php'; ?>
 
 <script>
 const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-function formatChildRow(d, idProspecto) {
+function formatChildRow(d, idProspecto, statusVentaLead) {
     if (!d || d.length === 0) {
         return `<div class="sub-table-wrapper p-3 bg-light text-center small text-muted">
                     <i class="bi bi-info-circle me-1"></i> Este prospecto aún no tiene cotizaciones generadas.
@@ -366,15 +466,24 @@ function formatChildRow(d, idProspecto) {
             `<span class="badge bg-danger animate__animated animate__flash animate__infinite" style="font-size:0.7rem;"><i class="bi bi-calendar-x"></i> Vencida</span>` : 
             `<span class="badge bg-success" style="font-size:0.7rem;"><i class="bi bi-calendar-check"></i> Vigente</span>`;
 
-        let btnAcciones = `
-            <div class="btn-group btn-group-sm">
-                <button type="button" onclick="verDetallesCotizacion(${cot.id_cotizacion})" class="btn btn-outline-info border-0" title="Ver Detalle"><i class="bi bi-eye-fill fs-5"></i></button>
-                <a href="editar_cotizacion.php?id_cotizacion=${cot.id_cotizacion}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square fs-5"></i></a>
-                <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperationComercial(${idProspecto})" title="Cerrar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>
-            </div>
-        `;
+        let yaCerrada = (cot.estatus_seguimiento === 'Liberada' || cot.estatus_seguimiento === 'Cancelada' || statusVentaLead === 'Venta Cerrada');
 
-        html += `<tr class="sub-row-cot-item" data-recordatorio="${cot.fecha_recordatorio}" data-status-cotiz="${cot.status_cotizacion}">
+        let btnAcciones = '';
+        if (yaCerrada) {
+            btnAcciones = `
+                <button type="button" onclick="verDetallesCotizacion(${cot.id_cotizacion})" class="btn btn-outline-info border-0" title="Ver Detalle"><i class="bi bi-eye-fill fs-5"></i></button>
+            `;
+        } else {
+            btnAcciones = `
+                <div class="btn-group btn-group-sm">
+                    <button type="button" onclick="verDetallesCotizacion(${cot.id_cotizacion})" class="btn btn-outline-info border-0" title="Ver Detalle"><i class="bi bi-eye-fill fs-5"></i></button>
+                    <a href="editar_cotizacion.php?id_cotizacion=${cot.id_cotizacion}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square fs-5"></i></a>
+                    <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperationComercial(${idProspecto})" title="Cerrar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>
+                </div>
+            `;
+        }
+
+        html += `<tr class="sub-row-cot-item" data-recordatorio="${cot.fecha_recordatorio}" data-status-cotiz="${cot.status_cotizacion}" data-estatus-seg="${cot.estatus_seguimiento}">
                     <td class="fw-bold text-danger">#${cot.id_cotizacion} <small class="text-secondary fw-normal d-block" style="font-size:0.72rem;">${fEmision}</small></td>
                     <td class="text-muted fw-semibold">${fVence}</td>
                     <td class="fw-bold text-dark">${cot.item_descripcion}</td>
@@ -390,6 +499,19 @@ function formatChildRow(d, idProspecto) {
           </div>
          </div>`;
     return html;
+}
+
+function abrirModalProspectoCerrado(idCliente, nombreCliente, fechaRegistro) {
+    $('#lbl_modal_nombre_cliente').text(nombreCliente);
+    $('#lbl_modal_fecha_registro').text(fechaRegistro);
+    
+    let urlDestino = 'clientes.php';
+    if (nombreCliente && nombreCliente.trim() !== '') {
+        urlDestino += '?search=' + encodeURIComponent(nombreCliente.trim());
+    }
+    $('#btn_modal_ir_clientes').attr('href', urlDestino);
+    
+    $('#modalProspectoYaCliente').appendTo("body").modal('show');
 }
 
 $(document).ready(function() {
@@ -444,6 +566,8 @@ $(document).ready(function() {
                 let esAtencion = false;
 
                 subCots.forEach(function(cot) {
+                    if (cot.estatus_seguimiento === 'Liberada' || cot.estatus_seguimiento === 'Cancelada') return;
+
                     if (cot.status_cotizacion === 'Vencida' || (cot.fecha_recordatorio && cot.fecha_recordatorio < hoyStr)) {
                         esUrgente = true;
                     } else if (cot.fecha_recordatorio === hoyStr) {
@@ -514,9 +638,10 @@ $(document).ready(function() {
         } else {
             var childDataStr = tr.attr('data-child-data');
             var idProspecto = tr.attr('data-id-prospecto');
+            var statusVentaLead = tr.attr('data-status-venta');
             var childData = childDataStr ? JSON.parse(childDataStr) : [];
 
-            row.child(formatChildRow(childData, idProspecto)).show();
+            row.child(formatChildRow(childData, idProspecto, statusVentaLead)).show();
             tr.addClass('shown');
             $(this).html('<i class="bi bi-dash-circle-fill"></i>');
             
@@ -527,9 +652,14 @@ $(document).ready(function() {
             tr.next().find('.sub-row-cot-item').each(function() {
                 const rec = $(this).data('recordatorio');
                 const statC = $(this).data('status-cotiz');
+                const statSeg = $(this).data('estatus-seg');
                 const cellSem = $(this).find('.sub-col-semaforo');
 
-                if (statC === 'Vencida' || (rec && rec < hoyStr)) {
+                if (statSeg === 'Liberada' || statusVentaLead === 'Venta Cerrada') {
+                    cellSem.html('<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.35rem 0.55rem;"><i class="bi bi-check-circle-fill me-1"></i> Al día</span>');
+                } else if (statSeg === 'Cancelada') {
+                    cellSem.html('<span class="badge bg-secondary">Cancelada</span>');
+                } else if (statC === 'Vencida' || (rec && rec < hoyStr)) {
                     cellSem.html('<span class="badge bg-danger animate__animated animate__headShake animate__infinite"><i class="bi bi-fire"></i> Urgente</span>');
                 } else if (rec === hoyStr) {
                     cellSem.html('<span class="badge bg-warning text-dark animate__animated animate__flash animate__infinite"><i class="bi bi-exclamation-triangle-fill"></i> Atención</span>');
