@@ -2,18 +2,20 @@
 /**
  * ARCHIVO: Ventas/registrar_prospecto.php
  * DESCRIPCIÓN: Registro manual de prospectos sin alterar el esquema de la BD.
- * Inserta en 'formulario' y enlaza directamente en 'prospectos'.
+ * Captura directa y limpia del Tipo de Interés Comercial (Maquinaria o Materia Prima).
+ * La especificación granular de modelos o insumos se define al emitir la cotización.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
+ * @version 3.0 (Selector Directo de Interés Comercial)
  */
 
 $page_title = "Registrar Prospecto | CRM Ventas";
 require_once '../config/db.php';
 
 $mensaje_error = '';
-$maquinas_reales = ['DEMEX 313', 'DEMEX 313T', 'DEMEX 513', 'DEMEX 613', 'DEMEX 1020', 'DEMEX 125', 'SPICE MT15', 'SPICE MV89'];
 $canales_disponibles = ['Página Web', 'Facebook', 'YouTube', 'WhatsApp', 'Recomendación'];
 
+// Procesamiento del Formulario
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nombre          = trim($_POST['nombre'] ?? '');
     $telefono        = trim($_POST['telefono'] ?? '');
@@ -23,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $maquina_interes = trim($_POST['maquina_interes'] ?? '');
     $canal_origen    = trim($_POST['canal_origen'] ?? 'Página Web');
 
-    if (empty($nombre) || empty($telefono) || empty($estado_region) || empty($maquina_interes)) {
+    if (empty($nombre) or empty($telefono) or empty($estado_region) or empty($maquina_interes)) {
         $mensaje_error = "Todos los campos marcados con (*) son obligatorios.";
     } else {
         try {
@@ -89,7 +91,7 @@ include '../includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <form action="registrar_prospecto.php" method="POST">
+            <form action="registrar_prospecto.php" method="POST" id="formRegistroProspecto">
                 <div class="row g-3">
 
                     <div class="col-md-6">
@@ -118,22 +120,23 @@ include '../includes/header.php';
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Equipo de Interés <span class="text-danger">*</span></label>
-                        <select name="maquina_interes" class="form-select" required>
-                            <option value="">Selecciona un equipo...</option>
-                            <?php foreach ($maquinas_reales as $maq): ?>
-                                <option value="<?= $maq ?>" <?= (($_POST['maquina_interes'] ?? '') === $maq) ? 'selected' : '' ?>><?= $maq ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div class="col-md-6">
                         <label class="form-label small fw-bold text-muted text-uppercase">Canal de Origen</label>
                         <select name="canal_origen" class="form-select">
                             <?php foreach ($canales_disponibles as $c): ?>
                                 <option value="<?= $c ?>" <?= (($_POST['canal_origen'] ?? 'Página Web') === $c) ? 'selected' : '' ?>><?= $c ?></option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+
+                    <!-- SELECTOR DIRECTO DE INTERÉS GENERAL -->
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Interés Comercial <span class="text-danger">*</span></label>
+                        <select name="maquina_interes" class="form-select" required>
+                            <option value="" selected disabled>Selecciona la línea de interés...</option>
+                            <option value="Maquinaria" <?= (($_POST['maquina_interes'] ?? '') === 'Maquinaria') ? 'selected' : '' ?>>Maquinaria (Equipos de Helado)</option>
+                            <option value="Materia Prima" <?= (($_POST['maquina_interes'] ?? '') === 'Materia Prima') ? 'selected' : '' ?>>Materia Prima (Bases y Saborizantes)</option>
+                        </select>
+                        <small class="text-muted" style="font-size: 0.72rem;">El o los productos específicos se elegirán al emitir la cotización formal.</small>
                     </div>
 
                     <div class="col-12 text-end mt-4">

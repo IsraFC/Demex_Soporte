@@ -1,31 +1,66 @@
 <?php
 /**
  * ARCHIVO: leads_crm.php
- * DESCRIPCIÓN: Panel de Control de Leads CRM con Motor de Búsqueda Asíncrono.
- * Integra botón de registro manual de prospectos, animaciones en semáforos y filtros avanzados.
+ * DESCRIPCIÓN: Panel de Control de Leads CRM con Vista Anidada Jerárquica.
+ * Agrupa las cotizaciones por Prospecto Único y despliega sub-tablas con transiciones fluidas.
+ * ORDENAMIENTO: Clasificación por Prioridad de Alerta Master (Urgente > Pendiente > En Curso > Venta Cerrada).
+ * MODIFICACIÓN: Soporte para Maquinaria y Lotes de Materia Prima en subtablas y catálogo universal.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 7.3 (Corrección estricta de cruce de IDs en cotizaciones y botones de acción)
+ * @version 9.5 (Vista Anidada Jerárquica Master-Detail en Prospectos)
  */
 
 $page_title = "Panel de Seguimiento | CRM Ventas";
 require_once '../config/db.php';
 
-/**
- * KPIs - INDICADORES CLAVE DE DESEMPEÑO (PHP Base)
- */
-$total_leads = $pdo->query("SELECT COUNT(*) FROM prospectos")->fetchColumn();
+$total_leads = $pdo->query("SELECT COUNT(*) FROM prospectos")->fetchColumn() ?: 0;
 
-$maquinas_reales = ['DEMEX 313', 'DEMEX 313T', 'DEMEX 513', 'DEMEX 613', 'DEMEX 1020', 'DEMEX 125', 'SPICE MT15', 'SPICE MV89'];
+$sql_filtro_prod = "SELECT DISTINCT p.nombre 
+                    FROM productos p 
+                    INNER JOIN categorias_productos c ON p.id_categoria = c.id_categoria 
+                    WHERE c.id_categoria != 4 
+                      AND c.nombre_categoria NOT LIKE '%refaccion%'
+                    ORDER BY c.id_categoria ASC, p.nombre ASC";
+$productos_filtro = $pdo->query($sql_filtro_prod)->fetchAll(PDO::FETCH_COLUMN) ?: [];
 
 $modulo_actual = 'ventas';
 include '../includes/header.php';
 ?>
 
+<style>
+    td.details-control {
+        text-align: center;
+        cursor: pointer;
+        color: #dc3545;
+        font-size: 1.2rem;
+    }
+    td.details-control i {
+        transition: color 0.25s ease, transform 0.25s ease;
+        display: inline-block;
+    }
+    tr.shown td.details-control i {
+        color: #6c757d;
+    }
+    .sub-table-wrapper {
+        display: none;
+    }
+    .sub-table-container {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: inset 0 3px 6px rgba(0,0,0,0.04);
+        animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
 <div class="row mb-4 align-items-center">
     <div class="col-md-5">
         <h1 class="fw-bold text-danger mb-0"><i class="bi bi-funnel"></i> Control de Prospectos a Clientes</h1>
-        <p class="text-muted small">Base unificada de prospectos capturados en línea y dados de alta en mostrador.</p>
+        <p class="text-muted small">Panel comercial jerárquico de prospectos y cotizaciones emitidas.</p>
     </div>
     <div class="col-md-7 text-md-end">
         <div class="d-inline-flex gap-2">
@@ -68,11 +103,17 @@ include '../includes/header.php';
             </select>
         </div>
         <div class="col-auto">
-            <select id="filterEquipo" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 190px;">
-                <option value="">Todos los Equipos</option>
-                <?php foreach ($maquinas_reales as $maquina): ?>
-                    <option value="<?= htmlspecialchars($maquina) ?>"><?= htmlspecialchars($maquina) ?></option>
-                <?php endforeach; ?>
+            <select id="filterEquipo" class="form-select form-select-sm border-0 bg-light fw-bold text-muted shadow-sm px-3" style="min-width: 220px;">
+                <option value="">Todos los Intereses / Productos</option>
+                <optgroup label="Interés Inicial">
+                    <option value="Maquinaria">Maquinaria</option>
+                    <option value="Materia Prima">Materia Prima</option>
+                </optgroup>
+                <optgroup label="Catálogo Oficial">
+                    <?php foreach ($productos_filtro as $prod_nom): ?>
+                        <option value="<?= htmlspecialchars($prod_nom) ?>"><?= htmlspecialchars($prod_nom) ?></option>
+                    <?php endforeach; ?>
+                </optgroup>
             </select>
         </div>
         <div class="col-auto d-flex flex-column gap-1">
@@ -90,7 +131,6 @@ include '../includes/header.php';
             </div>
         </div>
 
-        <!-- BOTÓN NUEVO PROSPECTO -->
         <div class="col-auto">
             <a href="registrar_prospecto.php" class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm py-2">
                 <i class="bi bi-person-plus-fill me-1"></i> Registrar Prospecto
@@ -104,62 +144,89 @@ include '../includes/header.php';
         <table id="tablaLeads" class="table table-hover align-middle w-100">
             <thead class="table-light">
                 <tr class="text-uppercase small fw-bold text-muted">
+                    <th style="width: 40px;"></th>
                     <th>Fecha Registro</th>
-                    <th>Cliente / Canal</th>
+                    <th>Prospecto / Canal</th>
                     <th>Contacto Directo</th>
                     <th>Ubicación</th>
-                    <th>Equipo de Interés</th>
-                    <th class="text-center" style="width: 140px;">Estatus Venta</th>
-                    <th class="text-center" style="width: 140px;">Estatus Cotiz.</th> 
+                    <th>Interés Registrado</th>
+                    <th class="text-center" style="width: 130px;">Estatus Venta</th>
+                    <th class="text-center" style="width: 120px;">Historial</th>
                     <th class="text-center" style="width: 130px;">Semáforo</th>
-                    <th class="text-center" style="width: 150px;">Acción</th>
+                    <th class="text-center" style="width: 110px;">Acción</th>
                 </tr>
             </thead>
             <tbody>
                 <?php
-                // Subconsulta optimizada: vincula únicamente la última cotización emitida de cada prospecto
-                $sql = "SELECT f.*, p.id_prospecto, p.status_comercial, p.fecha_ultimo_contacto,
-                               c.id_cotizacion, c.status_cotizacion, c.fecha_emision AS cotizacion_fecha,
-                               c.fecha_vencimiento, c.fecha_recordatorio
-                        FROM formulario f
-                        INNER JOIN prospectos p ON f.id_formulario = p.id_formulario
-                        LEFT JOIN (
-                            SELECT c1.*
-                            FROM cotizacion c1
-                            INNER JOIN (
-                                SELECT id_prospecto, MAX(id_cotizacion) AS max_cotiz
-                                FROM cotizacion
-                                GROUP BY id_prospecto
-                            ) c2 ON c1.id_prospecto = c2.id_prospecto AND c1.id_cotizacion = c2.max_cotiz
-                        ) c ON p.id_prospecto = c.id_prospecto
-                        ORDER BY 
-                            CASE 
-                                WHEN p.status_comercial = 'Venta Cerrada' THEN 4
-                                WHEN p.status_comercial = 'Consultado' AND DATEDIFF(CURDATE(), p.fecha_ultimo_contacto) > 5 THEN 1
-                                WHEN p.status_comercial = 'Cotizado' AND (c.status_cotizacion = 'Vencida' OR c.fecha_recordatorio < CURDATE()) THEN 1
-                                WHEN p.status_comercial = 'Cotizado' AND c.fecha_recordatorio = CURDATE() THEN 2
-                                WHEN p.status_comercial = 'Cotizado' AND c.fecha_recordatorio > CURDATE() THEN 3
-                                WHEN p.status_comercial = 'Consultado' AND DATEDIFF(CURDATE(), p.fecha_ultimo_contacto) <= 5 THEN 3
-                                ELSE 5
-                            END ASC, 
-                            f.fecha_registro DESC";
+                // Consulta agrupada por prospecto único
+                $sql_prospectos = "SELECT f.*, p.id_prospecto, p.status_comercial, p.fecha_ultimo_contacto,
+                                          COUNT(c.id_cotizacion) AS total_cotizaciones
+                                   FROM prospectos p
+                                   INNER JOIN formulario f ON p.id_formulario = f.id_formulario
+                                   LEFT JOIN cotizacion c ON p.id_prospecto = c.id_prospecto
+                                   GROUP BY p.id_prospecto
+                                   ORDER BY f.fecha_registro DESC";
                 
-                $stmt = $pdo->query($sql);
-                while ($lead = $stmt->fetch()):
-                    $estatus_real_cotizacion = $lead['status_cotizacion'];
-                    $id_cotiz_val = !empty($lead['id_cotizacion']) ? (string)$lead['id_cotizacion'] : '0';
+                $stmt_p = $pdo->query($sql_prospectos);
+                while ($lead = $stmt_p->fetch(PDO::FETCH_ASSOC)):
+                    $id_prospecto = (int)$lead['id_prospecto'];
+
+                    // Consulta de todas las cotizaciones de este prospecto
+                    $sql_sub = "SELECT c.*, 
+                                       prod.nombre AS producto_nombre,
+                                       (SELECT COUNT(*) FROM cotizacion_detalle cd WHERE cd.id_cotizacion = c.id_cotizacion) AS total_partidas
+                                FROM cotizacion c
+                                LEFT JOIN productos prod ON c.id_producto = prod.id_producto
+                                WHERE c.id_prospecto = :id_prospecto
+                                ORDER BY c.fecha_emision DESC, c.id_cotizacion DESC";
+                    $stmt_sub = $pdo->prepare($sql_sub);
+                    $stmt_sub->execute([':id_prospecto' => $id_prospecto]);
+                    $sub_cotizaciones = $stmt_sub->fetchAll(PDO::FETCH_ASSOC);
+
+                    // Formatear nombres legibles de cada cotización en subtabla
+                    foreach ($sub_cotizaciones as &$sc) {
+                        if (!empty($sc['producto_nombre'])) {
+                            $sc['item_descripcion'] = $sc['producto_nombre'];
+                        } elseif ((int)$sc['total_partidas'] > 0) {
+                            $sc['item_descripcion'] = 'Lote Materia Prima (' . $sc['total_partidas'] . ' Partidas)';
+                        } else {
+                            $sc['item_descripcion'] = 'Cotización General DEMEX';
+                        }
+                    }
+                    unset($sc);
+
+                    $interes_crudo = trim($lead['maquina_interes'] ?? '');
+                    $badge_interes = '';
+                    if ($interes_crudo === 'Maquinaria') {
+                        $badge_interes = '<span class="badge py-1.5 px-2.5 fw-semibold" style="background-color: #F8F9FA; color: #495057; border: 1px solid #DEE2E6; border-radius: 6px; font-size: 0.75rem;"><i class="bi bi-gear-wide-connected me-1 text-danger"></i>Maquinaria</span>';
+                    } elseif ($interes_crudo === 'Materia Prima') {
+                        $badge_interes = '<span class="badge py-1.5 px-2.5 fw-semibold" style="background-color: #E3F2FD; color: #0D47A1; border: 1px solid #BBDEFB; border-radius: 6px; font-size: 0.75rem;"><i class="bi bi-box-seam me-1"></i>Materia Prima</span>';
+                    } elseif (!empty($interes_crudo)) {
+                        $badge_interes = '<span class="badge bg-light text-dark border py-1.5 px-2.5 fw-semibold" style="border-radius: 6px; font-size: 0.75rem;">' . htmlspecialchars($interes_crudo) . '</span>';
+                    } else {
+                        $badge_interes = '<span class="badge text-muted border bg-light py-1.5 px-2.5 fw-normal" style="border-radius: 6px; font-size: 0.75rem;"><em>Sin Definir</em></span>';
+                    }
                 ?>
-                <tr class="row-lead-item" 
+                <tr class="row-lead-master" 
+                    data-id-prospecto="<?= $id_prospecto ?>"
                     data-origen="<?= htmlspecialchars($lead['canal_origen']) ?>" 
-                    data-equipo="<?= htmlspecialchars($lead['maquina_interes']) ?>" 
+                    data-equipo="<?= htmlspecialchars(!empty($interes_crudo) ? $interes_crudo : 'Sin Definir') ?>" 
+                    data-child-data="<?= htmlspecialchars(json_encode($sub_cotizaciones)) ?>"
+                    data-status-venta="<?= htmlspecialchars($lead['status_comercial']) ?>"
+                    data-fecha-consulta="<?= htmlspecialchars($lead['fecha_ultimo_contacto']) ?>"
                     data-urgente="0"
                     data-atencion="0"
                     data-encurso="0"> 
+                    
+                    <td class="details-control fw-bold">
+                        <?php if (count($sub_cotizaciones) > 0): ?>
+                            <i class="bi bi-plus-circle-fill"></i>
+                        <?php else: ?>
+                            <i class="bi bi-circle text-muted" style="opacity: 0.3; font-size: 0.9rem;" title="Sin cotizaciones"></i>
+                        <?php endif; ?>
+                    </td>
                     <td class="small fw-semibold text-secondary">
                         <?= date('d/m/Y g:i A', strtotime($lead['fecha_registro'])) ?>
-                        <?php if(!empty($lead['fecha_vencimiento'])): ?>
-                            <br><small class="text-muted" style="font-size:0.7rem;">Vence: <?= date('d/m/Y', strtotime($lead['fecha_vencimiento'])) ?></small>
-                        <?php endif; ?>
                     </td>
                     <td>
                         <div class="fw-bold text-dark lh-sm"><?= htmlspecialchars($lead['nombre']) ?></div>
@@ -177,29 +244,32 @@ include '../includes/header.php';
                         <i class="bi bi-geo-alt-fill text-muted me-1"></i><?= htmlspecialchars($lead['estado_region'] . ', ' . $lead['pais']) ?>
                     </td>
                     <td>
-                        <span class="badge bg-light text-dark border py-1.5 px-2.5 fw-semibold" style="border-radius: 6px; font-size: 0.75rem;">
-                            <?= htmlspecialchars($lead['maquina_interes']) ?>
-                        </span>
+                        <?= $badge_interes ?>
                     </td>
-                    <td class="text-center col-status-badge"></td>
+                    <td class="text-center col-status-badge">
+                        <?php if ($lead['status_comercial'] === 'Venta Cerrada'): ?>
+                            <span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;">Venta Cerrada</span>
+                        <?php elseif ($lead['status_comercial'] === 'Cotizado'): ?>
+                            <span class="badge" style="background-color: #FFFDE7; color: #F57F17; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;">Cotizado</span>
+                        <?php else: ?>
+                            <span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;">Consultado</span>
+                        <?php endif; ?>
+                    </td>
                     
-                    <td class="text-center col-cotizacion-badge" 
-                        data-tiene-cotizacion="<?= ($id_cotiz_val !== '0') ? '1' : '0' ?>"
-                        data-status-cotiz="<?= htmlspecialchars($estatus_real_cotizacion ?? '') ?>">
+                    <td class="text-center">
+                        <?php if (count($sub_cotizaciones) > 0): ?>
+                            <span class="badge bg-danger rounded-pill px-2.5 py-1 fw-bold" style="font-size: 0.75rem;"><?= count($sub_cotizaciones) ?> Doc(s)</span>
+                        <?php else: ?>
+                            <span class="text-muted small"><em>0 Docs</em></span>
+                        <?php endif; ?>
                     </td>
 
-                    <td class="text-center col-semaforo" 
-                        data-status-venta="<?= $lead['status_comercial'] ?>"
-                        data-status-cotizacion="<?= htmlspecialchars($estatus_real_cotizacion ?? '') ?>"
-                        data-fecha-consulta="<?= $lead['fecha_ultimo_contacto'] ?>"
-                        data-fecha-recordatorio="<?= htmlspecialchars($lead['fecha_recordatorio'] ?? '') ?>">
-                    </td>
+                    <td class="text-center col-semaforo-master"></td>
+
                     <td class="text-center">
-                        <div class="btn-group btn-group-sm col-acciones-comerciales" 
-                             data-id-prospecto="<?= $lead['id_prospecto'] ?>" 
-                             data-id-cotizacion="<?= $id_cotiz_val ?>"
-                             data-status-venta="<?= $lead['status_comercial'] ?>">
-                        </div>
+                        <a href="cotizaciones.php?id_prospecto=<?= $id_prospecto ?>" class="btn btn-sm btn-outline-danger border-0" title="Nueva Cotización">
+                            <i class="bi bi-file-earmark-plus-fill fs-5"></i>
+                        </a>
                     </td>
                 </tr>
                 <?php endwhile; ?>
@@ -208,17 +278,18 @@ include '../includes/header.php';
     </div>
 </div>
 
+<!-- MODAL CERRAR VENTA -->
 <div class="modal fade" id="modalLiberarVenta" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content shadow border-0" style="border-radius: 16px;">
             <div class="modal-header bg-danger text-white" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
-                <h5 class="modal-title fw-bold"><i class="bi bi-check-circle-fill me-2"></i> Desglose de cierre de Venta</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-check-circle-fill me-2"></i> Desglose de Cierre de Venta</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="formConfirmarVenta">
                 <input type="hidden" id="liberar_id_prospecto" name="id_prospecto">
                 <div class="modal-body p-4">
-                    <p class="text-muted small mb-3">El prospecto se convertirá en Cliente formal y se dará de alta su equipo en el historial cronológico de compras.</p>
+                    <p class="text-muted small mb-3">El prospecto se convertirá en Cliente formal y se transferirá al módulo de cartera y recompras.</p>
                     
                     <div class="mb-3">
                         <label class="form-label fw-semibold text-dark small">Fecha Exacta de Compra <span class="text-danger">*</span></label>
@@ -227,7 +298,7 @@ include '../includes/header.php';
 
                     <div class="mb-0">
                         <label class="form-label fw-semibold text-dark small">Observaciones Especiales del Cierre</label>
-                        <textarea class="form-control small text-muted" id="liberar_observaciones" name="observaciones_venta" rows="3" placeholder="Ej. Pago realizado en efectivo de liquidación, entrega programada..." style="font-size: 0.82rem; resize: none;"></textarea>
+                        <textarea class="form-control small text-muted" id="liberar_observaciones" name="observaciones_venta" rows="3" placeholder="Ej. Anticipo liquidado por transferencia, entrega en mostrador..." style="font-size: 0.82rem; resize: none;"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer bg-light border-0 px-4 py-3" style="border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;">
@@ -239,6 +310,7 @@ include '../includes/header.php';
     </div>
 </div>
 
+<!-- MODAL VISUALIZAR DETALLES -->
 <div class="modal fade" id="modalDetallesCotizacion" tabindex="-1" aria-hidden="true" data-bs-backdrop="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content shadow border-0" style="border-radius: 12px;">
@@ -249,6 +321,7 @@ include '../includes/header.php';
             <div class="modal-body p-4" id="cuerpoModalCotizacion">
                 <div class="text-center py-4">
                     <div class="spinner-border text-danger" role="status"><span class="visually-hidden">Cargando...</span></div>
+                    <p class="text-muted small mt-2">Consultando servidor corporativo DEMEX central...</p>
                 </div>
             </div>
         </div>
@@ -258,144 +331,140 @@ include '../includes/header.php';
 <?php include '../includes/footer.php'; ?>
 
 <script>
+const formatoMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+
+// Renderizado de la Subtabla Anidada de Cotizaciones
+function formatChildRow(d, idProspecto) {
+    if (!d || d.length === 0) {
+        return `<div class="sub-table-wrapper p-3 bg-light text-center small text-muted">
+                    <i class="bi bi-info-circle me-1"></i> Este prospecto aún no tiene cotizaciones generadas.
+                </div>`;
+    }
+
+    let html = `<div class="sub-table-wrapper">
+                  <div class="sub-table-container">
+                    <table class="table table-sm table-bordered bg-white m-0 small align-middle">
+                        <thead class="table-dark">
+                            <tr style="font-size:0.75rem;">
+                                <th>Folio / Emisión</th>
+                                <th>Vencimiento</th>
+                                <th>Concepto Cotizado</th>
+                                <th class="text-center">Vigencia</th>
+                                <th class="text-end">Importe Total</th>
+                                <th class="text-center">Semáforo</th>
+                                <th class="text-center" style="width:140px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+    
+    d.forEach(function(cot) {
+        let fEmision = cot.fecha_emision ? cot.fecha_emision.split('-').reverse().join('/') : 'N/D';
+        let fVence = cot.fecha_vencimiento ? cot.fecha_vencimiento.split('-').reverse().join('/') : 'N/D';
+
+        let badgeCot = (cot.status_cotizacion === 'Vencida') ? 
+            `<span class="badge bg-danger animate__animated animate__flash animate__infinite" style="font-size:0.7rem;"><i class="bi bi-calendar-x"></i> Vencida</span>` : 
+            `<span class="badge bg-success" style="font-size:0.7rem;"><i class="bi bi-calendar-check"></i> Vigente</span>`;
+
+        let btnAcciones = `
+            <div class="btn-group btn-group-sm">
+                <button type="button" onclick="verDetallesCotizacion(${cot.id_cotizacion})" class="btn btn-outline-info border-0" title="Ver Detalle"><i class="bi bi-eye-fill fs-5"></i></button>
+                <a href="editar_cotizacion.php?id_cotizacion=${cot.id_cotizacion}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square fs-5"></i></a>
+                <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperationComercial(${idProspecto})" title="Cerrar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>
+            </div>
+        `;
+
+        html += `<tr class="sub-row-cot-item" data-recordatorio="${cot.fecha_recordatorio}" data-status-cotiz="${cot.status_cotizacion}">
+                    <td class="fw-bold text-danger">#${cot.id_cotizacion} <small class="text-secondary fw-normal d-block" style="font-size:0.72rem;">${fEmision}</small></td>
+                    <td class="text-muted fw-semibold">${fVence}</td>
+                    <td class="fw-bold text-dark">${cot.item_descripcion}</td>
+                    <td class="text-center">${badgeCot}</td>
+                    <td class="text-end fw-bold text-dark">${formatoMXN.format(parseFloat(cot.precio_pactado) + parseFloat(cot.costo_envio || 0))}</td>
+                    <td class="text-center sub-col-semaforo"></td>
+                    <td class="text-center">${btnAcciones}</td>
+                 </tr>`;
+    });
+
+    html += `   </tbody>
+            </table>
+          </div>
+         </div>`;
+    return html;
+}
+
 $(document).ready(function() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('msg') === 'success') {
         Swal.fire({
             title: '¡Operación Exitosa!',
-            text: 'El prospecto se registró correctamente en el sistema.',
+            text: 'El prospecto y su cotización se sincronizaron correctamente.',
             icon: 'success',
-            confirmButtonColor: '#198754',
-            confirmButtonText: 'Entendido',
-            showClass: { popup: 'animate__animated animate__fadeInDown' },
-            hideClass: { popup: 'animate__animated animate__fadeOutUp' }
+            confirmButtonColor: '#198754'
         }).then(() => {
             window.history.replaceState({}, document.title, window.location.pathname);
         });
     }
 
-    const d = new Date();
-    const hoyStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    let leadsPendientesHoy = [];
+    function procesarKPIsYSemaforos() {
+        const d = new Date();
+        const hoyStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        const ahora = d.getTime();
 
-    $('.row-lead-item').each(function() {
-        const fechaRec = $(this).find('.col-semaforo').data('fecha-recordatorio');
-        const statusVenta = $(this).find('.col-semaforo').data('status-venta');
-        
-        if (fechaRec === hoyStr && statusVenta === 'Cotizado') {
-            const nombreLead = $(this).find('.fw-bold.text-dark').text().trim();
-            const equipo = $(this).attr('data-equipo');
-            leadsPendientesHoy.push(`• <strong>${nombreLead}</strong> (${equipo})`);
-        }
-    });
-
-    if (leadsPendientesHoy.length > 0) {
-        Swal.fire({
-            title: `<i class="bi bi-bell-fill text-danger animate__animated animate__swing animate__infinite" style="display:inline-block;"></i> Tienes ${leadsPendientesHoy.length} seguimiento(s) hoy`,
-            html: `<div class="text-start mt-2 small text-muted">Debes dar seguimiento hoy a los siguientes prospectos:</div>
-                   <div class="text-start mt-3 p-3 bg-light rounded border border-dark" style="max-height: 200px; overflow-y: auto; font-size: 0.9rem; line-height: 1.5;">
-                     ${leadsPendientesHoy.join('<br>')}
-                   </div>`,
-            icon: 'info',
-            confirmButtonColor: '#c72f3e',
-            confirmButtonText: 'Continuar',
-            backdrop: false,
-            position: 'top-end',
-            toast: false,
-            showCloseButton: true,
-            customClass: { popup: 'shadow-lg border-start border-4 border-danger' }
-        });
-    }
-
-    function calcularSemaforosComerciales() {
         let countEnCurso = 0, countAtencion = 0, countUrgentes = 0;
-        const ahora = new Date().getTime();
+        let recordatoriosHoy = [];
 
-        $('.col-semaforo').each(function() {
-            const statusVenta = $(this).data('status-venta');
-            const statusCotiz = $(this).data('status-cotizacion');
-            const fechaConsultaStr = $(this).data('fecha-consulta');
-            const fechaRecordatorioStr = $(this).data('fecha-recordatorio');
-            
-            const fila = $(this).closest('tr');
-            const contenedorAcciones = fila.find('.col-acciones-comerciales');
-            const contenedorStatusBadge = fila.find('.col-status-badge');
-            const contenedorCotizBadge = fila.find('.col-cotizacion-badge');
-            
-            // Extracción estricta de atributos por cada fila individual
-            const idProspecto = String(contenedorAcciones.attr('data-id-prospecto') || '');
-            const idCotizacion = String(contenedorAcciones.attr('data-id-cotizacion') || '0');
-
-            let statusBadgeHtml = '';
-            if (statusVenta === 'Venta Cerrada') {
-                statusBadgeHtml = '<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;">Venta Cerrada</span>';
-            } else if (statusVenta === 'Cotizado') {
-                statusBadgeHtml = '<span class="badge" style="background-color: #FFFDE7; color: #F57F17; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;">Cotizado</span>';
-            } else {
-                statusBadgeHtml = '<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;">Consultado</span>';
-            }
-            if (contenedorStatusBadge.html() !== statusBadgeHtml) contenedorStatusBadge.html(statusBadgeHtml);
-
-            const tieneCotizacion = contenedorCotizBadge.data('tiene-cotizacion');
-            const valorStatusCotiz = contenedorCotizBadge.data('status-cotiz');
-            let cotizBadgeHtml = '';
-
-            if (tieneCotizacion === 1 || tieneCotizacion === '1') {
-                if (valorStatusCotiz === 'Vencida' || valorStatusCotiz === 'vencida') {
-                    cotizBadgeHtml = '<span class="badge bg-danger animate__animated animate__flash animate__infinite" style="font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;"><i class="bi bi-calendar-x me-1"></i> Vencida</span>';
-                } else {
-                    cotizBadgeHtml = '<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;"><i class="bi bi-calendar-check me-1"></i> Vigente</span>';
-                }
-            } else {
-                cotizBadgeHtml = '<span class="text-muted small"><em>Sin Emitir</em></span>';
-            }
-            if (contenedorCotizBadge.html() !== cotizBadgeHtml) contenedorCotizBadge.html(cotizBadgeHtml);
-
-            // Generación de botones con verificación estricta de cotización por fila
-            let botonesHtml = '';
-            if (statusVenta === 'Venta Cerrada') {
-                botonesHtml = `<button type="button" onclick="verDetallesCotizacion(${idCotizacion})" class="btn btn-outline-info border-0" title="Visualizar Detalle Cotización"><i class="bi bi-eye-fill fs-5"></i></button>`;
-            } else if (statusVenta === 'Cotizado' && idCotizacion !== '0' && idCotizacion !== '') {
-                botonesHtml = `<button type="button" onclick="verDetallesCotizacion(${idCotizacion})" class="btn btn-outline-info border-0" title="Visualizar Detalle Cotización"><i class="bi bi-eye-fill fs-5"></i></button>
-                               <a href="editar_cotizacion.php?id_cotizacion=${idCotizacion}" class="btn btn-outline-warning border-0" title="Editar Cotización"><i class="bi bi-pencil-square fs-5"></i></a>
-                               <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperationComercial(${idProspecto})" title="Cerrar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>`;
-            } else {
-                botonesHtml = `<a href="cotizaciones.php?id_prospecto=${idProspecto}" class="btn btn-outline-danger border-0" title="Generar Cotización"><i class="bi bi-file-earmark-plus-fill fs-5"></i></a>`;
-            }
-            
-            if (contenedorAcciones.html() !== botonesHtml) contenedorAcciones.html(botonesHtml);
+        $('.row-lead-master').each(function() {
+            const $fila =$(this);
+            const statusVenta = $fila.attr('data-status-venta');
+            const fechaConsultaStr = $fila.attr('data-fecha-consulta');
+            const childDataStr = $fila.attr('data-child-data');
+            const subCots = childDataStr ? JSON.parse(childDataStr) : [];
+            const celdaSemaforo = $fila.find('.col-semaforo-master');
 
             if (statusVenta === 'Venta Cerrada') {
-                $(this).html('<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;"><i class="bi bi-check-circle-fill me-1"></i> Al día</span>');
-                fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '0');
+                celdaSemaforo.html('<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.6rem;"><i class="bi bi-check-circle-fill me-1"></i> Al día</span>');
+                $fila.attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '0');
                 return;
             }
 
-            if (statusVenta === 'Consultado' || !tieneCotizacion || tieneCotizacion === '0') {
-                const fechaConsulta = new Date(fechaConsultaStr);
-                const diasInactivo = Math.floor((ahora - fechaConsulta.getTime()) / (1000 * 60 * 60 * 24));
+            if (subCots.length === 0) {
+                // Sin cotización: evalúa inactividad desde primer contacto
+                const fConsulta = new Date(fechaConsultaStr);
+                const diasInactivo = Math.floor((ahora - fConsulta.getTime()) / (1000 * 60 * 60 * 24));
                 if (diasInactivo > 5) {
-                    $(this).html('<span class="badge bg-danger text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-fire me-1"></i> Urgente</span>');
-                    fila.removeClass('table-warning-sutil').addClass('table-danger-sutil').attr('data-urgente', '1').attr('data-atencion', '0').attr('data-encurso', '0');
+                    celdaSemaforo.html('<span class="badge bg-danger text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-fire me-1"></i> Urgente</span>');
+                    $fila.attr('data-urgente', '1').attr('data-atencion', '0').attr('data-encurso', '0');
                     countUrgentes++;
                 } else {
-                    $(this).html('<span class="badge bg-primary text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
-                    fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
+                    celdaSemaforo.html('<span class="badge bg-primary text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
+                    $fila.attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
                     countEnCurso++;
                 }
-            } else if (statusVenta === 'Cotizado') {
-                const hoyStr = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
-                if (statusCotiz === 'Vencida' || (fechaRecordatorioStr && fechaRecordatorioStr < hoyStr)) {
-                    $(this).html('<span class="badge bg-danger text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-fire me-1"></i> Urgente</span>');
-                    fila.removeClass('table-warning-sutil').addClass('table-danger-sutil').attr('data-urgente', '1').attr('data-atencion', '0').attr('data-encurso', '0');
+            } else {
+                // Con cotizaciones: toma la alerta de mayor severidad
+                let esUrgente = false;
+                let esAtencion = false;
+
+                subCots.forEach(function(cot) {
+                    if (cot.status_cotizacion === 'Vencida' || (cot.fecha_recordatorio && cot.fecha_recordatorio < hoyStr)) {
+                        esUrgente = true;
+                    } else if (cot.fecha_recordatorio === hoyStr) {
+                        esAtencion = true;
+                        const nom = $fila.find('.fw-bold.text-dark').text().trim();
+                        recordatoriosHoy.push(`• <strong>${nom}</strong> (Cotización #${cot.id_cotizacion})`);
+                    }
+                });
+
+                if (esUrgente) {
+                    celdaSemaforo.html('<span class="badge bg-danger text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-fire me-1"></i> Urgente</span>');
+                    $fila.attr('data-urgente', '1').attr('data-atencion', '0').attr('data-encurso', '0');
                     countUrgentes++;
-                } else if (fechaRecordatorioStr === hoyStr) {
-                    $(this).html('<span class="badge bg-warning text-dark px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-exclamation-triangle-fill me-1"></i> Atención</span>');
-                    fila.removeClass('table-danger-sutil').addClass('table-warning-sutil').attr('data-urgente', '0').attr('data-atencion', '1').attr('data-encurso', '0');
+                } else if (esAtencion) {
+                    celdaSemaforo.html('<span class="badge bg-warning text-dark px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-exclamation-triangle-fill me-1"></i> Atención</span>');
+                    $fila.attr('data-urgente', '0').attr('data-atencion', '1').attr('data-encurso', '0');
                     countAtencion++;
                 } else {
-                    $(this).html('<span class="badge bg-primary text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
-                    fila.removeClass('table-warning-sutil table-danger-sutil').attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
+                    celdaSemaforo.html('<span class="badge bg-primary text-white px-3 py-1.5" style="font-weight: 600; border-radius: 8px;"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> En Curso</span>');
+                    $fila.attr('data-urgente', '0').attr('data-atencion', '0').attr('data-encurso', '1');
                     countEnCurso++;
                 }
             }
@@ -404,20 +473,78 @@ $(document).ready(function() {
         $('#kpi-encurso').text(countEnCurso);
         $('#kpi-pendientes').text(countAtencion);
         $('#kpi-urgentes').text(countUrgentes);
+
+        if (recordatoriosHoy.length > 0 && !window.alertaMostrada) {
+            window.alertaMostrada = true;
+            Swal.fire({
+                title: `<i class="bi bi-bell-fill text-danger animate__animated animate__swing animate__infinite" style="display:inline-block;"></i> Tienes ${recordatoriosHoy.length} seguimiento(s) hoy`,
+                html: `<div class="text-start mt-2 small text-muted">Debes dar seguimiento hoy a los siguientes prospectos:</div>
+                       <div class="text-start mt-3 p-3 bg-light rounded border border-dark" style="max-height: 200px; overflow-y: auto; font-size: 0.9rem; line-height: 1.5;">
+                           ${recordatoriosHoy.join('<br>')}
+                       </div>`,
+                icon: 'info',
+                confirmButtonColor: '#c72f3e',
+                confirmButtonText: 'Continuar',
+                backdrop: false,
+                position: 'top-end',
+                showCloseButton: true,
+                customClass: { popup: 'shadow-lg border-start border-4 border-danger' }
+            });
+        }
     }
 
     var table = $('#tablaLeads').DataTable({
         "language": { "emptyTable": "No hay datos", "info": "Mostrando _START_ a _END_ de _TOTAL_", "infoEmpty": "0 registros", "infoFiltered": "(filtrado de _MAX_)", "zeroRecords": "Sin coincidencias", "paginate": { "next": "Sig.", "previous": "Ant." } },
         "dom": 'rtip', 
         "pageLength": 10, 
-        "responsive": true,
+        "responsive": true, 
         "ordering": false, 
-        "drawCallback": function() { calcularSemaforosComerciales(); }
+        "drawCallback": function() { procesarKPIsYSemaforos(); }
+    });
+
+    // Control del botón [+] para desplegar subtabla
+    $('#tablaLeads tbody').on('click', 'td.details-control', function () {
+        var tr = $(this).closest('tr');
+        var row = table.row(tr);
+
+        if (row.child.isShown()) {
+            tr.next().find('.sub-table-wrapper').slideUp(200, function() {
+                row.child.hide();
+                tr.removeClass('shown');
+            });
+            $(this).html('<i class="bi bi-plus-circle-fill"></i>');
+        } else {
+            var childDataStr = tr.attr('data-child-data');
+            var idProspecto = tr.attr('data-id-prospecto');
+            var childData = childDataStr ? JSON.parse(childDataStr) : [];
+
+            row.child(formatChildRow(childData, idProspecto)).show();
+            tr.addClass('shown');
+            $(this).html('<i class="bi bi-dash-circle-fill"></i>');
+            
+            tr.next().find('.sub-table-wrapper').slideDown(250);
+            
+            const hoyStr = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
+            
+            tr.next().find('.sub-row-cot-item').each(function() {
+                const rec = $(this).data('recordatorio');
+                const statC = $(this).data('status-cotiz');
+                const cellSem = $(this).find('.sub-col-semaforo');
+
+                if (statC === 'Vencida' || (rec && rec < hoyStr)) {
+                    cellSem.html('<span class="badge bg-danger animate__animated animate__headShake animate__infinite"><i class="bi bi-fire"></i> Urgente</span>');
+                } else if (rec === hoyStr) {
+                    cellSem.html('<span class="badge bg-warning text-dark animate__animated animate__flash animate__infinite"><i class="bi bi-exclamation-triangle-fill"></i> Atención</span>');
+                } else {
+                    cellSem.html('<span class="badge bg-primary text-white"><i class="bi bi-circle-fill" style="font-size:0.5rem;"></i> En Curso</span>');
+                }
+            });
+        }
     });
 
     $('#customSearch').on('keyup', function() { table.search(this.value).draw(); });
-    $('#filterCanal').on('change', function() { table.column(1).search(this.value).draw(); });
-    $('#filterEquipo').on('change', function() { table.column(4).search(this.value).draw(); });
+    $('#filterCanal').on('change', function() { table.column(2).search(this.value).draw(); });
+    $('#filterEquipo').on('change', function() { table.column(5).search(this.value).draw(); });
     
     $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
         var row = $(table.row(dataIndex).node());
@@ -429,9 +556,9 @@ $(document).ready(function() {
 
     $('#btnFiltrarCriticos, #btnFiltrarPendientes, #btnFiltrarEnCurso').on('change', function() { table.draw(); });
 
-    calcularSemaforosComerciales();
-    setInterval(calcularSemaforosComerciales, 1000); 
+    procesarKPIsYSemaforos();
 
+    // Confirmación y Cierre de Venta
     $('#formConfirmarVenta').on('submit', function(e) {
         e.preventDefault();
         const idProspecto = $('#liberar_id_prospecto').val();
@@ -457,9 +584,9 @@ $(document).ready(function() {
                         icon: 'success', 
                         timer: 2000, 
                         showConfirmButton: false 
+                    }).then(() => {
+                        window.location.reload();
                     });
-                    const celda = $(`.col-acciones-comerciales[data-id-prospecto='${idProspecto}']`).closest('tr').find('.col-semaforo');
-                    celda.data('status-venta', 'Venta Cerrada').attr('data-status-venta', 'Venta Cerrada');
                 } else {
                     Swal.fire({ title: 'Error', text: response.message, icon: 'error' });
                 }
@@ -489,7 +616,7 @@ function verDetallesCotizacion(idCotizacion) {
         return;
     }
 
-    $_cuerpo = $('#cuerpoModalCotizacion');
+    $_cuerpo =$('#cuerpoModalCotizacion');
     $_cuerpo.html(`
         <div class="text-center py-4">
             <div class="spinner-border text-danger" role="status"><span class="visually-hidden">Cargando...</span></div>

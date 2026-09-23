@@ -2,11 +2,11 @@
 /**
  * ARCHIVO: Ventas/generar_pdf_cotizacion.php
  * DESCRIPCIÓN: Compilador y renderizador en formato de Cotización Real Impresible.
- * Integra el panel superior con el diseño y la paleta roja oficial del sistema de DEMEX Central (.btn-danger).
- * MODIFICACIÓN: Adaptado a la tabla unificada 'productos' y columna 'id_producto'.
+ * Soporta documentos de producto unitario (Maquinaria) y multipartida (Bases y Saborizantes).
+ * Lee dinámicamente desde 'cotizacion_detalle' con retrocompatibilidad a cotizaciones históricas.
  * @author Sergio Mauricio Campos Carranza
  * @project Módulo Ventas DEMEX
- * @version 8.4 (Catálogo Central Unificado de Productos)
+ * @version 9.0 (Renderizador Multipartida para Cotización Detalle)
  */
 
 $page_title = "Propuesta Comercial Generada | CRM Ventas";
@@ -20,7 +20,7 @@ if ($id_cotizacion === 0) {
     exit();
 }
 
-// CORREGIDO: Consulta adaptada a 'c.id_producto' y unión con la tabla 'productos'
+// 1. Consulta de la cabecera de la cotización (LEFT JOIN a productos porque id_producto puede ser NULL)
 $sql = "SELECT c.*, 
                p.nombre AS maquina_nombre,
                f.nombre AS lead_cliente_nombre,
@@ -31,7 +31,7 @@ $sql = "SELECT c.*,
                cl.correo AS cartera_cliente_correo,
                u.nombre AS asesor_nombre
         FROM cotizacion c
-        INNER JOIN productos p ON c.id_producto = p.id_producto
+        LEFT JOIN productos p ON c.id_producto = p.id_producto
         INNER JOIN usuarios u ON c.id_usuario = u.id_usuario
         LEFT JOIN prospectos pr ON c.id_prospecto = pr.id_prospecto
         LEFT JOIN formulario f ON pr.id_formulario = f.id_formulario
@@ -40,14 +40,24 @@ $sql = "SELECT c.*,
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute([':id_cotizacion' => $id_cotizacion]);
-$cotizacion = $stmt->fetch();
+$cotizacion = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$cotizacion) {
     echo "<h3>Error: La cotización no existe en el sistema o los IDs relacionales fallaron.</h3>";
     exit();
 }
 
-// Definición limpia y dinámica del cliente/canal para evitar cruces con tipos de clientes
+// 2. Consulta de partidas asociadas en 'cotizacion_detalle'
+$sql_partidas = "SELECT cd.*, prod.nombre AS producto_nombre, prod.sku_codigo
+                 FROM cotizacion_detalle cd
+                 INNER JOIN productos prod ON cd.id_producto = prod.id_producto
+                 WHERE cd.id_cotizacion = :id_cotizacion
+                 ORDER BY cd.id_detalle ASC";
+$stmt_partidas = $pdo->prepare($sql_partidas);
+$stmt_partidas->execute([':id_cotizacion' => $id_cotizacion]);
+$partidas_cotizadas = $stmt_partidas->fetchAll(PDO::FETCH_ASSOC);
+
+// Definición limpia y dinámica del cliente/canal
 $nombre_cliente_final   = !empty($cotizacion['id_cliente']) ? $cotizacion['cartera_cliente_nombre'] : ($cotizacion['lead_cliente_nombre'] ?? 'Público General');
 $telefono_cliente_final = !empty($cotizacion['id_cliente']) ? $cotizacion['cartera_cliente_telefono'] : ($cotizacion['lead_cliente_telefono'] ?? '');
 $correo_cliente_final   = !empty($cotizacion['id_cliente']) ? $cotizacion['cartera_cliente_correo'] : ($cotizacion['lead_cliente_correo'] ?? '');
@@ -59,7 +69,7 @@ if (!empty($cotizacion['id_cliente']) && intval($cotizacion['id_cliente']) > 0) 
 }
 
 // PROCESADOR DE DESEMPAQUETADO BANCARIO Y OBSERVACIONES ORIGINALES
-$notas_limpias = $cotizacion['notes'];
+$notas_limpias = $cotizacion['notes'] ?? '';
 $bancos = [
     'condicion' => "Precios de promoción para pagos por transferencia o efectivo.\nNo incluyen el envío.",
     'b1_nom'    => "BANORTE", 'b1_cta' => "0434571284", 'b1_clabe' => "072 650 00434571284 8",
@@ -79,10 +89,20 @@ if (strpos($cotizacion['notes'], '|||') !== false) {
     }
 }
 
-// RECÁLCULO DINÁMICO EXACTO EN PHP
-$subtotal_partida = $cotizacion['precio_pactado'] * $cotizacion['cantidad'];
-$subtotal_con_envio = $subtotal_partida + $cotizacion['costo_envio'];
+// CÁLCULO DE TOTALES (Prioriza la sumatoria de cotizacion_detalle si existen)
+$subtotal_partidas_acumulado = 0;
 
+if (!empty($partidas_cotizadas)) {
+    foreach ($partidas_cotizadas as $partida) {
+        $subtotal_partidas_acumulado += floatval($partida['subtotal']);
+    }
+} else {
+    // Retrocompatibilidad con cotizaciones que no tenían tabla de detalle
+    $subtotal_partidas_acumulado = floatval($cotizacion['precio_pactado']) * intval($cotizacion['cantidad']);
+}
+
+$costo_envio = floatval($cotizacion['costo_envio'] ?? 0);
+$subtotal_con_envio = $subtotal_partidas_acumulado + $costo_envio;
 $iva_traslado = ($incluye_iva === 1) ? ($subtotal_con_envio * 0.16) : 0;
 $gran_total_neto = $subtotal_con_envio + $iva_traslado;
 
@@ -90,7 +110,6 @@ include '../includes/header.php';
 ?>
 
 <style>
-    /* ---- AJUSTES DE MAQUETACIÓN EN PANTALLA (Estándar Global del CRM) ---- */
     .crm-control-card {
         background: #ffffff !important;
         border: 1px solid #dee2e6 !important;
@@ -103,7 +122,6 @@ include '../includes/header.php';
         color: #333333;
     }
 
-    /* ---- REGLAS ESTRICTAS PARA GENERACIÓN DE PDF / IMPRESIÓN ---- */
     @media print {
         .sidebar, #sidebar-wrapper, .navbar, header, footer, .d-print-none, .btn, .nav, #menu-toggle, .crm-control-card {
             display: none !important;
@@ -209,6 +227,7 @@ include '../includes/header.php';
             </div>
         </div>
 
+        <!-- TABLA DINÁMICA DE CONCEPTOS COTIZADOS -->
         <div class="row mb-4">
             <div class="col-12">
                 <div class="text-uppercase fw-bold text-muted mb-2 pb-1 border-bottom" style="font-size: 0.8rem; letter-spacing: 0.5px;">Conceptos Cotizados</div>
@@ -218,22 +237,50 @@ include '../includes/header.php';
                             <tr>
                                 <th class="text-center" style="width: 8%;">Cant.</th>
                                 <th class="text-center" style="width: 12%;">Unidad</th>
-                                <th style="width: 50%;">Descripción Comercial / Ficha Técnica</th>
-                                <th class="text-end" style="width: 15%;">P. Unitario</th>
-                                <th class="text-end" style="width: 15%;">Importe</th>
+                                <th style="width: 48%;">Descripción Comercial / Ficha Técnica</th>
+                                <th class="text-end" style="width: 16%;">P. Unitario</th>
+                                <th class="text-end" style="width: 16%;">Importe</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td class="text-center fw-bold fs-6"><?= $cotizacion['cantidad'] ?>.00</td>
-                                <td class="text-center text-uppercase text-muted" style="font-size: 0.78rem;"><?= htmlspecialchars($cotizacion['unidad']) ?></td>
-                                <td>
-                                    <strong class="text-dark text-uppercase"><?= htmlspecialchars($cotizacion['maquina_nombre']) ?></strong>
-                                    <div class="text-muted mt-1" style="font-size: 0.78rem; white-space: pre-wrap; line-height: 1.4;"><?= htmlspecialchars($cotizacion['especificacion_cotizada']) ?></div>
-                                </td>
-                                <td class="text-end fw-semibold">$<?= number_format($cotizacion['precio_pactado'], 2, '.', ',') ?></td>
-                                <td class="text-end fw-bold text-dark">$<?= number_format($subtotal_partida, 2, '.', ',') ?></td>
-                            </tr>
+                            <?php if (!empty($partidas_cotizadas)): ?>
+                                <?php foreach ($partidas_cotizadas as $partida): ?>
+                                    <tr>
+                                        <td class="text-center fw-bold fs-6"><?= number_format($partida['cantidad'], 2, '.', '') ?></td>
+                                        <td class="text-center text-uppercase text-muted" style="font-size: 0.78rem;"><?= htmlspecialchars($partida['unidad']) ?></td>
+                                        <td>
+                                            <strong class="text-dark text-uppercase"><?= htmlspecialchars($partida['producto_nombre']) ?></strong>
+                                            <?php if (!empty($partida['sku_codigo'])): ?>
+                                                <small class="text-muted d-block" style="font-size: 0.72rem;">SKU: <?= htmlspecialchars($partida['sku_codigo']) ?></small>
+                                            <?php endif; ?>
+                                            
+                                            <!-- Si es una máquina con especificaciones en la cabecera -->
+                                            <?php if (!empty($cotizacion['especificacion_cotizada']) && count($partidas_cotizadas) === 1): ?>
+                                                <div class="text-muted mt-1" style="font-size: 0.78rem; white-space: pre-wrap; line-height: 1.4;"><?= htmlspecialchars($cotizacion['especificacion_cotizada']) ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-end fw-semibold">
+                                            $<?= number_format($partida['precio_pactado'], 2, '.', ',') ?>
+                                            <?php if ($partida['descuento_porcentaje'] > 0): ?>
+                                                <br><small class="text-danger" style="font-size: 0.7rem;">-<?= $partida['descuento_porcentaje'] ?>% desc.</small>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-end fw-bold text-dark">$<?= number_format($partida['subtotal'], 2, '.', ',') ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <!-- Retrocompatibilidad si la cotización antigua no tenía detalle -->
+                                <tr>
+                                    <td class="text-center fw-bold fs-6"><?= number_format($cotizacion['cantidad'], 2, '.', '') ?></td>
+                                    <td class="text-center text-uppercase text-muted" style="font-size: 0.78rem;"><?= htmlspecialchars($cotizacion['unidad']) ?></td>
+                                    <td>
+                                        <strong class="text-dark text-uppercase"><?= htmlspecialchars($cotizacion['maquina_nombre'] ?? 'Producto no especificado') ?></strong>
+                                        <div class="text-muted mt-1" style="font-size: 0.78rem; white-space: pre-wrap; line-height: 1.4;"><?= htmlspecialchars($cotizacion['especificacion_cotizada'] ?? '') ?></div>
+                                    </td>
+                                    <td class="text-end fw-semibold">$<?= number_format($cotizacion['precio_pactado'], 2, '.', ',') ?></td>
+                                    <td class="text-end fw-bold text-dark">$<?= number_format($subtotal_partidas_acumulado, 2, '.', ',') ?></td>
+                                </tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -280,11 +327,11 @@ include '../includes/header.php';
                 <table class="table table-sm table-borderless text-end mb-0" style="font-size: 0.85rem;">
                     <tr>
                         <td class="text-muted">Subtotal:</td>
-                        <td class="fw-semibold text-dark" style="width: 45%;">$<?= number_format($subtotal_partida, 2, '.', ',') ?></td>
+                        <td class="fw-semibold text-dark" style="width: 45%;">$<?= number_format($subtotal_partidas_acumulado, 2, '.', ',') ?></td>
                     </tr>
                     <tr>
                         <td class="text-muted">Gasto de Envío:</td>
-                        <td class="fw-semibold text-dark">$<?= number_format($cotizacion['costo_envio'], 2, '.', ',') ?></td>
+                        <td class="fw-semibold text-dark">$<?= number_format($costo_envio, 2, '.', ',') ?></td>
                     </tr>
                     <?php if ($incluye_iva === 1): ?>
                     <tr class="border-bottom">
