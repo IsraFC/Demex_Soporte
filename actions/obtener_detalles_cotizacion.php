@@ -76,10 +76,11 @@ try {
         $subtotal_partidas = floatval($cot['precio_pactado']) * intval($cot['cantidad']);
     }
 
-    $costo_envio = floatval($cot['costo_envio'] ?? 0);
-    $base_con_envio = $subtotal_partidas + $costo_envio;
-    $iva_monto = ($incluye_iva === 1) ? ($base_con_envio * 0.16) : 0;
-    $total_general = $base_con_envio + $iva_monto;
+                // Corrección del cálculo de importes e IVA:
+                $costo_envio = floatval($cot['costo_envio'] ?? 0);
+                $base_con_envio = $subtotal_partidas + $costo_envio;
+                $iva_monto = ($incluye_iva === 1) ? ($base_con_envio * 0.16) : 0;
+                $total_general = $base_con_envio + $iva_monto;
     ?>
     
     <div class="container-fluid py-1">

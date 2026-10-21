@@ -146,10 +146,13 @@ include '../includes/header.php';
                 while ($cli = $stmt_cli->fetch(PDO::FETCH_ASSOC)):
                     $id_cliente = $cli['id_cliente'];
 
-                    // CORREGIDO: Adaptado a c.id_producto y tabla productos
-                    $sql_sub_cot = "SELECT cot.*, p.nombre AS maquina_nombre 
+                    // Consulta de sub-cotizaciones con LEFT JOIN y fallback de nombre
+                    $sql_sub_cot = "SELECT cot.*, 
+                                        c.nombre_cliente AS cliente_nombre,
+                                        COALESCE(p.nombre, 'Materia Prima / Varios') AS maquina_nombre 
                                     FROM cotizacion cot
-                                    INNER JOIN productos p ON cot.id_producto = p.id_producto
+                                    LEFT JOIN productos p ON cot.id_producto = p.id_producto
+                                    LEFT JOIN clientes c ON cot.id_cliente = c.id_cliente
                                     WHERE cot.id_cliente = :id_cliente
                                     ORDER BY 
                                         CASE 
@@ -162,7 +165,7 @@ include '../includes/header.php';
                     $stmt_sub = $pdo->prepare($sql_sub_cot);
                     $stmt_sub->execute([':id_cliente' => $id_cliente]);
                     $sub_cotizaciones = $stmt_sub->fetchAll(PDO::FETCH_ASSOC);
-                ?>
+                    ?>
                 <tr class="row-cliente-master" data-child-data="<?= htmlspecialchars(json_encode($sub_cotizaciones)) ?>" data-prioridad="<?= $cli['orden_prioridad'] ?>">
                     <td class="details-control fw-bold"><i class="bi bi-plus-circle-fill"></i></td>
                     <td>
@@ -269,13 +272,16 @@ function formatChildRow(d) {
         let fEmision = cot.fecha_emision ? cot.fecha_emision.split('-').reverse().join('/') : 'N/D';
         let fVence = cot.fecha_vencimiento ? cot.fecha_vencimiento.split('-').reverse().join('/') : 'N/D';
         
-        let badgeSeg = `<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600;">${cot.estatus_seguimiento}</span>`;
+        let badgeSeg = `<span class="badge" style="background-color: #E3F2FD; color: #0D47A1; font-weight: 600;">${cot.estatus_seguimiento || 'En Seguimiento'}</span>`;
         if (cot.estatus_seguimiento === 'Liberada') badgeSeg = `<span class="badge" style="background-color: #E8F5E9; color: #2E7D32; font-weight: 600;">Liberada</span>`;
         if (cot.estatus_seguimiento === 'Cancelada') badgeSeg = `<span class="badge" style="background-color: #FFE082; color: #E65100; font-weight: 600;">Cancelada</span>`;
 
         let badgeCot = cot.status_cotizacion === 'Vencida' ? 
             `<span class="badge bg-danger animate__animated animate__flash animate__infinite"><i class="bi bi-calendar-x"></i> Vencida</span>` : 
             `<span class="badge bg-success"><i class="bi bi-calendar-check"></i> Vigente</span>`;
+
+        let prodNombreSanitizado = cot.maquina_nombre ? cot.maquina_nombre.replace(/'/g, "\\'") : 'Materia Prima / Varios';
+        let clienteNombreSanitizado = cot.cliente_nombre ? cot.cliente_nombre.replace(/'/g, "\\'") : '';
 
         let btnAcciones = '';
         if (cot.estatus_seguimiento === 'Liberada' || cot.estatus_seguimiento === 'Cancelada') {
@@ -284,14 +290,14 @@ function formatChildRow(d) {
             btnAcciones = `<div class="btn-group btn-group-sm">
                             <button type="button" onclick="verDetallesCotizacion(${cot.id_cotizacion})" class="btn btn-outline-info border-0" title="Ver Detalle"><i class="bi bi-eye-fill fs-5"></i></button>
                             <a href="editar_cotizacion.php?id_cotizacion=${cot.id_cotizacion}" class="btn btn-outline-warning border-0" title="Editar"><i class="bi bi-pencil-square fs-5"></i></a>
-                            <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperacionRecompra(${cot.id_cotizacion}, '${escape(cot.cliente_nombre || '')}', '${escape(cot.maquina_nombre)}', '${cot.cantidad} ${cot.unidad || 'Pza(s)'}')" title="Liberar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>
+                            <button type="button" class="btn btn-outline-success border-0" onclick="cerrarOperacionRecompra(${cot.id_cotizacion}, '${escape(clienteNombreSanitizado)}', '${escape(prodNombreSanitizado)}', '${cot.cantidad} ${cot.unidad || 'Pza(s)'}')" title="Liberar Venta"><i class="bi bi-check-circle-fill fs-5"></i></button>
                            </div>`;
         }
 
-        html += `<tr class="sub-row-cot-item" data-recordatorio="${cot.fecha_recordatorio}" data-status-cotiz="${cot.status_cotizacion}" data-status-seg="${cot.estatus_seguimiento}" data-equipo="${cot.maquina_nombre}">
+        html += `<tr class="sub-row-cot-item" data-recordatorio="${cot.fecha_recordatorio}" data-status-cotiz="${cot.status_cotizacion}" data-status-seg="${cot.estatus_seguimiento}" data-equipo="${prodNombreSanitizado}">
                     <td class="fw-semibold text-secondary">${fEmision}</td>
                     <td class="text-muted fw-semibold">${fVence}</td>
-                    <td class="fw-bold text-dark">${cot.maquina_nombre} <span class="text-muted small">(${cot.cantidad} ${cot.unidad || 'Pza'})</span></td>
+                    <td class="fw-bold text-dark">${prodNombreSanitizado} <span class="text-muted small">(${cot.cantidad} ${cot.unidad || 'Pza'})</span></td>
                     <td class="text-center">${badgeSeg}</td>
                     <td class="text-center">${badgeCot}</td>
                     <td class="text-center sub-col-semaforo"></td>
